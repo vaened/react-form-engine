@@ -212,6 +212,50 @@ Every `Field` and every `Node` exists on top of a `Path`.
 - `Field` is a terminal unit located on a route.
 - `Node` is a composite unit located on a route.
 
+## useForm
+
+`useForm` is the main entry point of the system.
+
+Every form begins in `useForm`.
+
+Its responsibility is to create the base universe of the form.
+
+That universe defines the full initial scope over which the system can operate.
+
+### What it creates
+
+`useForm` creates, among other things:
+
+- the `FormStore`
+- the root `Control`
+
+From that point onward, the form exists as a complete unit inside the system.
+
+### What it represents
+
+The universe created by `useForm` represents the form as a complete surface.
+
+That means the system begins from the idea that the form can be read, validated, and submitted as a whole.
+
+### usePatchForm
+
+`usePatchForm` is a variation of `useForm`.
+
+It does not create a different universe.
+
+It creates the same base universe of the form, but under a patch semantics.
+
+#### What changes
+
+In `usePatchForm`, the system does not interpret the form as a full replacement of its value.
+
+It interprets it as a partial modification over an already existing base.
+
+For that reason, `usePatchForm` introduces different rules over:
+
+- validation activation
+- the way in which the form expresses its result
+
 ## useFormState
 
 `useFormState` is a state aggregation hook.
