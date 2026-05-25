@@ -6,6 +6,8 @@ type StringKeyOf<T> = Extract<keyof T, string>;
 
 type TupleKeys<T extends readonly unknown[]> = Extract<keyof T, `${number}`>;
 
+type Present<T> = Exclude<T, null | undefined>;
+
 type IsTuple<T extends readonly unknown[]> = number extends T["length"] ? false : true;
 
 type IsTerminal<T> = T extends Primitive
@@ -16,104 +18,146 @@ type IsTerminal<T> = T extends Primitive
       ? false
       : true;
 
-type PathEntry<K extends string | number, V> = V extends Primitive ? `${K}` : `${K}` | `${K}.${PathInternal<V>}`;
+type IsEqual<TLeft, TRight> =
+  (<TValue>() => TValue extends TLeft ? 1 : 2) extends <TValue>() => TValue extends TRight ? 1 : 2 ? true : false;
 
-type PathInternal<T> = T extends readonly (infer TValue)[]
+type AnyIsEqual<TLeft, TRight> = TLeft extends TRight ? (IsEqual<TLeft, TRight> extends true ? true : never) : never;
+
+type PathEntry<K extends string | number, V, TSeen> =
+  IsTerminal<V> extends true
+    ? `${K}`
+    : true extends AnyIsEqual<TSeen, Present<V>>
+      ? `${K}`
+      : `${K}` | `${K}.${PathInternal<Present<V>, TSeen | Present<V>>}`;
+
+type PathInternal<T, TSeen = T> = T extends readonly (infer TValue)[]
   ? IsTuple<T> extends true
     ? {
-        [TKey in TupleKeys<T>]-?: PathEntry<TKey & string, T[TKey]>;
+        [TKey in TupleKeys<T>]-?: PathEntry<TKey & string, T[TKey], TSeen>;
       }[TupleKeys<T>]
-    : PathEntry<number, TValue>
+    : PathEntry<number, TValue, TSeen>
   : T extends object
     ? {
-        [TKey in StringKeyOf<T>]-?: PathEntry<TKey, T[TKey]>;
+        [TKey in StringKeyOf<T>]-?: PathEntry<TKey, T[TKey], TSeen>;
       }[StringKeyOf<T>]
     : never;
 
-type FieldPathEntry<K extends string | number, V> =
-  IsTerminal<V> extends true ? `${K}` : `${K}.${FieldPathInternal<V>}`;
+type FieldPathEntry<K extends string | number, V, TSeen> =
+  IsTerminal<V> extends true
+    ? `${K}`
+    : true extends AnyIsEqual<TSeen, Present<V>>
+      ? never
+      : `${K}.${FieldPathInternal<Present<V>, TSeen | Present<V>>}`;
 
-type FieldPathInternal<T> = T extends readonly (infer TValue)[]
+type FieldPathInternal<T, TSeen = T> = T extends readonly (infer TValue)[]
   ? IsTuple<T> extends true
     ? {
-        [TKey in TupleKeys<T>]-?: FieldPathEntry<TKey & string, T[TKey]>;
+        [TKey in TupleKeys<T>]-?: FieldPathEntry<TKey & string, T[TKey], TSeen>;
       }[TupleKeys<T>]
-    : FieldPathEntry<number, TValue>
+    : FieldPathEntry<number, TValue, TSeen>
   : T extends object
     ? {
-        [TKey in StringKeyOf<T>]-?: FieldPathEntry<TKey, T[TKey]>;
+        [TKey in StringKeyOf<T>]-?: FieldPathEntry<TKey, T[TKey], TSeen>;
       }[StringKeyOf<T>]
     : never;
 
-type NodePathEntry<K extends string | number, V> =
+type NodePathEntry<K extends string | number, V, TSeen> =
   IsTerminal<V> extends true
     ? never
-    : `${K}` | (NodePathInternal<V> extends never ? never : `${K}.${NodePathInternal<V>}`);
+    : true extends AnyIsEqual<TSeen, Present<V>>
+      ? `${K}`
+      :
+          | `${K}`
+          | (NodePathInternal<Present<V>, TSeen | Present<V>> extends never
+              ? never
+              : `${K}.${NodePathInternal<Present<V>, TSeen | Present<V>>}`);
 
-type NodePathInternal<T> = T extends readonly (infer TValue)[]
+type NodePathInternal<T, TSeen = T> = T extends readonly (infer TValue)[]
   ? IsTuple<T> extends true
     ? {
-        [TKey in TupleKeys<T>]-?: NodePathEntry<TKey & string, T[TKey]>;
+        [TKey in TupleKeys<T>]-?: NodePathEntry<TKey & string, T[TKey], TSeen>;
       }[TupleKeys<T>]
-    : NodePathEntry<number, TValue>
+    : NodePathEntry<number, TValue, TSeen>
   : T extends object
     ? {
-        [TKey in StringKeyOf<T>]-?: NodePathEntry<TKey, T[TKey]>;
+        [TKey in StringKeyOf<T>]-?: NodePathEntry<TKey, T[TKey], TSeen>;
       }[StringKeyOf<T>]
     : never;
 
-type ArrayPathTupleEntry<K extends string, V> = V extends readonly (infer TValue)[]
-  ? IsTuple<V> extends true
-    ? ArrayPathInternal<V> extends never
-      ? never
-      : `${K}.${ArrayPathInternal<V>}`
-    : `${K}` | (ArrayPathDynamicChild<V, TValue> extends never ? never : `${K}.${ArrayPathDynamicChild<V, TValue>}`)
-  : V extends object
-    ? ArrayPathInternal<V> extends never
-      ? never
-      : `${K}.${ArrayPathInternal<V>}`
-    : never;
+type ArrayPathTupleEntry<K extends string, V, TSeen> =
+  Present<V> extends readonly (infer TValue)[]
+    ? IsTuple<Present<V>> extends true
+      ? true extends AnyIsEqual<TSeen, Present<V>>
+        ? never
+        : ArrayPathInternal<Present<V>, TSeen | Present<V>> extends never
+          ? never
+          : `${K}.${ArrayPathInternal<Present<V>, TSeen | Present<V>>}`
+      :
+          | `${K}`
+          | (ArrayPathDynamicChild<Present<V>, TValue, TSeen | Present<V>> extends never
+              ? never
+              : `${K}.${ArrayPathDynamicChild<Present<V>, TValue, TSeen | Present<V>>}`)
+    : Present<V> extends object
+      ? true extends AnyIsEqual<TSeen, Present<V>>
+        ? never
+        : ArrayPathInternal<Present<V>, TSeen | Present<V>> extends never
+          ? never
+          : `${K}.${ArrayPathInternal<Present<V>, TSeen | Present<V>>}`
+      : never;
 
-type ArrayPathObjectEntry<K extends string, V> = V extends readonly (infer TValue)[]
-  ? IsTuple<V> extends true
-    ? ArrayPathInternal<V> extends never
-      ? never
-      : `${K}.${ArrayPathInternal<V>}`
-    : `${K}` | (ArrayPathDynamicChild<V, TValue> extends never ? never : `${K}.${ArrayPathDynamicChild<V, TValue>}`)
-  : V extends object
-    ? ArrayPathInternal<V> extends never
-      ? never
-      : `${K}.${ArrayPathInternal<V>}`
-    : never;
+type ArrayPathObjectEntry<K extends string, V, TSeen> =
+  Present<V> extends readonly (infer TValue)[]
+    ? IsTuple<Present<V>> extends true
+      ? true extends AnyIsEqual<TSeen, Present<V>>
+        ? never
+        : ArrayPathInternal<Present<V>, TSeen | Present<V>> extends never
+          ? never
+          : `${K}.${ArrayPathInternal<Present<V>, TSeen | Present<V>>}`
+      :
+          | `${K}`
+          | (ArrayPathDynamicChild<Present<V>, TValue, TSeen | Present<V>> extends never
+              ? never
+              : `${K}.${ArrayPathDynamicChild<Present<V>, TValue, TSeen | Present<V>>}`)
+    : Present<V> extends object
+      ? true extends AnyIsEqual<TSeen, Present<V>>
+        ? never
+        : ArrayPathInternal<Present<V>, TSeen | Present<V>> extends never
+          ? never
+          : `${K}.${ArrayPathInternal<Present<V>, TSeen | Present<V>>}`
+      : never;
 
-type ArrayPathDynamicChild<TArray extends readonly unknown[], TValue> =
+type ArrayPathDynamicChild<TArray extends readonly unknown[], TValue, TSeen> =
   IsTuple<TArray> extends true
     ? never
     : IsTerminal<TValue> extends true
       ? never
-      : TValue extends readonly (infer TChild)[]
-        ? IsTuple<TValue> extends true
-          ? ArrayPathInternal<TValue> extends never
+      : Present<TValue> extends readonly (infer TChild)[]
+        ? IsTuple<Present<TValue>> extends true
+          ? true extends AnyIsEqual<TSeen, Present<TValue>>
             ? never
-            : `${number}.${ArrayPathInternal<TValue>}`
+            : ArrayPathInternal<Present<TValue>, TSeen | Present<TValue>> extends never
+              ? never
+              : `${number}.${ArrayPathInternal<Present<TValue>, TSeen | Present<TValue>>}`
           :
               | `${number}`
-              | (ArrayPathDynamicChild<TValue, TChild> extends never
+              | (ArrayPathDynamicChild<Present<TValue>, TChild, TSeen | Present<TValue>> extends never
                   ? never
-                  : `${number}.${ArrayPathDynamicChild<TValue, TChild>}`)
-        : TValue extends object
-          ? `${number}.${ArrayPathInternal<TValue>}`
+                  : `${number}.${ArrayPathDynamicChild<Present<TValue>, TChild, TSeen | Present<TValue>>}`)
+        : Present<TValue> extends object
+          ? true extends AnyIsEqual<TSeen, Present<TValue>>
+            ? `${number}`
+            : `${number}.${ArrayPathInternal<Present<TValue>, TSeen | Present<TValue>>}`
           : never;
 
-type ArrayPathInternal<T> = T extends readonly (infer TValue)[]
+type ArrayPathInternal<T, TSeen = T> = T extends readonly (infer TValue)[]
   ? IsTuple<T> extends true
     ? {
-        [TKey in TupleKeys<T>]-?: ArrayPathTupleEntry<TKey & string, T[TKey]>;
+        [TKey in TupleKeys<T>]-?: ArrayPathTupleEntry<TKey & string, T[TKey], TSeen>;
       }[TupleKeys<T>]
-    : ArrayPathDynamicChild<T, TValue>
+    : ArrayPathDynamicChild<T, TValue, TSeen>
   : T extends object
     ? {
-        [TKey in StringKeyOf<T>]-?: ArrayPathObjectEntry<TKey, T[TKey]>;
+        [TKey in StringKeyOf<T>]-?: ArrayPathObjectEntry<TKey, T[TKey], TSeen>;
       }[StringKeyOf<T>]
     : never;
 
