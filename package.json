@@ -28,7 +28,8 @@
     "check": "biome check .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "lint:fix": "biome check --write ."
   },
   "peerDependencies": {
     "react": "^19.2.6",
