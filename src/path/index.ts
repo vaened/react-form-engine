@@ -117,6 +117,44 @@ type ArrayPathInternal<T> = T extends readonly (infer TValue)[]
       }[StringKeyOf<T>]
     : never;
 
+type PathValueArray<T extends readonly unknown[], P extends string> = P extends `${infer K}.${infer R}`
+  ? IsTuple<T> extends true
+    ? K extends TupleKeys<T>
+      ? PathValueInternal<T[K], R>
+      : never
+    : K extends `${number}`
+      ? T extends readonly (infer TValue)[]
+        ? PathValueInternal<TValue, R>
+        : never
+      : never
+  : IsTuple<T> extends true
+    ? P extends TupleKeys<T>
+      ? T[P]
+      : never
+    : P extends `${number}`
+      ? T extends readonly (infer TValue)[]
+        ? TValue
+        : never
+      : never;
+
+type PathValueObject<T extends object, P extends string> = P extends `${infer K}.${infer R}`
+  ? K extends keyof T
+    ? undefined extends T[K]
+      ? PathValueInternal<T[K], R> | undefined
+      : PathValueInternal<T[K], R>
+    : never
+  : P extends keyof T
+    ? T[P]
+    : never;
+
+type PathValueInternal<T, P extends string> = T extends unknown
+  ? T extends readonly unknown[]
+    ? PathValueArray<T, P>
+    : T extends object
+      ? PathValueObject<T, P>
+      : never
+  : never;
+
 export type Path<TValues extends FormValues> = TValues extends unknown ? PathInternal<TValues> : never;
 
 export type FieldPath<TValues extends FormValues> = TValues extends unknown ? FieldPathInternal<TValues> : never;
@@ -124,3 +162,8 @@ export type FieldPath<TValues extends FormValues> = TValues extends unknown ? Fi
 export type NodePath<TValues extends FormValues> = TValues extends unknown ? NodePathInternal<TValues> : never;
 
 export type ArrayPath<TValues extends FormValues> = TValues extends unknown ? ArrayPathInternal<TValues> : never;
+
+export type PathValue<
+  TValues extends FormValues,
+  TPath extends Path<TValues> | FieldPath<TValues> | NodePath<TValues> | ArrayPath<TValues>,
+> = PathValueInternal<TValues, TPath>;
