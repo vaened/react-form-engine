@@ -1,4 +1,22 @@
+interface Blob {
+  readonly size: number;
+  readonly type: string;
+}
+
+interface File extends Blob {
+  readonly lastModified: number;
+  readonly name: string;
+}
+
+interface FileList {
+  readonly length: number;
+  item(index: number): File | null;
+  [index: number]: File;
+}
+
 export type Primitive = bigint | boolean | null | number | string | symbol | undefined;
+
+export type HostNativeObject = Blob | Date | File | FileList;
 
 export type FormValues = Record<string, unknown> | readonly unknown[];
 
@@ -10,7 +28,7 @@ type Present<T> = Exclude<T, null | undefined>;
 
 type IsTuple<T extends readonly unknown[]> = number extends T["length"] ? false : true;
 
-type IsTerminal<T> = T extends Primitive
+type IsTerminal<T> = T extends Primitive | HostNativeObject
   ? true
   : T extends readonly unknown[]
     ? false
