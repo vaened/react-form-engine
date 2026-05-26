@@ -4,12 +4,15 @@
  */
 
 import type { FormValues, Path } from "../path";
+import type { PathResolver } from "./PathResolver";
 
 export type ControlAliasMap<TLocalValues extends FormValues, TFormValues extends FormValues> = Partial<
   Record<Path<TLocalValues>, Path<TFormValues>>
 >;
 
-export class PathAliasMapper<TLocalValues extends FormValues, TFormValues extends FormValues> {
+export class AliasPathResolver<TLocalValues extends FormValues, TFormValues extends FormValues>
+  implements PathResolver<TLocalValues, TFormValues>
+{
   readonly #aliases: ControlAliasMap<TLocalValues, TFormValues>;
   readonly #cache = new Map<Path<TLocalValues>, Path<TFormValues>>();
 

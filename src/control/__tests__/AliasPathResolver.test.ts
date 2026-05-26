@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import type { ControlAliasMap } from "../PathAliasMapper";
-import { PathAliasMapper } from "../PathAliasMapper";
+import type { ControlAliasMap } from "../AliasPathResolver";
+import { AliasPathResolver } from "../AliasPathResolver";
 
 type LocalValues = {
   client: {
@@ -43,9 +43,9 @@ type FormValues = {
   };
 };
 
-describe("PathAliasMapper", () => {
+describe("AliasPathResolver", () => {
   it("rejects empty alias dictionaries", () => {
-    expect(() => new PathAliasMapper<LocalValues, FormValues>({})).toThrow("Control aliases cannot be empty.");
+    expect(() => new AliasPathResolver<LocalValues, FormValues>({})).toThrow("Control aliases cannot be empty.");
   });
 
   it("exposes the original alias dictionary", () => {
@@ -54,14 +54,14 @@ describe("PathAliasMapper", () => {
       serial: "invoice.serial",
     } as const;
 
-    const mapper = new PathAliasMapper<LocalValues, FormValues>(aliases);
+    const mapper = new AliasPathResolver<LocalValues, FormValues>(aliases);
 
     expect(mapper.aliases).toBe(aliases);
     expect(mapper.aliases).toEqual(aliases);
   });
 
   it("returns exact matches directly", () => {
-    const mapper = new PathAliasMapper<LocalValues, FormValues>({
+    const mapper = new AliasPathResolver<LocalValues, FormValues>({
       person: "invoice.client.person",
       "person.name": "invoice.client.person.name",
       serial: "invoice.serial",
@@ -72,7 +72,7 @@ describe("PathAliasMapper", () => {
   });
 
   it("resolves nested paths from the closest registered prefix", () => {
-    const mapper = new PathAliasMapper<LocalValues, FormValues>({
+    const mapper = new AliasPathResolver<LocalValues, FormValues>({
       person: "invoice.client.person",
       serial: "invoice.serial",
     });
@@ -83,7 +83,7 @@ describe("PathAliasMapper", () => {
   });
 
   it("prefers the most specific registered prefix", () => {
-    const mapper = new PathAliasMapper<LocalValues, FormValues>({
+    const mapper = new AliasPathResolver<LocalValues, FormValues>({
       client: "invoice.client",
       "client.person": "invoice.client.person",
     });
@@ -95,7 +95,7 @@ describe("PathAliasMapper", () => {
     const aliases: ControlAliasMap<LocalValues, FormValues> = {
       person: "invoice.client.person",
     };
-    const mapper = new PathAliasMapper<LocalValues, FormValues>(aliases);
+    const mapper = new AliasPathResolver<LocalValues, FormValues>(aliases);
 
     expect(mapper.resolve("person.name")).toBe("invoice.client.person.name");
 
@@ -106,7 +106,7 @@ describe("PathAliasMapper", () => {
   });
 
   it("throws when the incoming path is outside the registered aliases", () => {
-    const mapper = new PathAliasMapper<LocalValues, FormValues>({
+    const mapper = new AliasPathResolver<LocalValues, FormValues>({
       person: "invoice.client.person",
     });
 
