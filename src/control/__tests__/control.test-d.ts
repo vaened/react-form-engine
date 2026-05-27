@@ -62,6 +62,7 @@ const personFields = projected.pick({
   document: "person.documentNumber",
   name: "person.name",
 });
+const person = projected.lens("person");
 
 type FormExpectation = Expect<Equal<typeof form, ControlType<InvoiceValues>>>;
 type ProjectedExpectation = Expect<
@@ -113,16 +114,27 @@ type PersonFieldsExpectation = Expect<
     }>
   >
 >;
+type PersonExpectation = Expect<
+  Equal<
+    typeof person,
+    ControlType<{
+      documentNumber: string;
+      name: string;
+    }>
+  >
+>;
 
 declare const formExpectation: FormExpectation;
 declare const projectedExpectation: ProjectedExpectation;
 declare const nestedExpectation: NestedExpectation;
 declare const personFieldsExpectation: PersonFieldsExpectation;
+declare const personExpectation: PersonExpectation;
 
 void formExpectation;
 void projectedExpectation;
 void nestedExpectation;
 void personFieldsExpectation;
+void personExpectation;
 
 form.register("invoice.client.person.name");
 form.unregister("invoice.client.person.name");
@@ -146,6 +158,11 @@ personFields.unregister("document");
 personFields.set("name", "Grace");
 personFields.set("document", "456");
 
+person.register("name");
+person.unregister("documentNumber");
+person.set("name", "Grace");
+person.set("documentNumber", "456");
+
 // @ts-expect-error projected control does not expose full global path
 projected.register("invoice.client.person.name");
 
@@ -164,6 +181,12 @@ personFields.register("person.name");
 // @ts-expect-error remapped projected control only exposes aliases
 personFields.unregister("person.name");
 
+// @ts-expect-error focused control only exposes subtree paths
+person.register("person.name");
+
+// @ts-expect-error focused control only exposes subtree paths
+person.unregister("person.name");
+
 // @ts-expect-error projected control does not expose full global path
 projected.set("invoice.client.person.name", "Grace");
 
@@ -173,5 +196,11 @@ nested.set("person.name", "Grace");
 // @ts-expect-error remapped projected control only exposes aliases
 personFields.set("person.name", "Grace");
 
+// @ts-expect-error focused control only exposes subtree paths
+person.set("person.name", "Grace");
+
 // @ts-expect-error wrong value type
 projected.set("serial.number", 123);
+
+// @ts-expect-error lens only accepts node paths
+projected.lens("person.name");
