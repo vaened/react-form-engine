@@ -5,11 +5,11 @@
 
 import type { FormStore, FormValues as StoreFormValues } from "../FormStore";
 import type { FormValues, NodePath, Path, PathValue } from "../path";
-import { AliasPathResolver, type ControlAliasMap } from "./AliasPathResolver";
 import type { Control } from "./Control";
-import { PassthroughPathResolver } from "./PassthroughPathResolver";
-import type { PathResolver } from "./PathResolver";
-import { PrefixedPathResolver } from "./PrefixedPathResolver";
+import { AliasPathResolver, type ControlAliasMap } from "./paths/AliasPathResolver";
+import { PassthroughPathResolver } from "./paths/PassthroughPathResolver";
+import type { PathResolver } from "./paths/PathResolver";
+import { PrefixedPathResolver } from "./paths/PrefixedPathResolver";
 import type { ControlProjection, FocusedValue, LensResult, LensSelection, ProjectionValue } from "./types";
 
 export class GraphControl<TLocalValues extends FormValues, TFormValues extends StoreFormValues = StoreFormValues>

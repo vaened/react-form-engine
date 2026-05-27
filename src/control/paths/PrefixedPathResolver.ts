@@ -3,7 +3,7 @@
  * @link https://vaened.dev DevFolio
  */
 
-import type { FormValues, NodePath, Path } from "../path";
+import type { FormValues, NodePath, Path } from "../../path";
 import type { PathResolver } from "./PathResolver";
 
 export class PrefixedPathResolver<TLocalValues extends FormValues, TFormValues extends FormValues>

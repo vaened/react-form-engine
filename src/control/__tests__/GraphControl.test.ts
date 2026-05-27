@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { FormStore } from "../../FormStore";
-import type { ControlAliasMap } from "../AliasPathResolver";
 import type { Control } from "../Control";
 import { GraphControl } from "../GraphControl";
+import type { ControlAliasMap } from "../paths/AliasPathResolver";
 
 type InvoiceValues = {
   invoice: {

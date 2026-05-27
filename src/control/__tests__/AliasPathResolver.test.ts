@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import type { ControlAliasMap } from "../AliasPathResolver";
-import { AliasPathResolver } from "../AliasPathResolver";
+import type { ControlAliasMap } from "../paths/AliasPathResolver";
+import { AliasPathResolver } from "../paths/AliasPathResolver";
 
 type LocalValues = {
   client: {

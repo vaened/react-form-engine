@@ -3,10 +3,10 @@
  * @link https://vaened.dev DevFolio
  */
 
-export type { ControlAliasMap } from "./AliasPathResolver";
-export { AliasPathResolver } from "./AliasPathResolver";
 export type { Control as ControlType } from "./Control";
 export { Control } from "./Control";
 export { GraphControl } from "./GraphControl";
-export { PassthroughPathResolver } from "./PassthroughPathResolver";
-export type { PathResolver } from "./PathResolver";
+export type { ControlAliasMap } from "./paths/AliasPathResolver";
+export { AliasPathResolver } from "./paths/AliasPathResolver";
+export { PassthroughPathResolver } from "./paths/PassthroughPathResolver";
+export type { PathResolver } from "./paths/PathResolver";

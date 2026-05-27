@@ -3,7 +3,7 @@
  * @link https://vaened.dev DevFolio
  */
 
-import type { FormValues, Path } from "../path";
+import type { FormValues, Path } from "../../path";
 import type { PathResolver } from "./PathResolver";
 
 export class PassthroughPathResolver<TValues extends FormValues> implements PathResolver<TValues, TValues> {
