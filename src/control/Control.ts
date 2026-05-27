@@ -9,12 +9,16 @@ import { GraphControl } from "./GraphControl";
 import type { LensResult, LensSelection } from "./types";
 
 /**
- * A scoped lens over form values.
+ * A control lens over form values.
  *
- * A control represents an operable view over a portion of the form tree.
- * Its paths are always interpreted relative to its current scope, and derived
- * controls preserve that same contract over subtrees or composed projections
- * of the current scope.
+ * A control may coincide with the whole form or with a structural subtree, but
+ * it is not defined by that shape. It is defined by the scoped field domain it
+ * exposes: the set of field paths that are visible and operable from a given
+ * scope.
+ *
+ * Those paths are always interpreted relative to that scope.
+ *
+ * A control is a lens over form state, not the owner of that state.
  */
 export interface Control<TValues extends FormValues> {
   /**
