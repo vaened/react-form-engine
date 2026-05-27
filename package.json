@@ -6,12 +6,12 @@
   "packageManager": "pnpm@11.1.1",
   "type": "module",
   "main": "./dist/index.cjs",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
       "require": "./dist/index.cjs"
     }
   },
@@ -20,8 +20,8 @@
   ],
   "sideEffects": false,
   "scripts": {
-    "build": "tsup src/index.ts --format esm,cjs --dts",
-    "dev": "tsup src/index.ts --format esm,cjs --dts --watch",
+    "build": "tsdown src/index.ts --format esm --format cjs --dts",
+    "dev": "tsdown src/index.ts --format esm --format cjs --dts --watch",
     "lint": "biome check .",
     "format": "biome format --write .",
     "format:check": "biome format .",
@@ -39,7 +39,7 @@
     "@biomejs/biome": "^2.4.8",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "tsup": "^8.5.1",
+    "tsdown": "^0.22.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.5"
   },
