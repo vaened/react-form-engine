@@ -50,7 +50,7 @@ function createStoreMock(): FormStore<InvoiceValues> & {
     register: vi.fn(),
     unregister: vi.fn(),
     set: vi.fn(),
-  } as unknown as FormStore<InvoiceValues> & {
+  } as FormStore<InvoiceValues> & {
     register: ReturnType<typeof vi.fn>;
     unregister: ReturnType<typeof vi.fn>;
     set: ReturnType<typeof vi.fn>;
