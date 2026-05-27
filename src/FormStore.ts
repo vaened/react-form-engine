@@ -14,6 +14,13 @@ export type FieldState = {
   errors: unknown[];
 };
 
+function createFieldState(): FieldState {
+  return {
+    errors: [],
+    flags: 0,
+  };
+}
+
 export type FormStoreOptions<TValues extends FormValues> = {
   values: TValues;
   defaults?: TValues;
@@ -47,6 +54,27 @@ export class FormStore<TValues extends FormValues> {
 
   get states(): ReadonlyMap<string, FieldState> {
     return this.#states;
+  }
+
+  register<TPath extends Path<TValues>>(path: TPath): FieldState {
+    const existingState = this.#states.get(path);
+
+    if (existingState) {
+      return existingState;
+    }
+
+    const state = createFieldState();
+    this.#states.set(path, state);
+
+    return state;
+  }
+
+  unregister<TPath extends Path<TValues>>(path: TPath): void {
+    this.#states.delete(path);
+  }
+
+  getState<TPath extends Path<TValues>>(path: TPath): FieldState | undefined {
+    return this.#states.get(path);
   }
 
   set<TPath extends Path<TValues>>(path: TPath, value: PathValue<TValues, TPath>): void {

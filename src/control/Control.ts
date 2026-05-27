@@ -9,6 +9,8 @@ import { GraphControl } from "./GraphControl";
 import type { ControlProjection, ProjectionValue } from "./types";
 
 export interface Control<TValues extends FormValues> {
+  register<TPath extends Path<TValues>>(path: TPath): void;
+  unregister<TPath extends Path<TValues>>(path: TPath): void;
   set<TPath extends Path<TValues>>(path: TPath, value: PathValue<TValues, TPath>): void;
   pick<const TProjection extends ControlProjection<TValues>>(
     projection: TProjection,

@@ -35,6 +35,14 @@ export class GraphControl<TLocalValues extends FormValues, TFormValues extends S
     return new GraphControl(store, pathResolver as PathResolver<TLocalValues, TFormValues>);
   }
 
+  register<TPath extends Path<TLocalValues>>(path: TPath): void {
+    this.#store.register(this.#pathResolver.resolve(path));
+  }
+
+  unregister<TPath extends Path<TLocalValues>>(path: TPath): void {
+    this.#store.unregister(this.#pathResolver.resolve(path));
+  }
+
   set<TPath extends Path<TLocalValues>>(path: TPath, value: PathValue<TLocalValues, TPath>): void {
     this.#store.set(this.#pathResolver.resolve(path), value as PathValue<TFormValues, Path<TFormValues>>);
   }
