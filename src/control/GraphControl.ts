@@ -10,7 +10,7 @@ import type { Control } from "./Control";
 import { PassthroughPathResolver } from "./PassthroughPathResolver";
 import type { PathResolver } from "./PathResolver";
 import { PrefixedPathResolver } from "./PrefixedPathResolver";
-import type { ControlProjection, FocusedValue, ProjectionValue } from "./types";
+import type { ControlProjection, FocusedValue, LensResult, LensSelection, ProjectionValue } from "./types";
 
 export class GraphControl<TLocalValues extends FormValues, TFormValues extends StoreFormValues = StoreFormValues>
   implements Control<TLocalValues>
@@ -48,17 +48,18 @@ export class GraphControl<TLocalValues extends FormValues, TFormValues extends S
     this.#store.set(this.#pathResolver.resolve(path), value as PathValue<TFormValues, Path<TFormValues>>);
   }
 
-  lens<TPath extends NodePath<TLocalValues>>(path: TPath): Control<FocusedValue<TLocalValues, TPath>> {
-    const realPrefix = this.#pathResolver.resolve(path as Path<TLocalValues>);
-    const pathResolver = new PrefixedPathResolver<FocusedValue<TLocalValues, TPath>, TFormValues>(realPrefix);
+  lens<TSelection extends LensSelection<TLocalValues>>(selection: TSelection): LensResult<TLocalValues, TSelection> {
+    if (typeof selection === "string") {
+      return this.#focus(selection as Extract<TSelection, NodePath<TLocalValues>>) as LensResult<
+        TLocalValues,
+        TSelection
+      >;
+    }
 
-    return new GraphControl(this.#store, pathResolver) as Control<FocusedValue<TLocalValues, TPath>>;
-  }
-
-  pick<const TProjection extends ControlProjection<TLocalValues>>(
-    projection: TProjection,
-  ): Control<ProjectionValue<TLocalValues, TProjection>> {
-    return GraphControl.from(this.#store, this.#build(projection));
+    return GraphControl.from(
+      this.#store,
+      this.#build(selection as Extract<TSelection, ControlProjection<TLocalValues>>),
+    ) as LensResult<TLocalValues, TSelection>;
   }
 
   #build<const TProjection extends ControlProjection<TLocalValues>>(
@@ -85,5 +86,12 @@ export class GraphControl<TLocalValues extends FormValues, TFormValues extends S
     }
 
     return aliases as ControlAliasMap<ProjectionValue<TLocalValues, TProjection>, TFormValues>;
+  }
+
+  #focus<TPath extends NodePath<TLocalValues>>(path: TPath): Control<FocusedValue<TLocalValues, TPath>> {
+    const realPrefix = this.#pathResolver.resolve(path as Path<TLocalValues>);
+    const pathResolver = new PrefixedPathResolver<FocusedValue<TLocalValues, TPath>, TFormValues>(realPrefix);
+
+    return new GraphControl(this.#store, pathResolver);
   }
 }

@@ -89,7 +89,7 @@ describe("GraphControl", () => {
     expect(store.set).toHaveBeenCalledWith("invoice.client.person.documentNumber", "123");
   });
 
-  it("composes alias projections across nested picks", () => {
+  it("composes alias projections across nested lenses", () => {
     const store = createStoreMock();
     const control: Control<ProjectedValues> = GraphControl.from(store, {
       client: "invoice.client",
@@ -97,7 +97,7 @@ describe("GraphControl", () => {
       serial: "invoice.serial",
     });
 
-    const personFields = control.pick({
+    const personFields = control.lens({
       document: "person.documentNumber",
       name: "person.name",
     });
@@ -119,7 +119,7 @@ describe("GraphControl", () => {
       serial: "invoice.serial",
     };
     const control: Control<ProjectedValues> = GraphControl.from(store, aliases);
-    const personFields = control.pick({
+    const personFields = control.lens({
       document: "person.documentNumber",
       name: "person.name",
     });
@@ -206,17 +206,17 @@ describe("GraphControl", () => {
     expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Grace");
   });
 
-  it("composes nested pick over pick over pick to the final real store paths", () => {
+  it("composes nested lens over lens over lens to the final real store paths", () => {
     const store = createStoreMock();
     const control: Control<InvoiceValues> = GraphControl.from(store);
-    const projected = control.pick({
+    const projected = control.lens({
       client: "invoice.client",
       serial: "invoice.serial",
     });
-    const personProjection = projected.pick({
+    const personProjection = projected.lens({
       person: "client.person",
     });
-    const fields = personProjection.pick({
+    const fields = personProjection.lens({
       document: "person.documentNumber",
       name: "person.name",
     });
@@ -261,13 +261,13 @@ describe("GraphControl", () => {
     });
 
     expect(() =>
-      control.pick({
+      control.lens({
         contact: "contact" as never,
       }),
     ).toThrow("Path `contact` is outside this control aliases.");
   });
 
-  it("throws when a lens path is outside the current control scope", () => {
+  it("throws when a lens node path is outside the current control scope", () => {
     const store = createStoreMock();
     const control: Control<ProjectedValues> = GraphControl.from(store, {
       client: "invoice.client",
@@ -282,6 +282,6 @@ describe("GraphControl", () => {
     const store = createStoreMock();
     const control: Control<InvoiceValues> = GraphControl.from(store);
 
-    expect(() => control.pick({} as never)).toThrow("Control projection cannot be empty.");
+    expect(() => control.lens({} as never)).toThrow("Control projection cannot be empty.");
   });
 });

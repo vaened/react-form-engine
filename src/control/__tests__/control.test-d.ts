@@ -46,19 +46,20 @@ const store = new FormStore<InvoiceValues>({
 
 const form = Control.createRoot(store);
 
-const projected = form.pick({
+void form.lens({ holi: "invoice.client.contact" });
+const projected = form.lens({
   contact: "invoice.client.contact",
   person: "invoice.client.person",
   serial: "invoice.serial",
 });
-const nested = form.pick({
+const nested = form.lens({
   client: {
     contact: "invoice.client.contact",
     person: "invoice.client.person",
   },
   serial: "invoice.serial",
 });
-const personFields = projected.pick({
+const personFields = projected.lens({
   document: "person.documentNumber",
   name: "person.name",
 });
