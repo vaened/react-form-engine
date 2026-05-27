@@ -4,12 +4,13 @@
  */
 
 import type { FormStore, FormValues as StoreFormValues } from "../FormStore";
-import type { FormValues, Path, PathValue } from "../path";
+import type { FormValues, NodePath, Path, PathValue } from "../path";
 import { AliasPathResolver, type ControlAliasMap } from "./AliasPathResolver";
 import type { Control } from "./Control";
 import { PassthroughPathResolver } from "./PassthroughPathResolver";
 import type { PathResolver } from "./PathResolver";
-import type { ControlProjection, ProjectionValue } from "./types";
+import { PrefixedPathResolver } from "./PrefixedPathResolver";
+import type { ControlProjection, FocusedValue, ProjectionValue } from "./types";
 
 export class GraphControl<TLocalValues extends FormValues, TFormValues extends StoreFormValues = StoreFormValues>
   implements Control<TLocalValues>
@@ -45,6 +46,13 @@ export class GraphControl<TLocalValues extends FormValues, TFormValues extends S
 
   set<TPath extends Path<TLocalValues>>(path: TPath, value: PathValue<TLocalValues, TPath>): void {
     this.#store.set(this.#pathResolver.resolve(path), value as PathValue<TFormValues, Path<TFormValues>>);
+  }
+
+  lens<TPath extends NodePath<TLocalValues>>(path: TPath): Control<FocusedValue<TLocalValues, TPath>> {
+    const realPrefix = this.#pathResolver.resolve(path as Path<TLocalValues>);
+    const pathResolver = new PrefixedPathResolver<FocusedValue<TLocalValues, TPath>, TFormValues>(realPrefix);
+
+    return new GraphControl(this.#store, pathResolver) as Control<FocusedValue<TLocalValues, TPath>>;
   }
 
   pick<const TProjection extends ControlProjection<TLocalValues>>(
