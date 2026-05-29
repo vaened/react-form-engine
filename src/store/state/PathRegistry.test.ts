@@ -28,18 +28,6 @@ describe("PathRegistry", () => {
     expect(() => registry.describe(pathId)).toThrow('Path id "1" has not been registered.');
   });
 
-  it("unregisters existing paths and keeps unknown paths as a no-op", () => {
-    const registry = new PathRegistry();
-    const personNameId = registry.register("invoice.client.person.name");
-
-    expect(registry.unregister("invoice.client.person.name")).toBe(true);
-    expect(registry.unregister("invoice.client.person.name")).toBe(false);
-    expect(() => registry.identify("invoice.client.person.name")).toThrow(
-      'Path "invoice.client.person.name" has not been registered.',
-    );
-    expect(() => registry.describe(personNameId)).toThrow('Path id "1" has not been registered.');
-  });
-
   it("clears all registrations and resets id assignment", () => {
     const registry = new PathRegistry();
 

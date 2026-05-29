@@ -64,19 +64,6 @@ export class PathRegistry<TPath extends Path = Path> implements PathIdentifier<T
     return path;
   }
 
-  unregister(path: TPath): boolean {
-    const id = this.#ids.get(path);
-
-    if (id === undefined) {
-      return false;
-    }
-
-    this.#ids.delete(path);
-    delete this.#paths[id as number];
-
-    return true;
-  }
-
   clear(): void {
     this.#ids.clear();
     this.#paths.length = 0;
