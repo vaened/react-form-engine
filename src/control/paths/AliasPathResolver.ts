@@ -4,6 +4,7 @@
  */
 
 import type { FormValues, Path } from "../../path";
+import { SingleEntryCache } from "../../SingleEntryCache";
 import type { PathId, PathIdentifier } from "../../store/state/PathRegistry";
 import type { PathResolver } from "./PathResolver";
 
@@ -16,6 +17,7 @@ export class AliasPathResolver<TLocalValues extends FormValues, TFormValues exte
 {
   readonly #identifier: PathIdentifier<Path<TFormValues>>;
   readonly #aliases: ControlAliasMap<TLocalValues, TFormValues>;
+  readonly #lastResolution: SingleEntryCache<Path<TLocalValues>, Path<TFormValues>>;
   readonly #cache = new Map<Path<TLocalValues>, PathId<Path<TFormValues>>>();
 
   constructor(identifier: PathIdentifier<Path<TFormValues>>, aliases: ControlAliasMap<TLocalValues, TFormValues>) {
@@ -25,6 +27,7 @@ export class AliasPathResolver<TLocalValues extends FormValues, TFormValues exte
 
     this.#identifier = identifier;
     this.#aliases = aliases;
+    this.#lastResolution = new SingleEntryCache();
   }
 
   get aliases(): Readonly<ControlAliasMap<TLocalValues, TFormValues>> {
@@ -32,16 +35,26 @@ export class AliasPathResolver<TLocalValues extends FormValues, TFormValues exte
   }
 
   resolve<TPath extends Path<TLocalValues>>(path: TPath): Path<TFormValues> {
+    const entry = this.#lastResolution.get(path);
+
+    if (entry !== undefined) {
+      return entry;
+    }
+
     const cachedPathId = this.#cache.get(path);
 
-    if (cachedPathId) {
-      return this.#identifier.describe(cachedPathId);
+    if (cachedPathId !== undefined) {
+      const cachedPath = this.#identifier.describe(cachedPathId);
+      this.#lastResolution.set(path, cachedPath);
+
+      return cachedPath;
     }
 
     const exactMatch = this.#aliases[path];
 
     if (exactMatch) {
       const id = this.#identifier.register(exactMatch);
+      this.#lastResolution.set(path, exactMatch);
       this.#cache.set(path, id);
 
       return exactMatch;
@@ -67,6 +80,7 @@ export class AliasPathResolver<TLocalValues extends FormValues, TFormValues exte
       const resolvedPath = `${formPrefix}${(path as string).slice(prefix.length)}` as Path<TFormValues>;
 
       const id = this.#identifier.register(resolvedPath);
+      this.#lastResolution.set(path, resolvedPath);
       this.#cache.set(path, id);
 
       return resolvedPath;
