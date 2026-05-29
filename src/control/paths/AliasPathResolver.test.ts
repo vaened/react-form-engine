@@ -144,15 +144,17 @@ describe("AliasPathResolver", () => {
     const identifier = createIdentifierMock();
     const aliases: ControlAliasMap<LocalValues, FormValues> = {
       person: "invoice.client.person",
+      serial: "invoice.serial",
     };
     const mapper = new AliasPathResolver<LocalValues, FormValues>(identifier, aliases);
 
     expect(mapper.resolve("person.name")).toBe("invoice.client.person.name");
+    expect(mapper.resolve("serial.number")).toBe("invoice.serial.number");
 
     aliases.person = "invoice.client.contact";
 
     expect(mapper.resolve("person.name")).toBe("invoice.client.person.name");
-    expect(identifier.register).toHaveBeenCalledTimes(1);
+    expect(identifier.register).toHaveBeenCalledTimes(2);
     expect(identifier.register).toHaveBeenCalledWith("invoice.client.person.name");
     expect(identifier.describe).toHaveBeenCalledTimes(1);
     expect(identifier.describe).toHaveBeenCalledWith(1 as PathId<Path<FormValues>>);
