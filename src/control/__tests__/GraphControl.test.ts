@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { FormStore } from "../../FormStore";
+import type { Path } from "../../path";
+import { PathRegistry } from "../../store/state/PathRegistry";
 import type { Control } from "../Control";
 import { GraphControl } from "../GraphControl";
 import type { ControlAliasMap } from "../paths/AliasPathResolver";
@@ -42,15 +44,18 @@ type ProjectedValues = {
 };
 
 function createStoreMock(): FormStore<InvoiceValues> & {
+  identifier: PathRegistry<Path<InvoiceValues>>;
   register: ReturnType<typeof vi.fn>;
   unregister: ReturnType<typeof vi.fn>;
   set: ReturnType<typeof vi.fn>;
 } {
   return {
+    identifier: new PathRegistry<Path<InvoiceValues>>(),
     register: vi.fn(),
     unregister: vi.fn(),
     set: vi.fn(),
   } as FormStore<InvoiceValues> & {
+    identifier: PathRegistry<Path<InvoiceValues>>;
     register: ReturnType<typeof vi.fn>;
     unregister: ReturnType<typeof vi.fn>;
     set: ReturnType<typeof vi.fn>;
