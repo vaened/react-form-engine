@@ -4,6 +4,7 @@
  */
 
 import type { Path, PathValue } from "./path";
+import { type PathIdentifier, PathRegistry } from "./store/state/PathRegistry";
 
 export type FormValues = Record<string, unknown>;
 
@@ -12,6 +13,12 @@ export type FormMode = "full" | "patch";
 export type FieldState = {
   flags: number;
   errors: unknown[];
+};
+
+type PathNode = {
+  children: Map<string, PathNode>;
+  parent: PathNode | null;
+  state?: FieldState;
 };
 
 function createFieldState(): FieldState {
@@ -28,7 +35,10 @@ export type FormStoreOptions<TValues extends FormValues> = {
 };
 
 export class FormStore<TValues extends FormValues> {
+  readonly #registry: PathRegistry<Path<TValues>>;
   readonly #mode: FormMode;
+  readonly #nodes = new Map<string, PathNode>();
+  readonly #root: PathNode;
 
   #values: TValues;
   #defaults: TValues;
@@ -38,6 +48,11 @@ export class FormStore<TValues extends FormValues> {
     this.#mode = options.mode ?? "full";
     this.#values = options.values;
     this.#defaults = options.defaults ?? options.values;
+    this.#registry = new PathRegistry<Path<TValues>>();
+    this.#root = {
+      children: new Map(),
+      parent: null,
+    };
   }
 
   get mode(): FormMode {
@@ -56,6 +71,10 @@ export class FormStore<TValues extends FormValues> {
     return this.#states;
   }
 
+  get identifier(): PathIdentifier<Path<TValues>> {
+    return this.#registry;
+  }
+
   register<TPath extends Path<TValues>>(path: TPath): FieldState {
     const existingState = this.#states.get(path);
 
@@ -63,13 +82,23 @@ export class FormStore<TValues extends FormValues> {
       return existingState;
     }
 
+    const node = this.#ensureNode(path);
     const state = createFieldState();
+
+    node.state = state;
     this.#states.set(path, state);
 
     return state;
   }
 
   unregister<TPath extends Path<TValues>>(path: TPath): void {
+    const node = this.#nodes.get(path);
+
+    if (!node?.state) {
+      return;
+    }
+
+    delete node.state;
     this.#states.delete(path);
   }
 
@@ -79,6 +108,43 @@ export class FormStore<TValues extends FormValues> {
 
   set<TPath extends Path<TValues>>(path: TPath, value: PathValue<TValues, TPath>): void {
     FormStore.setAtPath(this.#values, path, value);
+  }
+
+  #ensureNode(path: string): PathNode {
+    const existingNode = this.#nodes.get(path);
+
+    if (existingNode) {
+      return existingNode;
+    }
+
+    const segments = path.split(".");
+
+    let currentNode = this.#root;
+    let currentPath = "";
+
+    for (const segment of segments) {
+      currentPath = currentPath ? `${currentPath}.${segment}` : segment;
+
+      let nextNode = currentNode.children.get(segment);
+
+      if (!nextNode) {
+        nextNode = {
+          children: new Map(),
+          parent: currentNode,
+        };
+
+        currentNode.children.set(segment, nextNode);
+        this.#nodes.set(currentPath, nextNode);
+      }
+
+      if (!nextNode) {
+        throw new Error(`Failed to create path node for \`${currentPath}\`.`);
+      }
+
+      currentNode = nextNode;
+    }
+
+    return currentNode;
   }
 
   static setAtPath<TValue>(target: unknown, path: string, value: TValue): void {
