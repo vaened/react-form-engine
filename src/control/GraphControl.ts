@@ -32,7 +32,9 @@ export class GraphControl<TLocalValues extends FormValues, TFormValues extends S
     store: FormStore<TFormValues>,
     aliases?: ControlAliasMap<TLocalValues, TFormValues>,
   ): GraphControl<TLocalValues, TFormValues> {
-    const pathResolver = aliases ? new AliasPathResolver(aliases) : new PassthroughPathResolver<TLocalValues>();
+    const pathResolver = aliases
+      ? new AliasPathResolver(store.identifier, aliases)
+      : new PassthroughPathResolver<TLocalValues>();
     return new GraphControl(store, pathResolver as PathResolver<TLocalValues, TFormValues>);
   }
 
