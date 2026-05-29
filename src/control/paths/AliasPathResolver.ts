@@ -54,10 +54,8 @@ export class AliasPathResolver<TLocalValues extends FormValues, TFormValues exte
 
     if (exactMatch) {
       const id = this.#identifier.register(exactMatch);
-      this.#lastResolution.set(path, exactMatch);
-      this.#cache.set(path, id);
 
-      return exactMatch;
+      return this.#remember(path, exactMatch, id);
     }
 
     let prefix = path as string;
@@ -78,14 +76,22 @@ export class AliasPathResolver<TLocalValues extends FormValues, TFormValues exte
       }
 
       const resolvedPath = `${formPrefix}${(path as string).slice(prefix.length)}` as Path<TFormValues>;
-
       const id = this.#identifier.register(resolvedPath);
-      this.#lastResolution.set(path, resolvedPath);
-      this.#cache.set(path, id);
 
-      return resolvedPath;
+      return this.#remember(path, resolvedPath, id);
     }
 
     throw new Error(`Path \`${path}\` is outside this control aliases.`);
+  }
+
+  #remember<TPath extends Path<TLocalValues>>(
+    path: TPath,
+    resolvedPath: Path<TFormValues>,
+    id: PathId<Path<TFormValues>>,
+  ): Path<TFormValues> {
+    this.#lastResolution.set(path, resolvedPath);
+    this.#cache.set(path, id);
+
+    return resolvedPath;
   }
 }
