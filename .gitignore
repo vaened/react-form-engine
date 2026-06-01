@@ -38,6 +38,7 @@ coverage/
 .parcel-cache/
 .rts2_cache_*/
 .rpt2_cache/
+.atl
 
 # Lint/style caches
 .eslintcache
