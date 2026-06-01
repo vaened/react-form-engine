@@ -14,6 +14,8 @@ export type PathId<TPath extends Path = Path> = number & {
 export interface PathIdentifier<TPath extends Path = Path> {
   register(path: TPath): PathId<TPath>;
 
+  resolve(path: TPath): PathId<TPath> | undefined;
+
   identify(path: TPath): PathId<TPath>;
 
   describe(id: PathId<TPath>): TPath;
@@ -44,8 +46,12 @@ export class PathRegistry<TPath extends Path = Path> implements PathIdentifier<T
     return id;
   }
 
+  resolve(path: TPath): PathId<TPath> | undefined {
+    return this.#ids.get(path);
+  }
+
   identify(path: TPath): PathId<TPath> {
-    const id = this.#ids.get(path);
+    const id = this.resolve(path);
 
     if (id === undefined) {
       throw new Error(`Path "${path}" has not been registered.`);
