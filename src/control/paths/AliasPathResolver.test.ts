@@ -47,16 +47,21 @@ type FormValues = {
 
 function createIdentifierMock(): PathIdentifier<Path<FormValues>> & {
   register: ReturnType<typeof vi.fn>;
+  resolve: ReturnType<typeof vi.fn>;
   identify: ReturnType<typeof vi.fn>;
   describe: ReturnType<typeof vi.fn>;
+  rootId: PathId<Path<FormValues>>;
 } {
   const pathId = 1 as PathId<Path<FormValues>>;
   const register = vi.fn(() => pathId);
+  const resolve = vi.fn(() => pathId);
   const identify = vi.fn(() => pathId);
   const describe = vi.fn(() => "invoice.client.person.name" as Path<FormValues>);
 
   return {
+    rootId: 0 as PathId<Path<FormValues>>,
     register,
+    resolve,
     identify,
     describe,
   };

@@ -12,6 +12,8 @@ export type PathId<TPath extends Path = Path> = number & {
 };
 
 export interface PathIdentifier<TPath extends Path = Path> {
+  readonly rootId: PathId<TPath>;
+
   register(path: TPath): PathId<TPath>;
 
   resolve(path: TPath): PathId<TPath> | undefined;
@@ -22,10 +24,16 @@ export interface PathIdentifier<TPath extends Path = Path> {
 }
 
 export class PathRegistry<TPath extends Path = Path> implements PathIdentifier<TPath> {
-  #nextId = 1;
+  #nextId: number;
 
   readonly #ids = new Map<TPath, PathId<TPath>>();
   readonly #paths: Array<TPath | undefined> = [];
+  readonly rootId: PathId<TPath>;
+
+  constructor() {
+    this.rootId = 0 as PathId<TPath>;
+    this.#nextId = 1;
+  }
 
   register(path: TPath): PathId<TPath> {
     PathRegistry.assertValid(path);
