@@ -23,7 +23,7 @@ export type Primitive = bigint | boolean | null | number | string | symbol | und
 
 export type HostNativeObject = Blob | Date | File | FileList;
 
-export type FormValues = Record<string, unknown> | readonly unknown[];
+export type FormValues = Record<string, unknown>;
 
 type StringKeyOf<T> = Extract<keyof T, string>;
 

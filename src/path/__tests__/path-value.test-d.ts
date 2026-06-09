@@ -32,9 +32,6 @@ type NullableArrayValues = {
     | null;
 };
 
-type RootTupleValues = [number, { label: string }, string[]];
-type RootReadonlyTupleValues = readonly [number, { label: string }, readonly string[]];
-
 type OptionalTupleValues = {
   point?: [number, number];
   aliases?: [string[], string[]];
@@ -106,16 +103,6 @@ type OptionalArrayAliasValueExpectation = Expect<
 type NullableArrayValueExpectation = Expect<Equal<PathValue<NullableArrayValues, "items.0.name">, string>>;
 type NullableArrayAliasValueExpectation = Expect<Equal<PathValue<NullableArrayValues, "items.0.aliases.0">, string>>;
 
-type RootTupleIndexValueExpectation = Expect<Equal<PathValue<RootTupleValues, "0">, number>>;
-type RootTupleObjectValueExpectation = Expect<Equal<PathValue<RootTupleValues, "1.label">, string>>;
-type RootTupleArrayValueExpectation = Expect<Equal<PathValue<RootTupleValues, "2">, string[]>>;
-type RootTupleArrayItemValueExpectation = Expect<Equal<PathValue<RootTupleValues, "2.0">, string>>;
-
-type RootReadonlyTupleIndexValueExpectation = Expect<Equal<PathValue<RootReadonlyTupleValues, "0">, number>>;
-type RootReadonlyTupleObjectValueExpectation = Expect<Equal<PathValue<RootReadonlyTupleValues, "1.label">, string>>;
-type RootReadonlyTupleArrayValueExpectation = Expect<Equal<PathValue<RootReadonlyTupleValues, "2">, readonly string[]>>;
-type RootReadonlyTupleArrayItemValueExpectation = Expect<Equal<PathValue<RootReadonlyTupleValues, "2.0">, string>>;
-
 type OptionalTupleValueExpectation = Expect<Equal<PathValue<OptionalTupleValues, "point.1">, number | undefined>>;
 type OptionalTupleArraySlotValueExpectation = Expect<
   Equal<PathValue<OptionalTupleValues, "aliases.0">, string[] | undefined>
@@ -148,14 +135,6 @@ declare const optionalArrayValueExpectation: OptionalArrayValueExpectation;
 declare const optionalArrayAliasValueExpectation: OptionalArrayAliasValueExpectation;
 declare const nullableArrayValueExpectation: NullableArrayValueExpectation;
 declare const nullableArrayAliasValueExpectation: NullableArrayAliasValueExpectation;
-declare const rootTupleIndexValueExpectation: RootTupleIndexValueExpectation;
-declare const rootTupleObjectValueExpectation: RootTupleObjectValueExpectation;
-declare const rootTupleArrayValueExpectation: RootTupleArrayValueExpectation;
-declare const rootTupleArrayItemValueExpectation: RootTupleArrayItemValueExpectation;
-declare const rootReadonlyTupleIndexValueExpectation: RootReadonlyTupleIndexValueExpectation;
-declare const rootReadonlyTupleObjectValueExpectation: RootReadonlyTupleObjectValueExpectation;
-declare const rootReadonlyTupleArrayValueExpectation: RootReadonlyTupleArrayValueExpectation;
-declare const rootReadonlyTupleArrayItemValueExpectation: RootReadonlyTupleArrayItemValueExpectation;
 declare const optionalTupleValueExpectation: OptionalTupleValueExpectation;
 declare const optionalTupleArraySlotValueExpectation: OptionalTupleArraySlotValueExpectation;
 declare const optionalTupleArrayItemValueExpectation: OptionalTupleArrayItemValueExpectation;
@@ -182,14 +161,6 @@ void optionalArrayValueExpectation;
 void optionalArrayAliasValueExpectation;
 void nullableArrayValueExpectation;
 void nullableArrayAliasValueExpectation;
-void rootTupleIndexValueExpectation;
-void rootTupleObjectValueExpectation;
-void rootTupleArrayValueExpectation;
-void rootTupleArrayItemValueExpectation;
-void rootReadonlyTupleIndexValueExpectation;
-void rootReadonlyTupleObjectValueExpectation;
-void rootReadonlyTupleArrayValueExpectation;
-void rootReadonlyTupleArrayItemValueExpectation;
 void optionalTupleValueExpectation;
 void optionalTupleArraySlotValueExpectation;
 void optionalTupleArrayItemValueExpectation;
@@ -204,9 +175,6 @@ void unionTupleScalarValueExpectation;
 
 // @ts-expect-error invalid example path
 export type InvalidExamplePathValue = PathValue<ExampleValues, "person.unknown">;
-
-// @ts-expect-error invalid tuple index
-export type InvalidTuplePathValue = PathValue<RootTupleValues, "3">;
 
 // @ts-expect-error invalid union path
 export type InvalidUnionPathValue = PathValue<UnionValues, "payload.2">;

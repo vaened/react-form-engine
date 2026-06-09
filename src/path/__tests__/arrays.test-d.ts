@@ -33,8 +33,6 @@ type ReadonlyArrayValues = {
   }[];
 };
 
-type RootPrimitiveArrayValues = string[];
-
 type NestedArrayExpectedPath =
   | "matrix"
   | `matrix.${number}`
@@ -140,24 +138,6 @@ type ReadonlyArrayArrayPathExpectationB = Expect<
   Extends<ReadonlyArrayExpectedArrayPath, ArrayPath<ReadonlyArrayValues>>
 >;
 
-type RootPrimitiveArrayExpectedPath = `${number}`;
-type RootPrimitiveArrayExpectedFieldPath = `${number}`;
-
-type RootPrimitiveArrayPathExpectationA = Expect<
-  Extends<Path<RootPrimitiveArrayValues>, RootPrimitiveArrayExpectedPath>
->;
-type RootPrimitiveArrayPathExpectationB = Expect<
-  Extends<RootPrimitiveArrayExpectedPath, Path<RootPrimitiveArrayValues>>
->;
-type RootPrimitiveArrayFieldPathExpectationA = Expect<
-  Extends<FieldPath<RootPrimitiveArrayValues>, RootPrimitiveArrayExpectedFieldPath>
->;
-type RootPrimitiveArrayFieldPathExpectationB = Expect<
-  Extends<RootPrimitiveArrayExpectedFieldPath, FieldPath<RootPrimitiveArrayValues>>
->;
-type RootPrimitiveArrayNodePathExpectation = Expect<Extends<NodePath<RootPrimitiveArrayValues>, never>>;
-type RootPrimitiveArrayArrayPathExpectation = Expect<Extends<ArrayPath<RootPrimitiveArrayValues>, never>>;
-
 declare const nestedArrayPathExpectationA: NestedArrayPathExpectationA;
 declare const nestedArrayPathExpectationB: NestedArrayPathExpectationB;
 declare const nestedArrayFieldPathExpectationA: NestedArrayFieldPathExpectationA;
@@ -190,12 +170,6 @@ declare const readonlyArrayNodePathExpectationA: ReadonlyArrayNodePathExpectatio
 declare const readonlyArrayNodePathExpectationB: ReadonlyArrayNodePathExpectationB;
 declare const readonlyArrayArrayPathExpectationA: ReadonlyArrayArrayPathExpectationA;
 declare const readonlyArrayArrayPathExpectationB: ReadonlyArrayArrayPathExpectationB;
-declare const rootPrimitiveArrayPathExpectationA: RootPrimitiveArrayPathExpectationA;
-declare const rootPrimitiveArrayPathExpectationB: RootPrimitiveArrayPathExpectationB;
-declare const rootPrimitiveArrayFieldPathExpectationA: RootPrimitiveArrayFieldPathExpectationA;
-declare const rootPrimitiveArrayFieldPathExpectationB: RootPrimitiveArrayFieldPathExpectationB;
-declare const rootPrimitiveArrayNodePathExpectation: RootPrimitiveArrayNodePathExpectation;
-declare const rootPrimitiveArrayArrayPathExpectation: RootPrimitiveArrayArrayPathExpectation;
 
 void nestedArrayPathExpectationA;
 void nestedArrayPathExpectationB;
@@ -229,28 +203,16 @@ void readonlyArrayNodePathExpectationA;
 void readonlyArrayNodePathExpectationB;
 void readonlyArrayArrayPathExpectationA;
 void readonlyArrayArrayPathExpectationB;
-void rootPrimitiveArrayPathExpectationA;
-void rootPrimitiveArrayPathExpectationB;
-void rootPrimitiveArrayFieldPathExpectationA;
-void rootPrimitiveArrayFieldPathExpectationB;
-void rootPrimitiveArrayNodePathExpectation;
-void rootPrimitiveArrayArrayPathExpectation;
 
 const matrixArrayPath: ArrayPath<NestedArrayValues> = "matrix.0";
 const nestedMatrixTagsArrayPath: ArrayPath<NestedArrayValues> = "matrix.0.0.tags";
 const optionalAliasesArrayPath: ArrayPath<OptionalArrayValues> = "items.0.aliases";
 const nullableAliasesArrayPath: ArrayPath<NullableArrayValues> = "items.0.aliases";
 const readonlyAliasesArrayPath: ArrayPath<ReadonlyArrayValues> = "items.0.aliases";
-const rootPrimitiveArrayFieldPath: FieldPath<RootPrimitiveArrayValues> = "0";
 
 void matrixArrayPath;
 void nestedMatrixTagsArrayPath;
 void optionalAliasesArrayPath;
 void nullableAliasesArrayPath;
 void readonlyAliasesArrayPath;
-void rootPrimitiveArrayFieldPath;
 
-// @ts-expect-error root primitive array does not expose an empty array path
-const invalidRootPrimitiveArrayPath: ArrayPath<RootPrimitiveArrayValues> = "0";
-
-void invalidRootPrimitiveArrayPath;
