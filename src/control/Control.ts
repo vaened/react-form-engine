@@ -4,9 +4,9 @@
  */
 
 import type { FormStore, FormValues as StoreFormValues } from "../FormStore";
-import type { FormValues, Path, PathValue } from "../path";
+import type { FormValues, NodePath, Path, PathValue } from "../path";
 import { GraphControl } from "./GraphControl";
-import type { LensResult, LensSelection } from "./types";
+import type { ControlProjection, FocusedValue, ProjectionValue } from "./types";
 
 /**
  * A control lens over form values.
@@ -65,7 +65,8 @@ export interface Control<TValues extends FormValues> {
    *
    * summary.set("name", "Ada");
    */
-  lens<TSelection extends LensSelection<TValues>>(selection: TSelection): LensResult<TValues, TSelection>;
+  lens<TPath extends NodePath<TValues>>(selection: TPath): Control<FocusedValue<TValues, TPath>>;
+  lens<TProjection extends ControlProjection<TValues>>(selection: TProjection): Control<ProjectionValue<TValues, TProjection>>;
 }
 
 function createRoot<TValues extends StoreFormValues>(store: FormStore<TValues>): Control<TValues> {
