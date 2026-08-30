@@ -66,7 +66,9 @@ export interface Control<TValues extends FormValues> {
    * summary.set("name", "Ada");
    */
   lens<TPath extends NodePath<TValues>>(selection: TPath): Control<FocusedValue<TValues, TPath>>;
-  lens<TProjection extends ControlProjection<TValues>>(selection: TProjection): Control<ProjectionValue<TValues, TProjection>>;
+  lens<TProjection extends ControlProjection<TValues>>(
+    selection: TProjection,
+  ): Control<ProjectionValue<TValues, TProjection>>;
 }
 
 function createRoot<TValues extends StoreFormValues>(store: FormStore<TValues>): Control<TValues> {
