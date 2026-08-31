@@ -5,24 +5,27 @@
 
 import type { FormStore, FormValues as StoreFormValues } from "../FormStore";
 import type { FormValues, NodePath, Path, PathValue } from "../path";
-import { GraphControl } from "./GraphControl";
+import { MappedNodeControl } from "./MappedNodeControl";
 import type { ControlProjection, FocusedValue, ProjectionValue } from "./types";
 
 /**
- * A control lens over form values.
+ * A control over a scoped domain of form values.
  *
- * A control may coincide with the whole form or with a structural subtree, but
- * it is not defined by that shape. It is defined by the scoped field domain it
- * exposes: the set of field paths that are visible and operable from a given
- * scope.
+ * It may represent the whole form or a structural node. Its scope is defined
+ * by the paths that are visible and operable from its current context.
  *
- * Those paths are always interpreted relative to that scope.
+ * Every path received by its operations is interpreted relative to that
+ * context.
  *
- * A control is a lens over form state, not the owner of that state.
+ * The control provides access to the FormStore, but does not own or copy its
+ * values or state.
  */
-export interface Control<TValues extends FormValues> {
+export interface NodeControl<TValues extends FormValues> {
   /**
-   * Registers a field path inside the current control scope.
+   * Registers a path inside the current context without assigning or changing
+   * its value.
+   *
+   * The path uses dot notation and is interpreted relative to the control.
    *
    * @example
    * control.register("person.name");
@@ -30,7 +33,10 @@ export interface Control<TValues extends FormValues> {
   register<TPath extends Path<TValues>>(path: TPath): void;
 
   /**
-   * Unregisters a field path inside the current control scope.
+   * Removes a path from the registration lifecycle without deleting or
+   * changing its value.
+   *
+   * The path is interpreted relative to the current context.
    *
    * @example
    * control.unregister("person.name");
@@ -38,7 +44,10 @@ export interface Control<TValues extends FormValues> {
   unregister<TPath extends Path<TValues>>(path: TPath): void;
 
   /**
-   * Writes a value to a field path inside the current control scope.
+   * Writes a value to a path in the current context without changing its
+   * registration.
+   *
+   * The value type is determined by the selected path.
    *
    * @example
    * control.set("person.name", "Ada");
@@ -71,8 +80,49 @@ export interface Control<TValues extends FormValues> {
   ): Control<ProjectionValue<TValues, TProjection>>;
 }
 
+/**
+ * A control bound to one exact field.
+ *
+ * Unlike NodeControl, it does not expose a path domain: the target field is
+ * already contained by the control and every operation acts directly on it.
+ *
+ * Its methods therefore receive no paths, and the control cannot derive other
+ * controls through lens.
+ *
+ * This allows a reusable component to depend only on FieldControl<TValue>,
+ * without knowing the root form type or the field's absolute path.
+ */
+export interface FieldControl<TValue> {
+  /**
+   * Registers this field without assigning or changing its value.
+   *
+   * @example
+   * control.register();
+   */
+  register(): void;
+
+  /**
+   * Removes this field from the registration lifecycle while preserving its
+   * current value.
+   *
+   * @example
+   * control.unregister();
+   */
+  unregister(): void;
+
+  /**
+   * Writes this field's value without changing whether it is registered.
+   *
+   * @example
+   * control.set("Ada");
+   */
+  set(value: TValue): void;
+}
+
+export type Control<TValues extends FormValues> = NodeControl<TValues>;
+
 function createRoot<TValues extends StoreFormValues>(store: FormStore<TValues>): Control<TValues> {
-  return GraphControl.from(store);
+  return MappedNodeControl.from(store);
 }
 
 export const Control = {

@@ -4,7 +4,7 @@ import type { FormStore } from "../../FormStore";
 import type { Path } from "../../path";
 import { PathRegistry } from "../../store/state/PathRegistry";
 import type { Control } from "../Control";
-import { GraphControl } from "../GraphControl";
+import { MappedNodeControl } from "../MappedNodeControl";
 import type { ControlAliasMap } from "../paths/AliasPathResolver";
 
 type InvoiceValues = {
@@ -62,10 +62,10 @@ function createStoreMock(): FormStore<InvoiceValues> & {
   };
 }
 
-describe("GraphControl", () => {
+describe("MappedNodeControl", () => {
   it("passes direct paths through when created without aliases", () => {
     const store = createStoreMock();
-    const control: Control<InvoiceValues> = GraphControl.from(store);
+    const control: Control<InvoiceValues> = MappedNodeControl.from(store);
 
     control.register("invoice.client.person.name");
     control.unregister("invoice.serial.series");
@@ -83,7 +83,7 @@ describe("GraphControl", () => {
       person: "invoice.client.person",
       serial: "invoice.serial",
     };
-    const control: Control<ProjectedValues> = GraphControl.from(store, aliases);
+    const control: Control<ProjectedValues> = MappedNodeControl.from(store, aliases);
 
     control.register("person.name");
     control.unregister("serial.number");
@@ -96,7 +96,7 @@ describe("GraphControl", () => {
 
   it("composes alias projections across nested lenses", () => {
     const store = createStoreMock();
-    const control: Control<ProjectedValues> = GraphControl.from(store, {
+    const control: Control<ProjectedValues> = MappedNodeControl.from(store, {
       client: "invoice.client",
       person: "invoice.client.person",
       serial: "invoice.serial",
@@ -123,7 +123,7 @@ describe("GraphControl", () => {
       person: "invoice.client.person",
       serial: "invoice.serial",
     };
-    const control: Control<ProjectedValues> = GraphControl.from(store, aliases);
+    const control: Control<ProjectedValues> = MappedNodeControl.from(store, aliases);
     const personFields = control.lens({
       document: "person.documentNumber",
       name: "person.name",
@@ -142,7 +142,7 @@ describe("GraphControl", () => {
 
   it("focuses a subtree with lens from a direct control", () => {
     const store = createStoreMock();
-    const control: Control<InvoiceValues> = GraphControl.from(store);
+    const control: Control<InvoiceValues> = MappedNodeControl.from(store);
     const person = control.lens("invoice.client.person");
 
     person.register("name");
@@ -161,7 +161,7 @@ describe("GraphControl", () => {
       person: "invoice.client.person",
       serial: "invoice.serial",
     };
-    const control: Control<ProjectedValues> = GraphControl.from(store, aliases);
+    const control: Control<ProjectedValues> = MappedNodeControl.from(store, aliases);
     const person = control.lens("person");
 
     aliases.person = "invoice.client.contact" as never;
@@ -182,7 +182,7 @@ describe("GraphControl", () => {
       person: "invoice.client.person",
       serial: "invoice.serial",
     };
-    const control: Control<ProjectedValues> = GraphControl.from(store, aliases);
+    const control: Control<ProjectedValues> = MappedNodeControl.from(store, aliases);
     const person = control.lens("client.person");
 
     aliases.client = "invoice.otherClient" as never;
@@ -198,7 +198,7 @@ describe("GraphControl", () => {
 
   it("allows lens chaining across nested nodes", () => {
     const store = createStoreMock();
-    const control: Control<InvoiceValues> = GraphControl.from(store);
+    const control: Control<InvoiceValues> = MappedNodeControl.from(store);
     const client = control.lens("invoice.client");
     const person = client.lens("person");
 
@@ -213,7 +213,7 @@ describe("GraphControl", () => {
 
   it("composes nested lens over lens over lens to the final real store paths", () => {
     const store = createStoreMock();
-    const control: Control<InvoiceValues> = GraphControl.from(store);
+    const control: Control<InvoiceValues> = MappedNodeControl.from(store);
     const projected = control.lens({
       client: "invoice.client",
       serial: "invoice.serial",
@@ -242,7 +242,7 @@ describe("GraphControl", () => {
       person: "invoice.client.person",
       serial: "invoice.serial",
     };
-    const control: Control<ProjectedValues> = GraphControl.from(store, aliases);
+    const control: Control<ProjectedValues> = MappedNodeControl.from(store, aliases);
     const client = control.lens("client");
     const person = client.lens("person");
 
@@ -259,7 +259,7 @@ describe("GraphControl", () => {
 
   it("throws when a projection path is outside the current control scope", () => {
     const store = createStoreMock();
-    const control: Control<ProjectedValues> = GraphControl.from(store, {
+    const control: Control<ProjectedValues> = MappedNodeControl.from(store, {
       client: "invoice.client",
       person: "invoice.client.person",
       serial: "invoice.serial",
@@ -274,7 +274,7 @@ describe("GraphControl", () => {
 
   it("throws when a lens node path is outside the current control scope", () => {
     const store = createStoreMock();
-    const control: Control<ProjectedValues> = GraphControl.from(store, {
+    const control: Control<ProjectedValues> = MappedNodeControl.from(store, {
       client: "invoice.client",
       person: "invoice.client.person",
       serial: "invoice.serial",
@@ -285,7 +285,7 @@ describe("GraphControl", () => {
 
   it("throws when the projection is empty", () => {
     const store = createStoreMock();
-    const control: Control<InvoiceValues> = GraphControl.from(store);
+    const control: Control<InvoiceValues> = MappedNodeControl.from(store);
 
     expect(() => control.lens({} as never)).toThrow("Control projection cannot be empty.");
   });

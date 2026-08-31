@@ -3,9 +3,10 @@
  * @link https://vaened.dev DevFolio
  */
 
-export type { Control as ControlType } from "./Control";
+export { BoundFieldControl } from "./BoundFieldControl";
+export type { Control as ControlType, FieldControl, NodeControl } from "./Control";
 export { Control } from "./Control";
-export { GraphControl } from "./GraphControl";
+export { MappedNodeControl } from "./MappedNodeControl";
 export type { ControlAliasMap } from "./paths/AliasPathResolver";
 export { AliasPathResolver } from "./paths/AliasPathResolver";
 export { PassthroughPathResolver } from "./paths/PassthroughPathResolver";

@@ -1,6 +1,8 @@
-import type { ControlType } from "../../index";
-import { Control, FormStore } from "../../index";
+import { FormStore } from "../../FormStore";
 import type { Equal, Expect } from "../../path/__tests__/type-assertions";
+import type { NodeControl } from "../Control";
+import { MappedNodeControl } from "../MappedNodeControl";
+import type { ControlAliasMap } from "../paths/AliasPathResolver";
 
 type InvoiceValues = {
   invoice: {
@@ -19,6 +21,17 @@ type InvoiceValues = {
       number: string;
       series: string;
     };
+  };
+};
+
+type AliasedValues = {
+  person: {
+    documentNumber: string;
+    name: string;
+  };
+  serial: {
+    number: string;
+    series: string;
   };
 };
 
@@ -44,7 +57,12 @@ const store = new FormStore<InvoiceValues>({
   },
 });
 
-const form = Control.createRoot(store);
+const form = MappedNodeControl.from(store);
+const aliases = {
+  person: "invoice.client.person",
+  serial: "invoice.serial",
+} satisfies ControlAliasMap<AliasedValues, InvoiceValues>;
+const aliased = MappedNodeControl.from<AliasedValues, InvoiceValues>(store, aliases);
 
 void form.lens({ holi: "invoice.client.contact" });
 const projected = form.lens({
@@ -65,11 +83,14 @@ const personFields = projected.lens({
 });
 const person = projected.lens("person");
 
-type FormExpectation = Expect<Equal<typeof form, ControlType<InvoiceValues>>>;
+type FormImplementationExpectation = Expect<Equal<typeof form, MappedNodeControl<InvoiceValues, InvoiceValues>>>;
+type FormContractExpectation = Expect<Equal<typeof form extends NodeControl<InvoiceValues> ? true : false, true>>;
+type AliasedImplementationExpectation = Expect<Equal<typeof aliased, MappedNodeControl<AliasedValues, InvoiceValues>>>;
+type AliasedContractExpectation = Expect<Equal<typeof aliased extends NodeControl<AliasedValues> ? true : false, true>>;
 type ProjectedExpectation = Expect<
   Equal<
     typeof projected,
-    ControlType<{
+    NodeControl<{
       contact: {
         email: string;
         phone: string;
@@ -88,7 +109,7 @@ type ProjectedExpectation = Expect<
 type NestedExpectation = Expect<
   Equal<
     typeof nested,
-    ControlType<{
+    NodeControl<{
       client: {
         contact: {
           email: string;
@@ -109,7 +130,7 @@ type NestedExpectation = Expect<
 type PersonFieldsExpectation = Expect<
   Equal<
     typeof personFields,
-    ControlType<{
+    NodeControl<{
       document: string;
       name: string;
     }>
@@ -118,20 +139,26 @@ type PersonFieldsExpectation = Expect<
 type PersonExpectation = Expect<
   Equal<
     typeof person,
-    ControlType<{
+    NodeControl<{
       documentNumber: string;
       name: string;
     }>
   >
 >;
 
-declare const formExpectation: FormExpectation;
+declare const formImplementationExpectation: FormImplementationExpectation;
+declare const formContractExpectation: FormContractExpectation;
+declare const aliasedImplementationExpectation: AliasedImplementationExpectation;
+declare const aliasedContractExpectation: AliasedContractExpectation;
 declare const projectedExpectation: ProjectedExpectation;
 declare const nestedExpectation: NestedExpectation;
 declare const personFieldsExpectation: PersonFieldsExpectation;
 declare const personExpectation: PersonExpectation;
 
-void formExpectation;
+void formImplementationExpectation;
+void formContractExpectation;
+void aliasedImplementationExpectation;
+void aliasedContractExpectation;
 void projectedExpectation;
 void nestedExpectation;
 void personFieldsExpectation;
@@ -140,6 +167,10 @@ void personExpectation;
 form.register("invoice.client.person.name");
 form.unregister("invoice.client.person.name");
 form.set("invoice.client.person.name", "Grace");
+
+aliased.register("person.name");
+aliased.unregister("serial.number");
+aliased.set("person.documentNumber", "456");
 
 projected.register("person.name");
 projected.register("contact.phone");
@@ -166,6 +197,12 @@ person.set("documentNumber", "456");
 
 // @ts-expect-error projected control does not expose full global path
 projected.register("invoice.client.person.name");
+
+// @ts-expect-error aliased control only exposes its local domain
+aliased.register("invoice.client.person.name");
+
+// @ts-expect-error aliased control values are determined by local paths
+aliased.set("serial.number", 123);
 
 // @ts-expect-error projected control does not expose full global path
 projected.unregister("invoice.client.person.name");
@@ -205,3 +242,15 @@ projected.set("serial.number", 123);
 
 // @ts-expect-error lens only accepts node paths
 projected.lens("person.name");
+
+// @ts-expect-error a mapped node control always requires a relative path
+form.register();
+
+// @ts-expect-error a mapped node control always requires a relative path
+form.unregister();
+
+// @ts-expect-error a mapped node control cannot write without selecting a path
+form.set("Grace");
+
+// @ts-expect-error a projection path must exist in the current control scope
+form.lens({ missing: "invoice.missing" });
