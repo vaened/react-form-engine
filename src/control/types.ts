@@ -4,7 +4,7 @@
  */
 
 import type { FormValues, NodePath, Path, PathValue } from "../path";
-import type { Control } from "./Control";
+import type { NodeControl } from "./Control";
 
 export type ControlProjection<TValues extends FormValues> = {
   readonly [TKey: string]: Path<TValues> | ControlProjection<TValues>;
@@ -27,7 +27,7 @@ export type LensSelection<TValues extends FormValues> = NodePath<TValues> | Cont
 
 export type LensResult<TValues extends FormValues, TSelection extends LensSelection<TValues>> =
   TSelection extends NodePath<TValues>
-    ? Control<FocusedValue<TValues, TSelection>>
+    ? NodeControl<FocusedValue<TValues, TSelection>>
     : TSelection extends ControlProjection<TValues>
-      ? Control<ProjectionValue<TValues, TSelection>>
+      ? NodeControl<ProjectionValue<TValues, TSelection>>
       : never;

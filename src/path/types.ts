@@ -23,7 +23,8 @@ export type Primitive = bigint | boolean | null | number | string | symbol | und
 
 export type HostNativeObject = Blob | Date | File | FileList;
 
-export type FormValues = Record<string, unknown>;
+// biome-ignore lint/suspicious/noExplicitAny: Interfaces require an open record constraint without losing their exact value types.
+export type FormValues = Record<string, any>;
 
 type StringKeyOf<T> = Extract<keyof T, string>;
 

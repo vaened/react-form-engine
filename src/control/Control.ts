@@ -4,7 +4,7 @@
  */
 
 import type { FormStore, FormValues as StoreFormValues } from "../FormStore";
-import type { FormValues, NodePath, Path, PathValue } from "../path";
+import type { FormValues, HostNativeObject, NodePath, Path, PathValue, Primitive } from "../path";
 import { MappedNodeControl } from "./MappedNodeControl";
 import type { ControlProjection, FocusedValue, ProjectionValue } from "./types";
 
@@ -74,10 +74,10 @@ export interface NodeControl<TValues extends FormValues> {
    *
    * summary.set("name", "Ada");
    */
-  lens<TPath extends NodePath<TValues>>(selection: TPath): Control<FocusedValue<TValues, TPath>>;
+  lens<TPath extends NodePath<TValues>>(selection: TPath): NodeControl<FocusedValue<TValues, TPath>>;
   lens<TProjection extends ControlProjection<TValues>>(
     selection: TProjection,
-  ): Control<ProjectionValue<TValues, TProjection>>;
+  ): NodeControl<ProjectionValue<TValues, TProjection>>;
 }
 
 /**
@@ -119,9 +119,54 @@ export interface FieldControl<TValue> {
   set(value: TValue): void;
 }
 
-export type Control<TValues extends FormValues> = NodeControl<TValues>;
+type NodeControlValue<TValue> = TValue extends unknown
+  ? TValue extends null | undefined
+    ? never
+    : TValue extends Primitive | HostNativeObject
+      ? never
+      : TValue extends FormValues
+        ? TValue
+        : never
+  : never;
 
-function createRoot<TValues extends StoreFormValues>(store: FormStore<TValues>): Control<TValues> {
+type ArrayControlValue<TValue> = TValue extends unknown ? (TValue extends readonly unknown[] ? TValue : never) : never;
+
+type FieldControlValue<TValue> = TValue extends unknown
+  ? TValue extends null | undefined
+    ? never
+    : TValue extends Primitive | HostNativeObject
+      ? TValue
+      : TValue extends object
+        ? never
+        : TValue
+  : never;
+
+/**
+ * Selects the control contract that corresponds to a value.
+ *
+ * Structural form objects expose a NodeControl, while atomic values expose a
+ * FieldControl. Null and undefined preserve the classification of the
+ * non-nullish value they accompany.
+ *
+ * Arrays cannot form a control domain. Their structure is managed through the
+ * specialized array API, which exposes controls for individual items instead.
+ *
+ * A union that mixes structural and atomic values resolves to never because a
+ * single control cannot safely expose both operation contracts.
+ */
+export type Control<TValue> = [TValue] extends [never]
+  ? never
+  : [ArrayControlValue<TValue>] extends [never]
+    ? [NodeControlValue<TValue>] extends [never]
+      ? [FieldControlValue<TValue>] extends [never]
+        ? never
+        : FieldControl<TValue>
+      : [FieldControlValue<TValue>] extends [never]
+        ? NodeControl<NodeControlValue<TValue>>
+        : never
+    : never;
+
+function createRoot<TValues extends StoreFormValues>(store: FormStore<TValues>): NodeControl<TValues> {
   return MappedNodeControl.from(store);
 }
 
