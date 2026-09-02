@@ -19,6 +19,9 @@ import { type FieldStateInput, type StateEntry, type StateFieldEntry, StateKind,
 /** Shared so that registering a form's worth of fields does not leave one empty array each. */
 const NO_ERRORS: readonly unknown[] = Object.freeze([]);
 
+/** Shared so that a keystroke that moves nothing does not allocate to say so. */
+const NOTHING_MOVED: readonly StateEntry[] = Object.freeze([]);
+
 /**
  * The reactive state of a form.
  *
@@ -110,11 +113,11 @@ export class StateGraph {
    * reference somebody kept is inert instead of counting a contributor that was
    * already discounted.
    */
-  unregister(id: EntryId): void {
+  unregister(id: EntryId): readonly StateEntry[] {
     const existing = this.#entries.get(id);
 
     if (!existing) {
-      return;
+      return NOTHING_MOVED;
     }
 
     const field = StateGraph.#asField(existing);
@@ -122,7 +125,8 @@ export class StateGraph {
 
     this.#entries.delete(id);
     field.parent = null;
-    this.#propagate(parent, field.flags, 0);
+
+    return this.#propagate(parent, field.flags, 0);
   }
 
   /**
@@ -135,9 +139,10 @@ export class StateGraph {
    * allocate. Passing an empty collection is how they are cleared.
    *
    * Nothing happens above when the flags land on the same value, which is what
-   * keeps typing into an already touched field from reaching the root.
+   * keeps typing into an already touched field from reaching the root. That is
+   * also why nothing comes back in that case: there is nobody to tell.
    */
-  update(field: StateFieldEntry, next: FieldStateInput): StateFieldEntry {
+  update(field: StateFieldEntry, next: FieldStateInput): readonly StateEntry[] {
     const previous = field.flags;
 
     field.flags = next.flags ?? 0;
@@ -146,11 +151,11 @@ export class StateGraph {
       field.errors = next.errors;
     }
 
-    if (field.flags !== previous) {
-      this.#propagate(field.parent, previous, field.flags);
+    if (field.flags === previous) {
+      return NOTHING_MOVED;
     }
 
-    return field;
+    return this.#propagate(field.parent, previous, field.flags, [field]);
   }
 
   /** Resolves a field by id for callers that do not hold it, such as an imperative set. */
@@ -255,11 +260,24 @@ export class StateGraph {
    * Walks up folding a change into every ancestor, and stops as soon as one of
    * them derives the same public flags it already had: from there upward
    * nothing can have changed either.
+   *
+   * What it hands back is everyone whose public state moved, which is the same
+   * thing as everyone who has to be told. The cut is not only an optimization:
+   * it is what draws the line between who changed and who did not.
+   *
+   * The collection is only created once there is something to put in it, so the
+   * common keystroke — one that changes no flag at all — costs nothing.
    */
-  #propagate(from: StateNodeEntry | null, previous: number, current: number): void {
+  #propagate(
+    from: StateNodeEntry | null,
+    previous: number,
+    current: number,
+    changed: StateEntry[] | null = null,
+  ): readonly StateEntry[] {
     let node = from;
     let before = previous;
     let after = current;
+    let moved = changed;
 
     while (node) {
       const held = node.flags;
@@ -267,13 +285,18 @@ export class StateGraph {
       this.#contribute(node, before, after);
 
       if (node.flags === held) {
-        return;
+        break;
       }
+
+      moved ??= [];
+      moved.push(node);
 
       before = held;
       after = node.flags;
       node = node.parent;
     }
+
+    return moved ?? NOTHING_MOVED;
   }
 
   /**

@@ -167,6 +167,65 @@ describe("StateGraph", () => {
     });
   });
 
+  describe("reporting what moved", () => {
+    it("says nothing moved when the flags land on the same value", () => {
+      const field = graph.register(id(1), graph.root());
+
+      expect(graph.update(field, { flags: 0 })).toEqual([]);
+
+      graph.update(field, { flags: Touched });
+
+      expect(graph.update(field, { flags: Touched })).toEqual([]);
+    });
+
+    it("hands back the same empty collection every time, so saying nothing costs nothing", () => {
+      const field = graph.register(id(1), graph.root());
+
+      expect(graph.update(field, { flags: 0 })).toBe(graph.update(field, { flags: 0 }));
+    });
+
+    it("names the field and every ancestor that moved with it", () => {
+      const field = graph.register(id(1), graph.root());
+      const client = graph.materialize(id(10), graph.root(), [field]);
+
+      expect(graph.update(field, { flags: Touched })).toEqual([field, client, graph.root()]);
+    });
+
+    it("stops naming ancestors where the cut stops the walk", () => {
+      const first = graph.register(id(1), graph.root());
+      const second = graph.register(id(2), graph.root());
+      const client = graph.materialize(id(10), graph.root(), [first, second]);
+
+      expect(graph.update(first, { flags: Touched })).toEqual([first, client, graph.root()]);
+
+      // The second one raises the count but not the flag, so the cut fires at
+      // the very first ancestor and nobody above the field hears about it.
+      expect(graph.update(second, { flags: Touched })).toEqual([second]);
+      expect(client.aggregate.touched).toBe(2);
+      expect(graph.root().aggregate.touched).toBe(1);
+    });
+
+    it("names only the field when nothing above it moved", () => {
+      const first = graph.register(id(1), graph.root(), { flags: Touched });
+      const second = graph.register(id(2), graph.root());
+
+      expect(graph.update(second, { flags: Touched })).toEqual([second]);
+      expect(has(graph.root(), Touched)).toBe(true);
+      expect(first.flags).toBe(Touched);
+    });
+
+    it("names the ancestors that a departing field leaves changed", () => {
+      const field = graph.register(id(1), graph.root(), { flags: Invalid });
+      const client = graph.materialize(id(10), graph.root(), [field]);
+
+      expect(graph.unregister(id(1))).toEqual([client, graph.root()]);
+    });
+
+    it("says nothing moved when a field that was never registered departs", () => {
+      expect(graph.unregister(id(9))).toEqual([]);
+    });
+  });
+
   describe("materializing", () => {
     it("takes the children over and counts as a single contributor above", () => {
       const first = graph.register(id(1), graph.root(), { flags: Touched });
