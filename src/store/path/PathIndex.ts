@@ -34,6 +34,18 @@ import {
 const INDEX_SEGMENT = /^\d+$/;
 
 /**
+ * A structural entry seen from the one operation allowed to reshape one.
+ *
+ * `kind` reads as `readonly` everywhere else on purpose: what a location is
+ * settles when it is claimed and nothing afterwards may quietly disagree. This
+ * is the single exception, and naming it keeps the exception in one place.
+ */
+type OpenedEntry = PathIndexStructuralEntry & {
+  kind: PathKind;
+  children: Map<string, PathIndexChildEntry> | PathIndexChildEntry[];
+};
+
+/**
  * Canonical structural representation of a form value.
  *
  * Holds no values. It answers where a location is, who its parent is and who
@@ -109,19 +121,19 @@ export class PathIndex<TValues extends FormValues = FormValues> {
       const last = index === segments.length - 1;
       const childKind = last ? kind : PathIndex.#infer(segments[index + 1]);
 
+      const holder = current.kind === PathKind.Field ? this.#open(current, segment) : current;
+
       let child: PathIndexChildEntry;
 
-      if (current.kind === PathKind.Array) {
+      if (holder.kind === PathKind.Array) {
         const position = PathIndex.#toIndex(path, segment);
 
-        child = this.#ensureItem(current, position, childKind, path);
+        child = this.#ensureItem(holder, position, childKind, path, last);
         steps.push({ at: position });
-      } else if (current.kind === PathKind.Field) {
-        throw new PathKindConflict(path, current.kind, PathKind.Object);
       } else {
         PathIndex.#assertValidSegment(segment);
 
-        child = this.#ensureChild(current, segment, childKind, path);
+        child = this.#ensureChild(holder, segment, childKind, path, last);
 
         if (steps.length > 0) {
           steps.push({ key: segment });
@@ -153,7 +165,7 @@ export class PathIndex<TValues extends FormValues = FormValues> {
     const route = this.#routes.get(pathId);
 
     if (!route) {
-      throw new UnknownPathId(pathId as number);
+      throw new UnknownPathId(pathId);
     }
 
     return this.#follow(route);
@@ -177,7 +189,7 @@ export class PathIndex<TValues extends FormValues = FormValues> {
     const entry = this.#entries.get(id);
 
     if (!entry) {
-      throw new UnknownEntryId(id as number);
+      throw new UnknownEntryId(id);
     }
 
     return entry;
@@ -244,16 +256,16 @@ export class PathIndex<TValues extends FormValues = FormValues> {
       const parent: PathIndexStructuralEntry = current.parent;
 
       if (parent.kind === PathKind.Array) {
-        const position = parent.children.indexOf(current as PathIndexChildEntry);
+        const position = parent.children.indexOf(current);
 
         if (position < 0) {
-          throw new UnknownEntryId(current.id as number);
+          throw new UnknownEntryId(current.id);
         }
 
         segments.push(String(position));
       } else {
         if (current.segment === null) {
-          throw new UnknownEntryId(current.id as number);
+          throw new UnknownEntryId(current.id);
         }
 
         segments.push(current.segment);
@@ -360,7 +372,7 @@ export class PathIndex<TValues extends FormValues = FormValues> {
     for (const step of route.steps) {
       if ("at" in step) {
         if (current.kind !== PathKind.Array) {
-          throw new NotAnArrayEntry(current.id as number);
+          throw new NotAnArrayEntry(current.id);
         }
 
         const next = current.children[step.at];
@@ -389,16 +401,53 @@ export class PathIndex<TValues extends FormValues = FormValues> {
     return current;
   }
 
+  /**
+   * Opens a field so that something can be registered inside it.
+   *
+   * A location is registered as a field when nothing was known to live inside
+   * it, which happens whenever its base value was absent when it was first
+   * claimed. Someone registering below it says otherwise, and that is newer and
+   * more specific information: it stops being terminal and starts deriving from
+   * whatever now lives underneath.
+   *
+   * The entry is opened in place rather than replaced, because routes hold it
+   * by reference and a replacement would leave them reaching a dead entry. That
+   * is why this is the one place that reshapes an entry, and the one place that
+   * has to go around the discriminated union to do it.
+   */
+  #open(field: PathIndexFieldEntry, inner: string): PathIndexStructuralEntry {
+    const opened = field as unknown as OpenedEntry;
+
+    if (PathIndex.#infer(inner) === PathKind.Array) {
+      opened.kind = PathKind.Array;
+      opened.children = [];
+    } else {
+      opened.kind = PathKind.Object;
+      opened.children = new Map();
+    }
+
+    return opened;
+  }
+
+  /**
+   * The kind is only held against an entry that is being claimed, never against
+   * one that is merely on the way: what a path passes through is whatever is
+   * already there, and a field standing in the middle is opened rather than
+   * refused.
+   */
   #ensureChild(
     parent: PathIndexRootEntry | PathIndexObjectEntry,
     segment: string,
     kind: RegisterableKind,
     path: string,
+    claimed: boolean,
   ): PathIndexChildEntry {
     const existing = parent.children.get(segment);
 
     if (existing) {
-      this.#assertKind(existing, path, kind);
+      if (claimed) {
+        this.#assertKind(existing, path, kind);
+      }
 
       return existing;
     }
@@ -418,13 +467,21 @@ export class PathIndex<TValues extends FormValues = FormValues> {
    * so those positions become real entries rather than JavaScript holes. Items
    * of an array share a kind, so they take the kind the caller asked for.
    */
-  #ensureItem(array: PathIndexArrayEntry, index: number, kind: RegisterableKind, path: string): PathIndexChildEntry {
+  #ensureItem(
+    array: PathIndexArrayEntry,
+    index: number,
+    kind: RegisterableKind,
+    path: string,
+    claimed: boolean,
+  ): PathIndexChildEntry {
     const { children } = array;
 
     if (index < children.length) {
       const existing = children[index];
 
-      this.#assertKind(existing, path, kind);
+      if (claimed) {
+        this.#assertKind(existing, path, kind);
+      }
 
       return existing;
     }
@@ -472,7 +529,7 @@ export class PathIndex<TValues extends FormValues = FormValues> {
     const entry = this.entry(id);
 
     if (entry.kind !== PathKind.Array) {
-      throw new NotAnArrayEntry(id as number);
+      throw new NotAnArrayEntry(id);
     }
 
     return entry;

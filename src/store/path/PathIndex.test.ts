@@ -4,8 +4,8 @@
  */
 
 import { beforeEach, describe, expect, it } from "vitest";
-import type { Path } from "../../../path";
-import { PathRegistry } from "../../state/PathRegistry";
+import type { Path } from "../../path";
+import { PathRegistry } from "../state/PathRegistry";
 import {
   InvalidArrayIndex,
   MissingArrayPosition,
@@ -14,9 +14,9 @@ import {
   UnknownChildPath,
   UnknownEntryId,
   UnknownPathId,
-} from "../errors";
-import { PathIndex } from "../PathIndex";
-import { type EntryId, PathKind } from "../types";
+} from "./errors";
+import { PathIndex } from "./PathIndex";
+import { type EntryId, PathKind } from "./types";
 
 /** Shape of docs/FormValue.example.json. */
 type Invoice = {
@@ -156,6 +156,67 @@ describe("PathIndex", () => {
       expect(() => index.register("invoice.client.addresses.99999999999999999999.city", PathKind.Field)).toThrow(
         InvalidArrayIndex,
       );
+    });
+  });
+
+  describe("opening a field", () => {
+    it("turns it into an object when something registers a named child", () => {
+      const client = index.register("invoice.client", PathKind.Field);
+      const name = index.register("invoice.client.name", PathKind.Field);
+
+      expect(client.kind).toBe(PathKind.Object);
+      expect(name.parent).toBe(client);
+      expect(index.childrenOf(client.id)).toEqual([name]);
+    });
+
+    it("turns it into an array when what registers inside is a position", () => {
+      const addresses = index.register(ADDRESSES, PathKind.Field);
+      const city = index.register(CITY_0, PathKind.Field);
+
+      expect(addresses.kind).toBe(PathKind.Array);
+      expect(index.childrenOf(addresses.id)).toEqual([city.parent]);
+      expect(index.describe(city.id)).toBe(CITY_0);
+    });
+
+    it("keeps its identity, so the state and the value keyed by it survive", () => {
+      const client = index.register("invoice.client", PathKind.Field);
+      const identity = client.id;
+
+      index.register("invoice.client.name", PathKind.Field);
+
+      expect(client.id).toBe(identity);
+      expect(index.entry(identity)).toBe(client);
+    });
+
+    it("keeps the routes that were anchored on it resolving", () => {
+      const client = index.register("invoice.client", PathKind.Field);
+
+      index.register("invoice.client.name", PathKind.Field);
+
+      expect(index.resolve("invoice.client")).toBe(client);
+      expect(index.resolve("invoice.client.name")).toBe(index.childrenOf(client.id)[0]);
+    });
+
+    it("opens as many levels as the path needs in one registration", () => {
+      const client = index.register("invoice.client", PathKind.Field);
+      const city = index.register(CITY_0, PathKind.Field);
+
+      expect(client.kind).toBe(PathKind.Object);
+      expect(index.describe(city.id)).toBe(CITY_0);
+      expect(index.ancestorsOf(city.id)).toContain(client);
+    });
+
+    it("leaves a field alone while nothing registers inside it", () => {
+      const client = index.register("invoice.client", PathKind.Field);
+
+      expect(client.kind).toBe(PathKind.Field);
+      expect(index.childrenOf(client.id)).toEqual([]);
+    });
+
+    it("still refuses to register the same path as two different things", () => {
+      index.register("invoice.client.name", PathKind.Field);
+
+      expect(() => index.register("invoice.client.name", PathKind.Object)).toThrow(PathKindConflict);
     });
   });
 
