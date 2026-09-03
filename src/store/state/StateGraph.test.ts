@@ -210,6 +210,44 @@ describe("StateGraph", () => {
       expect(graph.update(second, { flags: Touched })).toEqual([second]);
       expect(first.flags).toBe(Touched);
     });
+
+    /**
+     * Errors are compared by reference, never by content: `StateGraph` has no
+     * way to know what a caller's error shape means, so a new message under the
+     * same flag has to be reported too, and a caller that hands back the exact
+     * reference it was given has to be trusted that nothing changed.
+     */
+    it("names the field when only its errors reference changed, flags untouched", () => {
+      const field = graph.register(form.city0, { flags: Invalid, errors: ["muy corto"] });
+
+      expect(graph.update(field, { flags: Invalid, errors: ["formato invalido"] })).toEqual([field]);
+      expect(field.errors).toEqual(["formato invalido"]);
+    });
+
+    it("does not climb to ancestors for an errors-only change, since they never derive from errors", () => {
+      const field = graph.register(form.city0, { flags: Invalid, errors: ["muy corto"] });
+      const address = graph.materialize(form.address0);
+
+      graph.update(field, { flags: Invalid, errors: ["formato invalido"] });
+
+      expect(address.aggregate.invalid).toBe(1);
+    });
+
+    it("says nothing moved when the same errors reference is handed back", () => {
+      const errors = ["muy corto"];
+      const field = graph.register(form.city0, { flags: Invalid, errors });
+
+      expect(graph.update(field, { flags: Invalid, errors })).toEqual([]);
+    });
+
+    it("reports a move for two error lists with identical content but different references", () => {
+      const field = graph.register(form.city0, { flags: Invalid, errors: ["muy corto"] });
+
+      // Content-equal but not the same array: StateGraph cannot and does not
+      // guess this — a caller that wants this treated as unchanged has to hand
+      // back its own previous reference.
+      expect(graph.update(field, { flags: Invalid, errors: ["muy corto"] })).toEqual([field]);
+    });
   });
 
   describe("materializing", () => {

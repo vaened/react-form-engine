@@ -111,13 +111,17 @@ export class StateGraph {
    * already holds it.
    *
    * Errors are only touched when the caller brings them, so typing allocates
-   * nothing; an empty collection is how they are cleared.
+   * nothing; an empty collection is how they are cleared. Whether they moved is
+   * decided by reference, never by content: this has no way to know what a
+   * caller's error shape means, so it trusts the reference it was handed, the
+   * same way a value write trusts the reference it receives.
    *
-   * Flags landing on the same value reach nobody above, which is what keeps
-   * typing into an already touched field from waking the root.
+   * Flags and errors landing on the same reference reach nobody above, which is
+   * what keeps typing into an already touched field from waking the root.
    */
   update(field: StateFieldEntry, next: FieldStateInput): readonly StateEntry[] {
-    const previous = field.flags;
+    const previousFlags = field.flags;
+    const previousErrors = field.errors;
 
     field.flags = next.flags ?? 0;
 
@@ -125,11 +129,11 @@ export class StateGraph {
       field.errors = next.errors;
     }
 
-    if (field.flags === previous) {
-      return NOTHING_MOVED;
+    if (field.flags === previousFlags) {
+      return field.errors === previousErrors ? NOTHING_MOVED : [field];
     }
 
-    return this.#propagate(field.parent, previous, field.flags, [field]);
+    return this.#propagate(field.parent, previousFlags, field.flags, [field]);
   }
 
   /** For callers that do not hold the field, such as an imperative set. */
