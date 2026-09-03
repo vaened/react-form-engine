@@ -25,6 +25,29 @@ export type Invoice = {
   };
 };
 
+/** The literal value of `docs/FormValue.example.json`. */
+export const sampleInvoice = (): Invoice => ({
+  invoice: {
+    createdAt: "2026-08-28T12:00:00.000Z",
+    series: "F001",
+    number: "000001",
+    client: {
+      documentNumber: "12345678",
+      name: "Ada Lovelace",
+      email: "ada@example.com",
+      phones: ["+51 999 999 999", "+51 988 888 888"],
+      addresses: [
+        { city: "Lima", reference: "Frente al parque principal" },
+        { city: "Arequipa", reference: "A dos cuadras de la plaza" },
+      ],
+    },
+    details: [
+      { description: "Consulting service", quantity: 2, unitPrice: 120, discount: 10 },
+      { description: "Technical support", quantity: 1, unitPrice: 80, discount: 0 },
+    ],
+  },
+});
+
 /** The canonical form of `docs/FormValue.example.json`, registered for real. */
 export class InvoiceStructure {
   readonly index = new PathIndex<Invoice>(new PathRegistry<Path<Invoice>>());

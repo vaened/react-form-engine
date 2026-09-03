@@ -3,7 +3,7 @@
  * @link https://vaened.dev DevFolio
  */
 
-export type { Control as ControlType } from "./control";
+export type { Control as ControlType, FieldControl, NodeControl } from "./control";
 export { Control } from "./control";
 export {
   type FieldState,

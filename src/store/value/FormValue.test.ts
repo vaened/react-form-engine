@@ -91,7 +91,7 @@ describe("FormValue", () => {
       value.write(client, null);
 
       expect(value.read(name)).toBeUndefined();
-      expect(value.root.invoice.client).toBeNull();
+      expect(value.value.invoice.client).toBeNull();
     });
   });
 
@@ -99,20 +99,20 @@ describe("FormValue", () => {
     it("writes a field nested under objects", () => {
       value.write(field("invoice.client.name"), "Grace Hopper");
 
-      expect(value.root.invoice.client.name).toBe("Grace Hopper");
+      expect(value.value.invoice.client.name).toBe("Grace Hopper");
     });
 
     it("writes a field inside an array of objects", () => {
       value.write(field(CITY_1), "Cusco");
 
-      expect(value.root.invoice.client.addresses[1].city).toBe("Cusco");
-      expect(value.root.invoice.client.addresses[0].city).toBe("Lima");
+      expect(value.value.invoice.client.addresses[1].city).toBe("Cusco");
+      expect(value.value.invoice.client.addresses[0].city).toBe("Lima");
     });
 
     it("writes an item of an array of scalars", () => {
       value.write(field(PHONE_1), "+51 900 000 000");
 
-      expect(value.root.invoice.client.phones).toEqual(["+51 999 999 999", "+51 900 000 000"]);
+      expect(value.value.invoice.client.phones).toEqual(["+51 999 999 999", "+51 900 000 000"]);
     });
 
     it("leaves an explicitly assigned null in place", () => {
@@ -120,7 +120,7 @@ describe("FormValue", () => {
 
       value.write(client, null);
 
-      expect(value.root.invoice.client).toBeNull();
+      expect(value.value.invoice.client).toBeNull();
     });
 
     it("refuses to write over the root", () => {
@@ -132,8 +132,8 @@ describe("FormValue", () => {
 
       value.write(client, { name: "Grace Hopper", phones: [], addresses: [] });
 
-      expect(value.root.invoice.client).toEqual({ name: "Grace Hopper", phones: [], addresses: [] });
-      expect(value.root.invoice.series).toBe("F001");
+      expect(value.value.invoice.client).toEqual({ name: "Grace Hopper", phones: [], addresses: [] });
+      expect(value.value.invoice.series).toBe("F001");
     });
 
     it("writes a whole array node", () => {
@@ -141,7 +141,7 @@ describe("FormValue", () => {
 
       value.write(addresses, [{ city: "Trujillo", reference: "Centro" }]);
 
-      expect(value.root.invoice.client.addresses).toEqual([{ city: "Trujillo", reference: "Centro" }]);
+      expect(value.value.invoice.client.addresses).toEqual([{ city: "Trujillo", reference: "Centro" }]);
     });
 
     it("does not leave a descendant pointing at the replaced object", () => {
@@ -152,7 +152,7 @@ describe("FormValue", () => {
       value.write(client, { name: "Grace Hopper" });
       value.write(city, "Trujillo");
 
-      expect(value.root.invoice.client).toEqual({
+      expect(value.value.invoice.client).toEqual({
         name: "Grace Hopper",
         addresses: [{ city: "Trujillo" }],
       });
@@ -167,7 +167,7 @@ describe("FormValue", () => {
       value.write(client, null);
       value.write(name, "Grace Hopper");
 
-      expect(value.root.invoice.client).toEqual({ name: "Grace Hopper" });
+      expect(value.value.invoice.client).toEqual({ name: "Grace Hopper" });
     });
 
     it("creates a branch that never existed in the initial value", () => {
@@ -175,7 +175,7 @@ describe("FormValue", () => {
 
       empty.write(field("invoice.client.name"), "Ada");
 
-      expect(empty.root).toEqual({ invoice: { client: { name: "Ada" } } });
+      expect(empty.value).toEqual({ invoice: { client: { name: "Ada" } } });
     });
 
     it("creates an array where the entry says array, and an object where it says object", () => {
@@ -184,8 +184,8 @@ describe("FormValue", () => {
       index.register(ADDRESSES, PathKind.Array);
       empty.write(field(CITY_0), "Lima");
 
-      expect(Array.isArray(empty.root.invoice.client.addresses)).toBe(true);
-      expect(empty.root.invoice.client.addresses[0]).toEqual({ city: "Lima" });
+      expect(Array.isArray(empty.value.invoice.client.addresses)).toBe(true);
+      expect(empty.value.invoice.client.addresses[0]).toEqual({ city: "Lima" });
     });
   });
 
@@ -196,13 +196,13 @@ describe("FormValue", () => {
       value.write(city, "Cusco");
 
       expect(value.read(city)).toBe("Cusco");
-      expect(value.readDefault(city)).toBe("Lima");
+      expect(value.default(city)).toBe("Lima");
     });
 
     it("never creates anything while reading a default", () => {
       const empty = new FormValue<Invoice>({} as Invoice, {} as Invoice);
 
-      expect(empty.readDefault(field("invoice.client.name"))).toBeUndefined();
+      expect(empty.default(field("invoice.client.name"))).toBeUndefined();
       expect(empty.defaults).toEqual({});
     });
   });
@@ -223,11 +223,11 @@ describe("FormValue", () => {
       value.write(lima, "Lima editada");
 
       index.move(addresses.id, 1, 0);
-      move(value.root.invoice.client.addresses, 1, 0);
+      move(value.value.invoice.client.addresses, 1, 0);
 
       value.write(lima, "Lima otra vez");
 
-      expect(value.root.invoice.client.addresses).toEqual([
+      expect(value.value.invoice.client.addresses).toEqual([
         { city: "Arequipa", reference: "A dos cuadras de la plaza" },
         { city: "Lima otra vez", reference: "Frente al parque principal" },
       ]);
@@ -240,11 +240,11 @@ describe("FormValue", () => {
       field(PHONE_1);
 
       index.move(phones.id, 1, 0);
-      move(value.root.invoice.client.phones, 1, 0);
+      move(value.value.invoice.client.phones, 1, 0);
 
       value.write(first, "cambiado");
 
-      expect(value.root.invoice.client.phones).toEqual(["+51 988 888 888", "cambiado"]);
+      expect(value.value.invoice.client.phones).toEqual(["+51 988 888 888", "cambiado"]);
     });
 
     it("is dropped by clear", () => {
@@ -254,14 +254,14 @@ describe("FormValue", () => {
       value.clear();
       value.write(city, "Trujillo");
 
-      expect(value.root.invoice.client.addresses[0].city).toBe("Trujillo");
+      expect(value.value.invoice.client.addresses[0].city).toBe("Trujillo");
     });
 
     it("does not survive replacing the root", () => {
       const city = field(CITY_0);
 
       value.write(city, "Cusco");
-      value.replaceRoot(sample());
+      value.replace(sample());
 
       expect(value.read(city)).toBe("Lima");
     });
@@ -340,7 +340,7 @@ describe("FormValue", () => {
       const city = field(CITY_0);
 
       value.write(city, "Cusco");
-      expect(value.readDefault(city)).toBe("Lima");
+      expect(value.default(city)).toBe("Lima");
 
       value.write(city, "Trujillo");
 
@@ -388,7 +388,7 @@ describe("FormValue", () => {
 
       matrix.write(cell, 99);
 
-      expect(matrix.root.invoice.grid).toEqual([
+      expect(matrix.value.invoice.grid).toEqual([
         [1, 2],
         [99, 4],
       ]);
@@ -401,8 +401,8 @@ describe("FormValue", () => {
 
       matrix.write(label, "editado");
 
-      expect(matrix.root.invoice.rows[0].tags[1].label).toBe("editado");
-      expect(matrix.root.invoice.rows[1].tags[0].label).toBe("tres");
+      expect(matrix.value.invoice.rows[0].tags[1].label).toBe("editado");
+      expect(matrix.value.invoice.rows[1].tags[0].label).toBe("tres");
     });
 
     it("keeps writing to the same item after the outer array moves", () => {
@@ -412,13 +412,13 @@ describe("FormValue", () => {
       nested.register("invoice.rows.1.tags.0.label", PathKind.Field);
       nested.move(rows.id, 1, 0);
 
-      const items = matrix.root.invoice.rows;
+      const items = matrix.value.invoice.rows;
       const [moved] = items.splice(1, 1);
 
       items.splice(0, 0, moved);
       matrix.write(label, "sigue siendo dos");
 
-      expect(matrix.root.invoice.rows[1].tags[1].label).toBe("sigue siendo dos");
+      expect(matrix.value.invoice.rows[1].tags[1].label).toBe("sigue siendo dos");
     });
 
     it("builds both levels when neither exists yet", () => {
@@ -428,43 +428,43 @@ describe("FormValue", () => {
       nested.register("invoice.grid.0", PathKind.Array);
       empty.write(nested.register("invoice.grid.0.1", PathKind.Field), 7);
 
-      expect(empty.root.invoice.grid).toEqual([[undefined, 7]]);
+      expect(empty.value.invoice.grid).toEqual([[undefined, 7]]);
     });
   });
 
   describe("replacing the root", () => {
     it("rejects a replacement that is not an object", () => {
-      expect(() => value.replaceRoot([] as never)).toThrow(InvalidRootValue);
-      expect(() => value.replaceRoot(null as never)).toThrow(InvalidRootValue);
+      expect(() => value.replace([] as never)).toThrow(InvalidRootValue);
+      expect(() => value.replace(null as never)).toThrow(InvalidRootValue);
     });
 
     it("swaps the live value while leaving the defaults alone", () => {
       const city = field(CITY_0);
 
       value.write(city, "Cusco");
-      value.replaceRoot(sample());
+      value.replace(sample());
 
       expect(value.read(city)).toBe("Lima");
-      expect(value.readDefault(city)).toBe("Lima");
+      expect(value.default(city)).toBe("Lima");
     });
 
     it("exposes the new object by reference", () => {
       const next = sample();
 
-      value.replaceRoot(next);
+      value.replace(next);
 
-      expect(value.root).toBe(next);
+      expect(value.value).toBe(next);
     });
 
     it("writes into the replacement, not the discarded value", () => {
-      const discarded = value.root;
+      const discarded = value.value;
       const city = field(CITY_0);
 
       value.write(city, "Cusco");
-      value.replaceRoot(sample());
+      value.replace(sample());
       value.write(city, "Trujillo");
 
-      expect(value.root.invoice.client.addresses[0].city).toBe("Trujillo");
+      expect(value.value.invoice.client.addresses[0].city).toBe("Trujillo");
       expect(discarded.invoice.client.addresses[0].city).toBe("Cusco");
     });
   });

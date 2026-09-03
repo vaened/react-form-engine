@@ -29,7 +29,7 @@ export class FormValue<TValues extends FormValues = FormValues> {
     this.#defaults = defaults;
   }
 
-  get root(): TValues {
+  get value(): TValues {
     return this.#root;
   }
 
@@ -49,7 +49,7 @@ export class FormValue<TValues extends FormValues = FormValues> {
   }
 
   /** Reads the base value an entry is compared against to decide whether it is dirty. */
-  readDefault(entry: PathIndexEntry): unknown {
+  default(entry: PathIndexEntry): unknown {
     if (!entry.parent) {
       return this.#defaults;
     }
@@ -82,7 +82,7 @@ export class FormValue<TValues extends FormValues = FormValues> {
     this.#containers.clear();
   }
 
-  replaceRoot(values: TValues): void {
+  replace(values: TValues): void {
     FormValue.#assertRoot(values);
 
     this.#root = values;
