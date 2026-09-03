@@ -4,45 +4,49 @@
  */
 
 import type { Equal, Expect } from "../../path/__tests__/type-assertions";
-import type { EntryId } from "../path/types";
 import { StateGraph } from "../state/StateGraph";
 import type { StateFieldEntry, StateNodeEntry } from "../state/types";
-import { ValueGraph } from "./../value/ValueGraph";
+import { ValueGraph } from "../value/ValueGraph";
+import { InvoiceStructure } from "./__fixtures__/invoice";
 import type { ObservationChain } from "./ObservationChain";
 
-const id = (value: number) => value as EntryId;
+const form = new InvoiceStructure();
 
 /**
  * The root keeps its own type instead of coming back as the wide union, which is
  * what let `StateGraph` drop the copy of it that it used to hold on the side.
  */
-const state = new StateGraph(id(0));
+const state = new StateGraph(form.index);
 
 type StateRootExpectation = Expect<Equal<ReturnType<typeof state.root>, StateNodeEntry>>;
 
-const values = new ValueGraph(id(0));
+const values = new ValueGraph(form.index);
 
 type ValueRootExpectation = Expect<Equal<ReturnType<typeof values.root>, ReturnType<typeof values.entry>>>;
 
 /**
- * Only a node can sit above anybody. Handing a field over as a parent has to be
+ * Only a node can sit above anybody. Handing a field over as one has to be
  * refused by the compiler rather than caught at runtime, which is exactly what
- * the single `TNode` parameter could not express: `StateEntry` was widened to
+ * a single `TNode` parameter could not express: `StateEntry` was widened to
  * accept a field there and only property covariance let it through.
  */
 declare const chain: ObservationChain<StateFieldEntry | StateNodeEntry, StateNodeEntry>;
 declare const field: StateFieldEntry;
-declare const node: StateNodeEntry;
-
-// @ts-expect-error a field cannot be a parent
-chain.join(node, field);
-
-// @ts-expect-error a field cannot be a parent
-chain.insert(node, field, []);
 
 // @ts-expect-error a field cannot take children on
-chain.insert(field, node, []);
+chain.insert(field);
+
+type ParentExpectation = Expect<Equal<ReturnType<typeof chain.parentOf>, StateNodeEntry>>;
 
 type RemovedParentExpectation = Expect<Equal<ReturnType<typeof chain.remove>["parent"], StateNodeEntry>>;
 
-export type { RemovedParentExpectation, StateRootExpectation, ValueRootExpectation };
+/** A walk may start at anything on the chain, a field included. */
+type OriginExpectation = Expect<Equal<ReturnType<typeof chain.originOf>, StateFieldEntry | StateNodeEntry>>;
+
+export type {
+  OriginExpectation,
+  ParentExpectation,
+  RemovedParentExpectation,
+  StateRootExpectation,
+  ValueRootExpectation,
+};

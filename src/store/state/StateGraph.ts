@@ -4,7 +4,7 @@
  */
 
 import { ObservationChain } from "../observation/ObservationChain";
-import type { EntryId } from "../path/types";
+import type { EntryId, EntryTree } from "../path/types";
 import { StateAggregateUnderflow, StateKindConflict } from "./errors";
 import { StateAggregate } from "./StateAggregate";
 import { type FieldStateInput, type StateEntry, type StateFieldEntry, StateKind, type StateNodeEntry } from "./types";
@@ -19,27 +19,20 @@ const NOTHING_MOVED: readonly StateEntry[] = Object.freeze([]);
  * The reactive state of a form.
  *
  * State is born in fields and only in fields. A node owns nothing of its own:
- * its flags are derived from counters that its reactive children keep up to
- * date, so reading a node never walks its subtree.
+ * its flags are derived from counters its reactive children keep up to date, so
+ * reading a node never walks its subtree.
  *
- * Who reports to whom is the chain's business, not this class's. What is left
- * here is the arithmetic — folding a change into the counters above and knowing
- * where it stops mattering — which is the whole of what makes the state
- * different from the value.
- *
- * Finding which descendants belong to a node is structural work, so the store
- * resolves it and hands the result in. This class never sees the index.
+ * Who reports to whom belongs to the chain. What is left here is the arithmetic:
+ * folding a change into the counters above, and knowing where it stops
+ * mattering.
  */
 export class StateGraph {
-  /**
-   * Only a node can sit above anybody, which the chain is told so that it hands
-   * back parents already narrowed and the root keeps its own type.
-   */
+  /** A field never holds children, so only a node may be a parent. */
   readonly #chain: ObservationChain<StateEntry, StateNodeEntry>;
 
-  constructor(rootId: EntryId) {
-    this.#chain = new ObservationChain<StateEntry, StateNodeEntry>({
-      id: rootId,
+  constructor(tree: EntryTree) {
+    this.#chain = new ObservationChain<StateEntry, StateNodeEntry>(tree, {
+      id: tree.root().id,
       kind: StateKind.Node,
       parent: null,
       flags: 0,
@@ -64,13 +57,8 @@ export class StateGraph {
     return this.#chain.has(id);
   }
 
-  /**
-   * Gives a registered field its own state.
-   *
-   * Registering twice returns what is already there, so a field that remounts
-   * keeps the flags and errors it had.
-   */
-  register(id: EntryId, parent: StateNodeEntry, initial: FieldStateInput = {}): StateFieldEntry {
+  /** Registering twice returns what is there, so a remount keeps its state. */
+  register(id: EntryId, initial: FieldStateInput = {}): StateFieldEntry {
     const existing = this.#chain.find(id);
 
     if (existing) {
@@ -85,8 +73,8 @@ export class StateGraph {
       errors: initial.errors ?? NO_ERRORS,
     };
 
-    this.#chain.join(field, parent);
-    this.#propagate(parent, 0, field.flags);
+    this.#chain.join(field);
+    this.#propagate(field.parent, 0, field.flags);
 
     return field;
   }
@@ -94,9 +82,8 @@ export class StateGraph {
   /**
    * Takes a field's state away and discounts it from everyone above.
    *
-   * The field is detached on the way out, so an update arriving through a
-   * reference somebody kept is inert instead of counting a contributor that was
-   * already discounted.
+   * The field is detached on the way out, so a later update through a reference
+   * somebody kept is inert rather than counting a discounted contributor.
    */
   unregister(id: EntryId): readonly StateEntry[] {
     const existing = this.#chain.find(id);
@@ -114,17 +101,14 @@ export class StateGraph {
   }
 
   /**
-   * The hot path: a field's own state changed.
+   * The hot path. It takes the field rather than its id because the writer
+   * already holds it.
    *
-   * It takes the field itself rather than its id, because whoever is writing
-   * already holds it and looking up what you have in hand is work for nothing.
+   * Errors are only touched when the caller brings them, so typing allocates
+   * nothing; an empty collection is how they are cleared.
    *
-   * Errors are only touched when the caller brings them, so typing does not
-   * allocate. Passing an empty collection is how they are cleared.
-   *
-   * Nothing happens above when the flags land on the same value, which is what
-   * keeps typing into an already touched field from reaching the root. That is
-   * also why nothing comes back in that case: there is nobody to tell.
+   * Flags landing on the same value reach nobody above, which is what keeps
+   * typing into an already touched field from waking the root.
    */
   update(field: StateFieldEntry, next: FieldStateInput): readonly StateEntry[] {
     const previous = field.flags;
@@ -142,20 +126,19 @@ export class StateGraph {
     return this.#propagate(field.parent, previous, field.flags, [field]);
   }
 
-  /** Resolves a field by id for callers that do not hold it, such as an imperative set. */
+  /** For callers that do not hold the field, such as an imperative set. */
   field(id: EntryId): StateFieldEntry {
     return StateGraph.#asField(this.entry(id));
   }
 
   /**
-   * Starts deriving state for a node, taking over the children that used to
-   * report further up.
+   * Starts deriving state for a node, taking over the children that reported
+   * further up.
    *
-   * The subtle part is the parent: it counted each of those children as its own
-   * contributor and from now on it counts the new node once, so their weight
-   * has to be taken off before the node's is added.
+   * The parent counted each of those children directly and from now on counts
+   * the node once, so their weight comes off before the node's goes on.
    */
-  materialize(id: EntryId, parent: StateNodeEntry, children: readonly StateEntry[]): StateNodeEntry {
+  materialize(id: EntryId): StateNodeEntry {
     const existing = this.#chain.find(id);
 
     if (existing) {
@@ -170,11 +153,9 @@ export class StateGraph {
       aggregate: new StateAggregate(),
     };
 
+    const parent = this.#chain.parentOf(id);
     const held = parent.flags;
-
-    // Nothing is counted until the chain accepts the whole list, so a rejected
-    // one leaves the arithmetic exactly as it was.
-    this.#chain.insert(node, parent, children);
+    const children = this.#chain.insert(node);
 
     for (const child of children) {
       node.aggregate.add(child.flags);
@@ -189,17 +170,9 @@ export class StateGraph {
     return node;
   }
 
-  /**
-   * The mirror of `materialize`: the children go back to reporting upward.
-   *
-   * Unlike materializing, this one takes no list. Who reports to a node is
-   * something the chain already knows, and asking the caller for them would
-   * mean a forgotten one leaves the form claiming it is untouched while one of
-   * its fields is not.
-   */
+  /** The mirror of `materialize`: the children go back to reporting upward. */
   dematerialize(id: EntryId): void {
-    // The kind is checked before anything moves: asking to dematerialize a
-    // field has to be refused with the chain still intact.
+    // Checked before anything moves, so refusing a field leaves the chain intact.
     const node = StateGraph.#asNode(this.entry(id));
     const removal = this.#chain.remove(id);
     const parent = removal.parent;
@@ -215,16 +188,14 @@ export class StateGraph {
   }
 
   /**
-   * Walks up folding a change into every ancestor, and stops as soon as one of
-   * them derives the same public flags it already had: from there upward
-   * nothing can have changed either.
+   * Folds a change into every ancestor and stops at the first one deriving the
+   * flags it already had: above that, nothing changed either.
    *
-   * What it hands back is everyone whose public state moved, which is the same
-   * thing as everyone who has to be told. The cut is not only an optimization:
-   * it is what draws the line between who changed and who did not.
+   * What comes back is everyone whose public state moved, which is the same as
+   * everyone who has to be told. The stop is not only an optimization, it draws
+   * the line between who changed and who did not.
    *
-   * The collection is only created once there is something to put in it, so the
-   * common keystroke — one that changes no flag at all — costs nothing.
+   * The collection is built only once there is something to put in it.
    */
   #propagate(
     from: StateNodeEntry | null,
@@ -260,11 +231,8 @@ export class StateGraph {
   /**
    * Folds one child's change into a node and recomputes its public flags.
    *
-   * The underflow check is unreachable through the public API now that every
-   * way of handing over children is validated first. It stays as the last
-   * resort: a counter below zero means the arithmetic here lost a delta, and
-   * that has to be loud rather than leave a form quietly claiming less than it
-   * holds.
+   * A counter below zero means a delta was lost here. That has to be loud
+   * rather than leave a form quietly claiming less than it holds.
    */
   #contribute(node: StateNodeEntry, previous: number, current: number): void {
     node.aggregate.fold(previous, current);
@@ -277,11 +245,10 @@ export class StateGraph {
   }
 
   /**
-   * Reports a node upward after several contributors were swapped in one go.
+   * Reports a node upward after several contributors changed in one go.
    *
-   * Materializing and dematerializing touch the same parent many times, so the
-   * comparison has to be against the flags it held before the whole operation
-   * rather than against each intermediate step.
+   * The comparison is against the flags held before the whole operation, not
+   * against each intermediate step.
    */
   #settle(node: StateNodeEntry, held: number): void {
     if (node.flags !== held) {

@@ -3,74 +3,59 @@
  * @link https://vaened.dev DevFolio
  */
 
-import type { EntryId } from "../path/types";
-import {
-  DetachedObservationParent,
-  DuplicatedObservationChild,
-  RootObservationRequired,
-  UnexpectedObservationParent,
-  UnknownObservation,
-} from "./errors";
+import type { EntryId, EntryTree } from "../path/types";
+import { RootHasNoParent, RootObservationRequired, UnknownObservation } from "./errors";
 
 /**
- * What the chain needs a node to have, and nothing else.
+ * `parent` is not the structural parent: it is the nearest ancestor on the
+ * chain, so a field can point straight at the root with five levels in between.
  *
- * It is generic over the node itself rather than over a payload it carries, so
- * whoever owns the chain keeps its own fields flat. The state reads `flags`
- * straight off the entry on every keystroke, and one indirection there would be
- * paid on the hot path to save duplication on a cold one.
- *
- * `parent` is not the structural parent. It is the nearest place above that
- * somebody is watching, so a field points straight at the root while nothing in
- * between is being watched. It is its own parameter because not everything on
- * the chain can be one: in the state a field never has children, so only a node
- * can sit above anybody.
+ * It has its own type parameter because not every node can be one. In the state
+ * a field never holds children, so only a node may sit above anybody.
  */
 export type ChainNode<TParent> = {
   readonly id: EntryId;
   parent: TParent | null;
 };
 
-/**
- * What changed hands when a node was taken off the chain.
- *
- * The state has to discount what left and count what moved, so it needs all
- * three; the value needs none of them and ignores this. It is a report of what
- * happened rather than a hook for one of the two, which is why it is a return
- * value and not a callback.
- */
 export type ChainRemoval<TNode, TParent> = {
-  /** The node that left, already detached. */
+  /** Already detached: its `parent` is null. */
   readonly node: TNode;
-  /** Who it reported to, and who its children report to from now on. */
+  /** Who the removed node reported to, and who its children report to now. */
   readonly parent: TParent;
-  /** The children that changed hands, already relinked. */
+  /** Already relinked to `parent`. */
   readonly adopted: readonly TNode[];
 };
 
 /**
  * Who is being watched, and who each of them reports to.
  *
- * The state and the value need exactly the same thing here: a set of watched
- * locations, a link from each to the nearest watched one above it, and the
- * relinking that happens when somebody starts or stops watching. What travels
- * up those links is not this class's business — it never walks the chain.
+ * It never walks the chain. What travels up the links belongs to whoever owns
+ * it: the state folds counters and stops when they stabilize, the value carries
+ * a fact and never stops.
  *
- * Keeping the relinking in one place is not about repetition. The two mistakes
- * that corrupt a chain silently — taking over a child that reported elsewhere,
- * and losing one when a node leaves — both live there, so it is worth having
- * exactly one of it to guard and to test.
+ * It holds the tree because its one question — who above me is watching — needs
+ * both halves. Shape does not know who watches; membership does not know who is
+ * above.
+ *
+ * Membership is the watched nodes plus the root. Leaves join as well, but as a
+ * cache rather than a rule: nothing walks through a leaf, so keeping one costs
+ * nobody a hop and spares every write the climb. An interior node is not free
+ * that way, since everything below it would pay, so it joins only when watched
+ * and its climbs happen when they are needed.
  */
 export class ObservationChain<TNode extends ChainNode<TParent>, TParent extends TNode = TNode> {
   readonly #nodes = new Map<EntryId, TNode>();
+  readonly #tree: EntryTree;
   readonly #root: TParent;
 
-  constructor(root: TParent) {
+  constructor(tree: EntryTree, root: TParent) {
+    this.#tree = tree;
     this.#root = root;
     this.#nodes.set(root.id, root);
   }
 
-  /** Always on the chain, so every walk has somewhere to end. */
+  /** Always on the chain, so every climb and every walk has an answer. */
   root(): TParent {
     return this.#root;
   }
@@ -94,32 +79,47 @@ export class ObservationChain<TNode extends ChainNode<TParent>, TParent extends 
   }
 
   /**
-   * Puts a node on the chain without taking anything over.
+   * Where a walk from this location starts.
    *
-   * The node comes built from the caller because what it carries is the caller's
-   * business; the link upward is this class's, so it is set here.
+   * A member answers for itself, which is every field and every watched node.
+   * Anything else — a write onto a node nobody watches — climbs to the nearest
+   * one above.
    */
-  join(node: TNode, parent: TParent): void {
-    this.#assertLive(parent);
+  originOf(id: EntryId): TNode {
+    return this.#nodes.get(id) ?? this.#above(id);
+  }
 
-    node.parent = parent;
+  /** The same climb as `originOf`, skipping the location itself. */
+  parentOf(id: EntryId): TParent {
+    return this.#above(id);
+  }
+
+  /**
+   * The members that pass under a node when it starts being watched.
+   *
+   * A descendant already reporting to something closer belongs to that one, so
+   * only those still reporting to `parent` change hands.
+   */
+  claimableUnder(id: EntryId, parent: TParent): TNode[] {
+    const { nodes, fields } = this.#tree.descendantsOf(id);
+    const claimable: TNode[] = [];
+
+    this.#gather(nodes, parent, claimable);
+    this.#gather(fields, parent, claimable);
+
+    return claimable;
+  }
+
+  join(node: TNode): void {
+    node.parent = this.#above(node.id);
 
     this.#nodes.set(node.id, node);
   }
 
-  /**
-   * Puts a node on the chain and moves the given children onto it.
-   *
-   * The children come from the caller because working out which of them belong
-   * underneath is structural work, and structure is not something this class
-   * knows anything about. What it does know is when that list is wrong.
-   *
-   * What goes in has to be a parent: it is taking children on, and in the state
-   * that alone is what tells a node apart from a field.
-   */
-  insert(node: TParent, parent: TParent, children: readonly TNode[]): void {
-    this.#assertLive(parent);
-    ObservationChain.#assertTakeable(parent, children);
+  /** Hands back what it claimed, for owners that keep counters over the chain. */
+  insert(node: TParent): readonly TNode[] {
+    const parent = this.#above(node.id);
+    const children = this.claimableUnder(node.id, parent);
 
     node.parent = parent;
 
@@ -128,19 +128,10 @@ export class ObservationChain<TNode extends ChainNode<TParent>, TParent extends 
     }
 
     this.#nodes.set(node.id, node);
+
+    return children;
   }
 
-  /**
-   * Takes a node off the chain and hands its children to whoever it reported to.
-   *
-   * It takes no list. Who reports to a node is something the chain already
-   * knows, and asking the caller for it would mean a forgotten child keeps
-   * reporting into something nobody can reach any more.
-   *
-   * It reports back everything that moved, because the caller that keeps
-   * counters over the chain has to discount what left and count what changed
-   * hands, and it has no other way to know which children those were.
-   */
   remove(id: EntryId): ChainRemoval<TNode, TParent> {
     const node = this.node(id);
     const parent = node.parent;
@@ -168,11 +159,10 @@ export class ObservationChain<TNode extends ChainNode<TParent>, TParent extends 
   }
 
   /**
-   * Takes a node off the chain without handing anything over, for the leaves
-   * that have nothing under them.
+   * Takes a leaf off the chain.
    *
-   * Detaching it on the way out is what makes a change arriving through a
-   * reference somebody kept inert, instead of reaching a chain it already left.
+   * Detaching it makes anything arriving through a reference somebody kept
+   * inert, instead of reaching a chain it already left.
    */
   leave(id: EntryId): TNode | undefined {
     const node = this.#nodes.get(id);
@@ -187,33 +177,31 @@ export class ObservationChain<TNode extends ChainNode<TParent>, TParent extends 
     return node;
   }
 
-  /** A node that is no longer on the chain cannot be given children. */
-  #assertLive(node: TParent): void {
-    if (this.#nodes.get(node.id) !== node) {
-      throw new DetachedObservationParent(node.id as number);
+  /**
+   * The climb, and the only place shape and membership meet.
+   *
+   * The cast holds because `ancestorsOf` yields the root, objects and arrays and
+   * never a field, so whatever is found up there can hold children.
+   */
+  #above(id: EntryId): TParent {
+    for (const ancestor of this.#tree.ancestorsOf(id)) {
+      const found = this.#nodes.get(ancestor.id);
+
+      if (found) {
+        return found as TParent;
+      }
     }
+
+    throw new RootHasNoParent();
   }
 
-  /**
-   * Checked before anything moves, so a rejected list leaves the chain as it
-   * was instead of half migrated.
-   */
-  static #assertTakeable<TNode extends ChainNode<TParent>, TParent extends TNode>(
-    parent: TParent,
-    children: readonly TNode[],
-  ): void {
-    const seen = new Set<EntryId>();
+  #gather(candidates: readonly { readonly id: EntryId }[], parent: TParent, into: TNode[]): void {
+    for (const candidate of candidates) {
+      const member = this.#nodes.get(candidate.id);
 
-    for (const child of children) {
-      if (child.parent !== parent) {
-        throw new UnexpectedObservationParent(child.id as number);
+      if (member && member.parent === parent) {
+        into.push(member);
       }
-
-      if (seen.has(child.id)) {
-        throw new DuplicatedObservationChild(child.id as number);
-      }
-
-      seen.add(child.id);
     }
   }
 }

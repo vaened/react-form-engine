@@ -3,11 +3,5 @@
  * @link https://vaened.dev DevFolio
  */
 
-export {
-  DetachedObservationParent,
-  DuplicatedObservationChild,
-  RootObservationRequired,
-  UnexpectedObservationParent,
-  UnknownObservation,
-} from "./errors";
+export { RootHasNoParent, RootObservationRequired, UnknownObservation } from "./errors";
 export { type ChainNode, type ChainRemoval, ObservationChain } from "./ObservationChain";
