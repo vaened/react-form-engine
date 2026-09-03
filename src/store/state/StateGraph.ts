@@ -3,16 +3,9 @@
  * @link https://vaened.dev DevFolio
  */
 
+import { ObservationChain } from "../observation/ObservationChain";
 import type { EntryId } from "../path/types";
-import {
-  DetachedStateParent,
-  DuplicatedStateChild,
-  RootStateRequired,
-  StateAggregateUnderflow,
-  StateKindConflict,
-  UnexpectedStateParent,
-  UnknownStateEntry,
-} from "./errors";
+import { StateAggregateUnderflow, StateKindConflict } from "./errors";
 import { StateAggregate } from "./StateAggregate";
 import { type FieldStateInput, type StateEntry, type StateFieldEntry, StateKind, type StateNodeEntry } from "./types";
 
@@ -29,52 +22,46 @@ const NOTHING_MOVED: readonly StateEntry[] = Object.freeze([]);
  * its flags are derived from counters that its reactive children keep up to
  * date, so reading a node never walks its subtree.
  *
- * The graph is the edges, not the map. Every entry holds a direct reference to
- * its nearest materialized ancestor, so propagating upward follows pointers and
- * never resolves a path or looks a parent up. Structural nodes that nobody
- * observes are not in the chain at all: with only the root materialized, every
- * field reports straight to it.
+ * Who reports to whom is the chain's business, not this class's. What is left
+ * here is the arithmetic — folding a change into the counters above and knowing
+ * where it stops mattering — which is the whole of what makes the state
+ * different from the value.
  *
  * Finding which descendants belong to a node is structural work, so the store
  * resolves it and hands the result in. This class never sees the index.
  */
 export class StateGraph {
-  readonly #entries = new Map<EntryId, StateEntry>();
-  readonly #root: StateNodeEntry;
+  /**
+   * Only a node can sit above anybody, which the chain is told so that it hands
+   * back parents already narrowed and the root keeps its own type.
+   */
+  readonly #chain: ObservationChain<StateEntry, StateNodeEntry>;
 
   constructor(rootId: EntryId) {
-    this.#root = {
+    this.#chain = new ObservationChain<StateEntry, StateNodeEntry>({
       id: rootId,
       kind: StateKind.Node,
       parent: null,
       flags: 0,
       aggregate: new StateAggregate(),
-    };
-
-    this.#entries.set(rootId, this.#root);
+    });
   }
 
   /** Always materialized, so a form can always answer for itself as a whole. */
   root(): StateNodeEntry {
-    return this.#root;
+    return this.#chain.root();
   }
 
   find(id: EntryId): StateEntry | undefined {
-    return this.#entries.get(id);
+    return this.#chain.find(id);
   }
 
   entry(id: EntryId): StateEntry {
-    const entry = this.#entries.get(id);
-
-    if (!entry) {
-      throw new UnknownStateEntry(id as number);
-    }
-
-    return entry;
+    return this.#chain.node(id);
   }
 
   has(id: EntryId): boolean {
-    return this.#entries.has(id);
+    return this.#chain.has(id);
   }
 
   /**
@@ -84,23 +71,21 @@ export class StateGraph {
    * keeps the flags and errors it had.
    */
   register(id: EntryId, parent: StateNodeEntry, initial: FieldStateInput = {}): StateFieldEntry {
-    const existing = this.#entries.get(id);
+    const existing = this.#chain.find(id);
 
     if (existing) {
       return StateGraph.#asField(existing);
     }
 
-    this.#assertLive(parent);
-
     const field: StateFieldEntry = {
       id,
       kind: StateKind.Field,
-      parent,
+      parent: null,
       flags: initial.flags ?? 0,
       errors: initial.errors ?? NO_ERRORS,
     };
 
-    this.#entries.set(id, field);
+    this.#chain.join(field, parent);
     this.#propagate(parent, 0, field.flags);
 
     return field;
@@ -114,7 +99,7 @@ export class StateGraph {
    * already discounted.
    */
   unregister(id: EntryId): readonly StateEntry[] {
-    const existing = this.#entries.get(id);
+    const existing = this.#chain.find(id);
 
     if (!existing) {
       return NOTHING_MOVED;
@@ -123,8 +108,7 @@ export class StateGraph {
     const field = StateGraph.#asField(existing);
     const parent = field.parent;
 
-    this.#entries.delete(id);
-    field.parent = null;
+    this.#chain.leave(id);
 
     return this.#propagate(parent, field.flags, 0);
   }
@@ -172,49 +156,33 @@ export class StateGraph {
    * has to be taken off before the node's is added.
    */
   materialize(id: EntryId, parent: StateNodeEntry, children: readonly StateEntry[]): StateNodeEntry {
-    const existing = this.#entries.get(id);
+    const existing = this.#chain.find(id);
 
     if (existing) {
       return StateGraph.#asNode(existing);
     }
 
-    this.#assertLive(parent);
-
-    // Checked before anything moves, so a rejected list leaves the graph as it
-    // was instead of half migrated.
-    const seen = new Set<EntryId>();
-
-    for (const child of children) {
-      if (child.parent !== parent) {
-        throw new UnexpectedStateParent(child.id as number);
-      }
-
-      if (seen.has(child.id)) {
-        throw new DuplicatedStateChild(child.id as number);
-      }
-
-      seen.add(child.id);
-    }
-
     const node: StateNodeEntry = {
       id,
       kind: StateKind.Node,
-      parent,
+      parent: null,
       flags: 0,
       aggregate: new StateAggregate(),
     };
 
     const held = parent.flags;
 
+    // Nothing is counted until the chain accepts the whole list, so a rejected
+    // one leaves the arithmetic exactly as it was.
+    this.#chain.insert(node, parent, children);
+
     for (const child of children) {
-      child.parent = node;
       node.aggregate.add(child.flags);
       this.#contribute(parent, child.flags, 0);
     }
 
     node.flags = node.aggregate.derive();
 
-    this.#entries.set(id, node);
     this.#contribute(parent, 0, node.flags);
     this.#settle(parent, held);
 
@@ -225,31 +193,21 @@ export class StateGraph {
    * The mirror of `materialize`: the children go back to reporting upward.
    *
    * Unlike materializing, this one takes no list. Who reports to a node is
-   * something the graph already knows — they are the entries pointing at it —
-   * and asking the caller for them would mean a forgotten one leaves the form
-   * claiming it is untouched while one of its fields is not. Reading it off the
-   * registry costs a pass over the materialized state on a cold path and makes
-   * that mistake impossible.
+   * something the chain already knows, and asking the caller for them would
+   * mean a forgotten one leaves the form claiming it is untouched while one of
+   * its fields is not.
    */
   dematerialize(id: EntryId): void {
+    // The kind is checked before anything moves: asking to dematerialize a
+    // field has to be refused with the chain still intact.
     const node = StateGraph.#asNode(this.entry(id));
-
-    if (!node.parent) {
-      throw new RootStateRequired();
-    }
-
-    const parent = node.parent;
+    const removal = this.#chain.remove(id);
+    const parent = removal.parent;
     const held = parent.flags;
 
-    this.#entries.delete(id);
     this.#contribute(parent, node.flags, 0);
 
-    for (const child of this.#entries.values()) {
-      if (child.parent !== node) {
-        continue;
-      }
-
-      child.parent = parent;
+    for (const child of removal.adopted) {
       this.#contribute(parent, 0, child.flags);
     }
 
@@ -328,13 +286,6 @@ export class StateGraph {
   #settle(node: StateNodeEntry, held: number): void {
     if (node.flags !== held) {
       this.#propagate(node.parent, held, node.flags);
-    }
-  }
-
-  /** A node that is no longer in the registry cannot be given children. */
-  #assertLive(node: StateNodeEntry): void {
-    if (this.#entries.get(node.id) !== node) {
-      throw new DetachedStateParent(node.id as number);
     }
   }
 

@@ -4,15 +4,15 @@
  */
 
 import { beforeEach, describe, expect, it } from "vitest";
-import type { EntryId } from "../path/types";
 import {
-  DetachedStateParent,
-  DuplicatedStateChild,
-  RootStateRequired,
-  StateKindConflict,
-  UnexpectedStateParent,
-  UnknownStateEntry,
-} from "./errors";
+  DetachedObservationParent,
+  DuplicatedObservationChild,
+  RootObservationRequired,
+  UnexpectedObservationParent,
+  UnknownObservation,
+} from "../observation/errors";
+import type { EntryId } from "../path/types";
+import { StateKindConflict } from "./errors";
 import { StateAggregate } from "./StateAggregate";
 import { hasFlag, StateFlag } from "./StateFlag";
 import { StateGraph } from "./StateGraph";
@@ -40,7 +40,7 @@ describe("StateGraph", () => {
     });
 
     it("cannot be dematerialized", () => {
-      expect(() => graph.dematerialize(ROOT)).toThrow(RootStateRequired);
+      expect(() => graph.dematerialize(ROOT)).toThrow(RootObservationRequired);
     });
   });
 
@@ -80,7 +80,7 @@ describe("StateGraph", () => {
     });
 
     it("rejects updating something that was never registered", () => {
-      expect(() => graph.update(graph.field(id(9)), { flags: Dirty })).toThrow(UnknownStateEntry);
+      expect(() => graph.update(graph.field(id(9)), { flags: Dirty })).toThrow(UnknownObservation);
     });
   });
 
@@ -299,7 +299,7 @@ describe("StateGraph", () => {
     it("gives the children back and keeps the totals right", () => {
       const first = graph.register(id(1), graph.root(), { flags: Touched });
       const second = graph.register(id(2), graph.root(), { flags: Touched });
-      const client = graph.materialize(id(10), graph.root(), [first, second]);
+      graph.materialize(id(10), graph.root(), [first, second]);
 
       expect(graph.root().aggregate.touched).toBe(1);
 
@@ -310,7 +310,17 @@ describe("StateGraph", () => {
       expect(second.parent).toBe(graph.root());
       expect(graph.root().aggregate.touched).toBe(2);
       expect(has(graph.root(), Touched)).toBe(true);
-      expect(client.parent).toBe(graph.root());
+    });
+
+    it("detaches the node, so a reference somebody kept is inert", () => {
+      const field = graph.register(id(1), graph.root(), { flags: Touched });
+      const client = graph.materialize(id(10), graph.root(), [field]);
+
+      graph.dematerialize(id(10));
+
+      // Its weight was already discounted from the root, so leaving it linked
+      // would let anything arriving through this reference count it twice.
+      expect(client.parent).toBeNull();
     });
 
     it("routes later updates straight to the root again", () => {
@@ -486,7 +496,7 @@ describe("StateGraph", () => {
     it("finds an unknown entry as undefined but requiring it throws", () => {
       expect(graph.find(id(9))).toBeUndefined();
       expect(graph.has(id(9))).toBe(false);
-      expect(() => graph.entry(id(9))).toThrow(UnknownStateEntry);
+      expect(() => graph.entry(id(9))).toThrow(UnknownObservation);
     });
 
     it("refuses to update a node as if it were a field", () => {
@@ -533,7 +543,7 @@ describe("StateGraph", () => {
       const second = graph.register(id(2), graph.root(), { flags: Touched });
       const client = graph.materialize(id(10), graph.root(), [first, second]);
 
-      expect(() => graph.materialize(id(20), client, [first, first])).toThrow(DuplicatedStateChild);
+      expect(() => graph.materialize(id(20), client, [first, first])).toThrow(DuplicatedObservationChild);
       expect(client.aggregate.touched).toBe(2);
     });
 
@@ -541,7 +551,7 @@ describe("StateGraph", () => {
       const field = graph.register(id(1), graph.root(), { flags: Touched });
       const client = graph.materialize(id(10), graph.root(), []);
 
-      expect(() => graph.materialize(id(20), client, [field])).toThrow(UnexpectedStateParent);
+      expect(() => graph.materialize(id(20), client, [field])).toThrow(UnexpectedObservationParent);
       expect(field.parent).toBe(graph.root());
       expect(graph.root().aggregate.touched).toBe(1);
     });
@@ -551,14 +561,14 @@ describe("StateGraph", () => {
 
       graph.dematerialize(id(10));
 
-      expect(() => graph.register(id(1), client)).toThrow(DetachedStateParent);
-      expect(() => graph.materialize(id(20), client, [])).toThrow(DetachedStateParent);
+      expect(() => graph.register(id(1), client)).toThrow(DetachedObservationParent);
+      expect(() => graph.materialize(id(20), client, [])).toThrow(DetachedObservationParent);
     });
 
     it("refuses to hand a node its own parent as a child, which would close a loop", () => {
       const client = graph.materialize(id(10), graph.root(), []);
 
-      expect(() => graph.materialize(id(20), client, [graph.root()])).toThrow(UnexpectedStateParent);
+      expect(() => graph.materialize(id(20), client, [graph.root()])).toThrow(UnexpectedObservationParent);
     });
 
     it("makes an update through an unregistered field inert", () => {

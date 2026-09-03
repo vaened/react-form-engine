@@ -3,12 +3,7 @@
  * @link https://vaened.dev DevFolio
  */
 
-export {
-  RootStateRequired,
-  StateAggregateUnderflow,
-  StateKindConflict,
-  UnknownStateEntry,
-} from "./errors";
+export { StateAggregateUnderflow, StateKindConflict } from "./errors";
 export { type PathId, type PathIdentifier, PathRegistry } from "./PathRegistry";
 export { StateAggregate } from "./StateAggregate";
 export { hasFlag, StateFlag, setFlag } from "./StateFlag";
