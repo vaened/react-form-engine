@@ -257,6 +257,56 @@ describe("ValueGraph", () => {
     });
   });
 
+  describe("more than one watcher on the same location", () => {
+    it("keeps reporting to a node while a second watcher is still there", () => {
+      graph.register(form.city0);
+      graph.materialize(form.client);
+      graph.materialize(form.client);
+
+      graph.dematerialize(form.client);
+
+      expect(graph.has(form.client)).toBe(true);
+      expect(reported(form.city0)).toEqual([form.city0, form.client, form.root]);
+    });
+
+    it("stops once the last watcher goes", () => {
+      graph.register(form.city0);
+      graph.materialize(form.client);
+      graph.materialize(form.client);
+
+      graph.dematerialize(form.client);
+      graph.dematerialize(form.client);
+
+      expect(graph.has(form.client)).toBe(false);
+      expect(reported(form.city0)).toEqual([form.city0, form.root]);
+    });
+
+    it("keeps a field on the chain while a second one still holds it", () => {
+      const city = graph.register(form.city0);
+
+      graph.register(form.city0);
+      graph.unregister(form.city0);
+
+      expect(graph.has(form.city0)).toBe(true);
+      expect(city.parent).toBe(graph.root());
+
+      graph.unregister(form.city0);
+
+      expect(graph.has(form.city0)).toBe(false);
+    });
+
+    it("leaves the children of a still watched node where they are", () => {
+      const city = graph.register(form.city0);
+      const address = graph.materialize(form.address0);
+
+      graph.materialize(form.address0);
+      graph.dematerialize(form.address0);
+
+      expect(city.parent).toBe(address);
+      expect(reported(form.city0)).toEqual([form.city0, form.address0, form.root]);
+    });
+  });
+
   describe("guards", () => {
     it("finds an unknown entry as undefined but requiring it throws", () => {
       expect(graph.find(form.city0)).toBeUndefined();

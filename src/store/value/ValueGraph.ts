@@ -46,17 +46,7 @@ export class ValueGraph {
 
   /** A field joins whether or not anybody watches it, so a write starts at it. */
   register(id: EntryId): ValueEntry {
-    const existing = this.#chain.find(id);
-
-    if (existing) {
-      return existing;
-    }
-
-    const entry: ValueEntry = { id, parent: null };
-
-    this.#chain.join(entry);
-
-    return entry;
+    return this.#chain.join({ id, parent: null });
   }
 
   unregister(id: EntryId): void {
@@ -64,17 +54,7 @@ export class ValueGraph {
   }
 
   materialize(id: EntryId): ValueEntry {
-    const existing = this.#chain.find(id);
-
-    if (existing) {
-      return existing;
-    }
-
-    const node: ValueEntry = { id, parent: null };
-
-    this.#chain.insert(node);
-
-    return node;
+    return this.#chain.insert({ id, parent: null }).node;
   }
 
   dematerialize(id: EntryId): void {

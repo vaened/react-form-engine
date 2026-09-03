@@ -6,6 +6,9 @@
 import type { EntryId, EntryTree } from "../path/types";
 import { RootHasNoParent, RootObservationRequired, UnknownObservation } from "./errors";
 
+/** Shared so that watching an already watched node does not allocate to say so. */
+const NOTHING_CLAIMED: readonly never[] = Object.freeze([]);
+
 /**
  * `parent` is not the structural parent: it is the nearest ancestor on the
  * chain, so a field can point straight at the root with five levels in between.
@@ -16,6 +19,13 @@ import { RootHasNoParent, RootObservationRequired, UnknownObservation } from "./
 export type ChainNode<TParent> = {
   readonly id: EntryId;
   parent: TParent | null;
+};
+
+export type ChainInsertion<TNode> = {
+  /** The node on the chain, which is the existing one when it was already there. */
+  readonly node: TNode;
+  /** Empty when it was already there, since nothing changed hands. */
+  readonly claimed: readonly TNode[];
 };
 
 export type ChainRemoval<TNode, TParent> = {
@@ -46,6 +56,7 @@ export type ChainRemoval<TNode, TParent> = {
  */
 export class ObservationChain<TNode extends ChainNode<TParent>, TParent extends TNode = TNode> {
   readonly #nodes = new Map<EntryId, TNode>();
+  readonly #claims = new Map<EntryId, number>();
   readonly #tree: EntryTree;
   readonly #root: TParent;
 
@@ -53,6 +64,7 @@ export class ObservationChain<TNode extends ChainNode<TParent>, TParent extends 
     this.#tree = tree;
     this.#root = root;
     this.#nodes.set(root.id, root);
+    this.#claims.set(root.id, 1);
   }
 
   /** Always on the chain, so every climb and every walk has an answer. */
@@ -110,34 +122,72 @@ export class ObservationChain<TNode extends ChainNode<TParent>, TParent extends 
     return claimable;
   }
 
-  join(node: TNode): void {
+  /**
+   * Puts a node on the chain, or counts one more watcher on the one already
+   * there. It hands back whichever of the two is on the chain now.
+   */
+  join(node: TNode): TNode {
+    const existing = this.#nodes.get(node.id);
+
+    if (existing) {
+      this.#claims.set(node.id, this.#claimsOn(node.id) + 1);
+
+      return existing;
+    }
+
     node.parent = this.#above(node.id);
 
     this.#nodes.set(node.id, node);
+    this.#claims.set(node.id, 1);
+
+    return node;
   }
 
-  /** Hands back what it claimed, for owners that keep counters over the chain. */
-  insert(node: TParent): readonly TNode[] {
+  /**
+   * The same as `join` for a node that takes children on, handing back what it
+   * claimed for owners that keep counters over the chain.
+   */
+  insert(node: TParent): ChainInsertion<TNode> {
+    const existing = this.#nodes.get(node.id);
+
+    if (existing) {
+      this.#claims.set(node.id, this.#claimsOn(node.id) + 1);
+
+      return { node: existing, claimed: NOTHING_CLAIMED };
+    }
+
     const parent = this.#above(node.id);
-    const children = this.claimableUnder(node.id, parent);
+    const claimed = this.claimableUnder(node.id, parent);
 
     node.parent = parent;
 
-    for (const child of children) {
+    for (const child of claimed) {
       child.parent = node;
     }
 
     this.#nodes.set(node.id, node);
+    this.#claims.set(node.id, 1);
 
-    return children;
+    return { node, claimed };
   }
 
-  remove(id: EntryId): ChainRemoval<TNode, TParent> {
+  /**
+   * Gives up one watcher, and takes the node off the chain once it was the
+   * last. Its children go to whoever it reported to.
+   *
+   * Nothing comes back while somebody else is still watching, so an owner that
+   * keeps counters knows not to discount anything yet.
+   */
+  remove(id: EntryId): ChainRemoval<TNode, TParent> | undefined {
     const node = this.node(id);
     const parent = node.parent;
 
     if (!parent) {
       throw new RootObservationRequired();
+    }
+
+    if (!this.#release(id)) {
+      return undefined;
     }
 
     this.#nodes.delete(id);
@@ -159,7 +209,8 @@ export class ObservationChain<TNode extends ChainNode<TParent>, TParent extends 
   }
 
   /**
-   * Takes a leaf off the chain.
+   * Gives up one watcher on a leaf, and takes it off the chain once it was the
+   * last.
    *
    * Detaching it makes anything arriving through a reference somebody kept
    * inert, instead of reaching a chain it already left.
@@ -167,7 +218,7 @@ export class ObservationChain<TNode extends ChainNode<TParent>, TParent extends 
   leave(id: EntryId): TNode | undefined {
     const node = this.#nodes.get(id);
 
-    if (!node || node === this.#root) {
+    if (!node || node === this.#root || !this.#release(id)) {
       return undefined;
     }
 
@@ -193,6 +244,25 @@ export class ObservationChain<TNode extends ChainNode<TParent>, TParent extends 
     }
 
     throw new RootHasNoParent();
+  }
+
+  #claimsOn(id: EntryId): number {
+    return this.#claims.get(id) ?? 0;
+  }
+
+  /** Whether that was the last watcher, in which case the node may go. */
+  #release(id: EntryId): boolean {
+    const left = this.#claimsOn(id) - 1;
+
+    if (left > 0) {
+      this.#claims.set(id, left);
+
+      return false;
+    }
+
+    this.#claims.delete(id);
+
+    return true;
   }
 
   #gather(candidates: readonly { readonly id: EntryId }[], parent: TParent, into: TNode[]): void {

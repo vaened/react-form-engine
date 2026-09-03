@@ -27,18 +27,19 @@ describe("ObservationChain", () => {
 
   const node = (id: EntryId, label: string): Node => ({ id, parent: null, label });
 
-  const join = (id: EntryId, label: string): Node => {
-    const created = node(id, label);
+  const join = (id: EntryId, label: string) => chain.join(node(id, label));
 
-    chain.join(created);
+  const insert = (id: EntryId, label: string) => chain.insert(node(id, label));
 
-    return created;
-  };
+  /** Removing what is on the chain, which every one of these has just put there. */
+  const drop = (id: EntryId) => {
+    const removal = chain.remove(id);
 
-  const insert = (id: EntryId, label: string): { node: Node; claimed: readonly Node[] } => {
-    const created = node(id, label);
+    if (!removal) {
+      throw new Error(`entry ${id as number} was still claimed`);
+    }
 
-    return { node: created, claimed: chain.insert(created) };
+    return removal;
   };
 
   const upward = (from: EntryId) => {
@@ -231,7 +232,7 @@ describe("ObservationChain", () => {
     });
 
     it("finds its own children, so none can be left behind", () => {
-      chain.remove(form.address0);
+      drop(form.address0);
 
       expect(city.parent).toBe(chain.root());
       expect(reference.parent).toBe(chain.root());
@@ -239,7 +240,7 @@ describe("ObservationChain", () => {
     });
 
     it("hands back what left, detached, and who takes over from it", () => {
-      const removal = chain.remove(form.address0);
+      const removal = drop(form.address0);
 
       expect(removal.node).toBe(address);
       expect(removal.parent).toBe(chain.root());
@@ -248,7 +249,7 @@ describe("ObservationChain", () => {
     });
 
     it("names every child that changed hands, already relinked", () => {
-      const { adopted } = chain.remove(form.address0);
+      const { adopted } = drop(form.address0);
 
       expect(adopted).toEqual([city, reference]);
       expect(adopted.every((child) => child.parent === chain.root())).toBe(true);
@@ -257,13 +258,13 @@ describe("ObservationChain", () => {
     it("names nobody when it had no children", () => {
       insert(form.details, "details");
 
-      expect(chain.remove(form.details).adopted).toEqual([]);
+      expect(drop(form.details).adopted).toEqual([]);
     });
 
     it("hands a middle one's children to the grandparent", () => {
       const client = insert(form.client, "client").node;
 
-      chain.remove(form.address0);
+      drop(form.address0);
 
       expect(city.parent).toBe(client);
       expect(reference.parent).toBe(client);
@@ -272,7 +273,7 @@ describe("ObservationChain", () => {
 
     it("hands a watcher down when the one above it goes", () => {
       insert(form.client, "client");
-      chain.remove(form.client);
+      drop(form.client);
 
       expect(address.parent).toBe(chain.root());
       expect(upward(form.city0)).toEqual(["city", "address0", "invoice"]);
@@ -280,6 +281,92 @@ describe("ObservationChain", () => {
 
     it("throws for a location that was never on the chain", () => {
       expect(() => chain.remove(form.email)).toThrow(UnknownObservation);
+    });
+  });
+
+  describe("counting watchers", () => {
+    it("keeps one node however many times it is joined", () => {
+      const first = join(form.city0, "city");
+      const second = join(form.city0, "other");
+
+      expect(second).toBe(first);
+      expect(second.label).toBe("city");
+    });
+
+    it("stays on the chain until the last one leaves", () => {
+      const city = join(form.city0, "city");
+
+      join(form.city0, "again");
+
+      expect(chain.leave(form.city0)).toBeUndefined();
+      expect(chain.has(form.city0)).toBe(true);
+      expect(city.parent).toBe(chain.root());
+
+      expect(chain.leave(form.city0)).toBe(city);
+      expect(chain.has(form.city0)).toBe(false);
+      expect(city.parent).toBeNull();
+    });
+
+    it("claims nothing the second time a node is inserted", () => {
+      const city = join(form.city0, "city");
+      const first = insert(form.address0, "address0");
+      const again = insert(form.address0, "again");
+
+      expect(again.node).toBe(first.node);
+      expect(again.claimed).toEqual([]);
+      expect(city.parent).toBe(first.node);
+    });
+
+    it("holds a node's children while somebody still watches it", () => {
+      const city = join(form.city0, "city");
+      const address = insert(form.address0, "address0").node;
+
+      insert(form.address0, "again");
+
+      expect(chain.remove(form.address0)).toBeUndefined();
+      expect(chain.has(form.address0)).toBe(true);
+      expect(city.parent).toBe(address);
+      expect(upward(form.city0)).toEqual(["city", "address0", "invoice"]);
+    });
+
+    it("hands the children back once the last one lets go", () => {
+      const city = join(form.city0, "city");
+
+      insert(form.address0, "address0");
+      insert(form.address0, "again");
+
+      chain.remove(form.address0);
+
+      expect(drop(form.address0).adopted).toEqual([city]);
+      expect(city.parent).toBe(chain.root());
+    });
+
+    it("starts over when a node joins again after leaving", () => {
+      join(form.city0, "city");
+      chain.leave(form.city0);
+
+      const reborn = join(form.city0, "reborn");
+
+      expect(reborn.label).toBe("reborn");
+      expect(chain.leave(form.city0)).toBe(reborn);
+      expect(chain.has(form.city0)).toBe(false);
+    });
+
+    it("ignores letting go of something that already left", () => {
+      join(form.city0, "city");
+      chain.leave(form.city0);
+
+      expect(chain.leave(form.city0)).toBeUndefined();
+      expect(chain.has(form.city0)).toBe(false);
+    });
+
+    it("counts join and insert on the same location together", () => {
+      const city = join(form.city0, "city");
+
+      insert(form.city0, "watched too");
+
+      expect(chain.leave(form.city0)).toBeUndefined();
+      expect(chain.leave(form.city0)).toBe(city);
     });
   });
 

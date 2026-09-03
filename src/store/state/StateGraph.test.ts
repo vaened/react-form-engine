@@ -509,6 +509,90 @@ describe("StateGraph", () => {
     });
   });
 
+  describe("more than one watcher on the same location", () => {
+    it("counts a field once however many times it is registered", () => {
+      const first = graph.register(form.city0, { flags: Dirty });
+      const again = graph.register(form.city0, { flags: Dirty });
+
+      expect(again).toBe(first);
+      expect(graph.root().aggregate.dirty).toBe(1);
+    });
+
+    it("does not discount a field a second watcher still holds", () => {
+      graph.register(form.city0, { flags: Dirty });
+      graph.register(form.city0);
+
+      expect(graph.unregister(form.city0)).toEqual([]);
+      expect(graph.has(form.city0)).toBe(true);
+      expect(graph.root().aggregate.dirty).toBe(1);
+      expect(has(graph.root(), Dirty)).toBe(true);
+    });
+
+    it("discounts it once the last watcher goes", () => {
+      graph.register(form.city0, { flags: Dirty });
+      graph.register(form.city0);
+
+      graph.unregister(form.city0);
+      graph.unregister(form.city0);
+
+      expect(graph.has(form.city0)).toBe(false);
+      expect(graph.root().aggregate.dirty).toBe(0);
+      expect(graph.root().flags).toBe(0);
+    });
+
+    it("counts a node once however many times it is materialized", () => {
+      graph.register(form.city0, { flags: Touched });
+
+      const first = graph.materialize(form.address0);
+      const again = graph.materialize(form.address0);
+
+      expect(again).toBe(first);
+      expect(first.aggregate.touched).toBe(1);
+      expect(graph.root().aggregate.touched).toBe(1);
+    });
+
+    it("keeps a node deriving while a second watcher still holds it", () => {
+      const field = graph.register(form.city0, { flags: Touched });
+      const address = graph.materialize(form.address0);
+
+      graph.materialize(form.address0);
+      graph.dematerialize(form.address0);
+
+      expect(graph.has(form.address0)).toBe(true);
+      expect(field.parent).toBe(address);
+      expect(address.aggregate.touched).toBe(1);
+      expect(graph.root().aggregate.touched).toBe(1);
+    });
+
+    it("hands the children back and keeps the totals once the last one goes", () => {
+      const field = graph.register(form.city0, { flags: Touched });
+
+      graph.materialize(form.address0);
+      graph.materialize(form.address0);
+
+      graph.dematerialize(form.address0);
+      graph.dematerialize(form.address0);
+
+      expect(graph.has(form.address0)).toBe(false);
+      expect(field.parent).toBe(graph.root());
+      expect(graph.root().aggregate.touched).toBe(1);
+      expect(has(graph.root(), Touched)).toBe(true);
+    });
+
+    it("still routes updates through a node one watcher let go of", () => {
+      graph.register(form.city0);
+
+      const address = graph.materialize(form.address0);
+
+      graph.materialize(form.address0);
+      graph.dematerialize(form.address0);
+      graph.update(graph.field(form.city0), { flags: Invalid });
+
+      expect(address.aggregate.invalid).toBe(1);
+      expect(has(graph.root(), Invalid)).toBe(true);
+    });
+  });
+
   describe("guards", () => {
     it("finds an unknown entry as undefined but requiring it throws", () => {
       expect(graph.find(form.email)).toBeUndefined();

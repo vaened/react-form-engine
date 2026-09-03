@@ -57,14 +57,11 @@ export class StateGraph {
     return this.#chain.has(id);
   }
 
-  /** Registering twice returns what is there, so a remount keeps its state. */
+  /**
+   * Registering twice counts one more watcher and returns what is there, so a
+   * second `Controller` on the same path keeps the state the first one had.
+   */
   register(id: EntryId, initial: FieldStateInput = {}): StateFieldEntry {
-    const existing = this.#chain.find(id);
-
-    if (existing) {
-      return StateGraph.#asField(existing);
-    }
-
     const field: StateFieldEntry = {
       id,
       kind: StateKind.Field,
@@ -73,7 +70,12 @@ export class StateGraph {
       errors: initial.errors ?? NO_ERRORS,
     };
 
-    this.#chain.join(field);
+    const joined = this.#chain.join(field);
+
+    if (joined !== field) {
+      return StateGraph.#asField(joined);
+    }
+
     this.#propagate(field.parent, 0, field.flags);
 
     return field;
@@ -95,7 +97,11 @@ export class StateGraph {
     const field = StateGraph.#asField(existing);
     const parent = field.parent;
 
-    this.#chain.leave(id);
+    // Discounting a field somebody else still watches would take flags off a
+    // contributor that has not gone anywhere.
+    if (!this.#chain.leave(id)) {
+      return NOTHING_MOVED;
+    }
 
     return this.#propagate(parent, field.flags, 0);
   }
@@ -139,12 +145,6 @@ export class StateGraph {
    * the node once, so their weight comes off before the node's goes on.
    */
   materialize(id: EntryId): StateNodeEntry {
-    const existing = this.#chain.find(id);
-
-    if (existing) {
-      return StateGraph.#asNode(existing);
-    }
-
     const node: StateNodeEntry = {
       id,
       kind: StateKind.Node,
@@ -155,9 +155,13 @@ export class StateGraph {
 
     const parent = this.#chain.parentOf(id);
     const held = parent.flags;
-    const children = this.#chain.insert(node);
+    const inserted = this.#chain.insert(node);
 
-    for (const child of children) {
+    if (inserted.node !== node) {
+      return StateGraph.#asNode(inserted.node);
+    }
+
+    for (const child of inserted.claimed) {
       node.aggregate.add(child.flags);
       this.#contribute(parent, child.flags, 0);
     }
@@ -175,6 +179,11 @@ export class StateGraph {
     // Checked before anything moves, so refusing a field leaves the chain intact.
     const node = StateGraph.#asNode(this.entry(id));
     const removal = this.#chain.remove(id);
+
+    if (!removal) {
+      return;
+    }
+
     const parent = removal.parent;
     const held = parent.flags;
 

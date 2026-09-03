@@ -38,7 +38,7 @@ chain.insert(field);
 
 type ParentExpectation = Expect<Equal<ReturnType<typeof chain.parentOf>, StateNodeEntry>>;
 
-type RemovedParentExpectation = Expect<Equal<ReturnType<typeof chain.remove>["parent"], StateNodeEntry>>;
+type RemovedParentExpectation = Expect<Equal<NonNullable<ReturnType<typeof chain.remove>>["parent"], StateNodeEntry>>;
 
 /** A walk may start at anything on the chain, a field included. */
 type OriginExpectation = Expect<Equal<ReturnType<typeof chain.originOf>, StateFieldEntry | StateNodeEntry>>;
