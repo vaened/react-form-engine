@@ -89,3 +89,31 @@ export type PathDescendants = {
   readonly nodes: readonly (PathIndexObjectEntry | PathIndexArrayEntry)[];
   readonly fields: readonly PathIndexFieldEntry[];
 };
+
+/**
+ * What is inside what, read only, keyed by identity.
+ *
+ * Whoever needs to know the shape of a form — the reactive chains, an array hook
+ * listing its items — depends on this rather than on `PathIndex` itself. Two
+ * things come out of that. Nothing here registers a path or moves an item, so a
+ * reader cannot quietly turn into a writer. And nothing carries the value type
+ * or a path string: this side of the index speaks in entries alone, which is why
+ * it can be named for the tree and not for the paths that built it.
+ *
+ * It is the whole tree rather than the slice today's callers happen to use. The
+ * index already answers all six, and a view that only fits one consumer stops
+ * being the shape of the form and becomes that consumer's errand list.
+ */
+export interface EntryTree {
+  /** Where every walk ends, and what a chain builds its own root around. */
+  root(): PathIndexRootEntry;
+  entry(id: EntryId): PathIndexEntry;
+  /** One step up, or `null` at the root. */
+  parentOf(id: EntryId): PathIndexStructuralEntry | null;
+  /** One level down. On an array, this is the item order. */
+  childrenOf(id: EntryId): PathIndexChildEntry[];
+  /** Every step up, nearest first. Never a field: only a node holds children. */
+  ancestorsOf(id: EntryId): PathIndexStructuralEntry[];
+  /** Every level down, flattened and split by kind. */
+  descendantsOf(id: EntryId): PathDescendants;
+}

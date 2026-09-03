@@ -17,6 +17,7 @@ import {
 } from "./errors";
 import {
   type EntryId,
+  type EntryTree,
   type PathDescendants,
   type PathIndexArrayEntry,
   type PathIndexChildEntry,
@@ -63,7 +64,7 @@ type OpenedEntry = PathIndexStructuralEntry & {
  * That is what lets `move`, `insert`, `remove` and `swap` run without rewriting
  * a single route and without reassigning a single entry id.
  */
-export class PathIndex<TValues extends FormValues = FormValues> {
+export class PathIndex<TValues extends FormValues = FormValues> implements EntryTree {
   readonly #paths: PathIdentifier<FormPath<TValues>>;
   readonly #root: PathIndexRootEntry;
   readonly #entries = new Map<EntryId, PathIndexEntry>();
