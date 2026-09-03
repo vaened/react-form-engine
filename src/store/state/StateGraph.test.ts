@@ -4,13 +4,18 @@
  */
 
 import { beforeEach, describe, expect, it } from "vitest";
+import type { Path } from "../../path";
 import { InvoiceStructure } from "../observation/__fixtures__/invoice";
 import { RootObservationRequired, UnknownObservation } from "../observation/errors";
+import { PathIndex } from "../path/PathIndex";
+import { PathKind } from "../path/types";
 import { StateKindConflict } from "./errors";
+import { PathRegistry } from "./PathRegistry";
 import { StateAggregate } from "./StateAggregate";
 import { hasFlag, StateFlag } from "./StateFlag";
 import { StateGraph } from "./StateGraph";
 import type { StateFieldEntry, StateNodeEntry } from "./types";
+import { StateKind } from "./types";
 
 const { Dirty, Touched, Invalid } = StateFlag;
 
@@ -690,6 +695,118 @@ describe("StateGraph", () => {
 
       expect(graph.root().aggregate.touched).toBe(1);
       expect(has(graph.root(), Touched)).toBe(true);
+    });
+  });
+
+  /**
+   * PathIndex reopens a field into a structural node the instant something
+   * registers beneath it. StateGraph keeps its own entry for that same id, and
+   * has no way of knowing the index moved on — until something actually walks
+   * through it. This is where that catch-up happens.
+   */
+  describe("promoting a stale field to a node", () => {
+    type Nested = { invoice: { client: { name: string } } };
+
+    const build = () => {
+      const index = new PathIndex<Nested>(new PathRegistry<Path<Nested>>());
+      const invoice = index.register("invoice", PathKind.Field);
+      const graph = new StateGraph(index);
+
+      return { index, invoice, graph };
+    };
+
+    /** Reopens `invoice` in the index without ever registering `client` in state. */
+    const openInvoice = (index: PathIndex<Nested>) => index.register("invoice.client", PathKind.Field);
+
+    it("turns into a node once something registers beneath it", () => {
+      const { index, invoice, graph } = build();
+
+      graph.register(invoice.id);
+      openInvoice(index);
+
+      const name = index.register("invoice.client.name", PathKind.Field);
+      const promoted = graph.register(name.id).parent;
+
+      expect(promoted?.id).toBe(invoice.id);
+      expect(promoted?.kind).toBe(StateKind.Node);
+    });
+
+    it("discounts what it contributed as a field before the promotion lands", () => {
+      const { index, invoice, graph } = build();
+
+      graph.register(invoice.id, { flags: Touched });
+      expect(graph.root().aggregate.touched).toBe(1);
+
+      openInvoice(index);
+
+      const name = index.register("invoice.client.name", PathKind.Field);
+      graph.register(name.id);
+
+      // invoice's own touched is gone; nothing above it holds a stale count.
+      expect(graph.root().aggregate.touched).toBe(0);
+    });
+
+    it("starts the promoted node owning nothing the field had", () => {
+      const { index, invoice, graph } = build();
+
+      graph.register(invoice.id, { flags: Touched | Invalid, errors: ["requerido"] });
+
+      openInvoice(index);
+
+      const name = index.register("invoice.client.name", PathKind.Field);
+      const promoted = graph.register(name.id).parent as StateNodeEntry;
+
+      expect(promoted.flags).toBe(0);
+      expect(promoted.aggregate).toEqual(new StateAggregate());
+      expect(promoted).not.toHaveProperty("errors");
+    });
+
+    it("keeps deriving correctly through the promoted node afterward", () => {
+      const { index, invoice, graph } = build();
+
+      graph.register(invoice.id, { flags: Touched });
+      openInvoice(index);
+
+      const name = index.register("invoice.client.name", PathKind.Field);
+
+      graph.register(name.id, { flags: Touched });
+
+      // The field's own touched was discarded, but the walk continues past the
+      // freshly promoted node: root ends up touched again anyway, now because
+      // a real child is touched, not because the node itself was.
+      const promoted = graph.entry(invoice.id) as StateNodeEntry;
+
+      expect(has(promoted, Touched)).toBe(true);
+      expect(graph.root().aggregate.touched).toBe(1);
+      expect(has(graph.root(), Touched)).toBe(true);
+    });
+
+    it("names every entry that moved, including the node it just promoted", () => {
+      const { index, invoice, graph } = build();
+
+      graph.register(invoice.id, { flags: Touched });
+      openInvoice(index);
+
+      const name = index.register("invoice.client.name", PathKind.Field);
+      const field = graph.register(name.id);
+      const moved = graph.update(field, { flags: Touched });
+
+      expect(moved.map((entry) => entry.id)).toEqual([name.id, invoice.id, graph.root().id]);
+      expect(graph.root().aggregate.touched).toBe(1);
+    });
+
+    it("does not promote a node that is already one", () => {
+      const { index, invoice, graph } = build();
+
+      graph.materialize(invoice.id);
+      const before = graph.entry(invoice.id);
+
+      openInvoice(index);
+      const name = index.register("invoice.client.name", PathKind.Field);
+
+      graph.register(name.id);
+
+      expect(graph.entry(invoice.id)).toBe(before);
     });
   });
 });

@@ -209,6 +209,35 @@ export class ObservationChain<TNode extends ChainNode<TParent>, TParent extends 
   }
 
   /**
+   * Swaps what occupies `id` for a node of a different shape, re-pointing
+   * every child that reported to the one it replaces.
+   *
+   * Some owners need a location to become a different kind of thing — a field
+   * promoted into a node once something registers beneath it — and a kind
+   * that changes is not the same operation as a value that changes: nothing
+   * else on the chain knows how to reshape one variant into another. Handing
+   * in the real thing it becomes and relinking around it needs no reshaping
+   * at all.
+   */
+  replace(id: EntryId, next: TParent): TParent {
+    const previous = this.node(id);
+
+    next.parent = previous.parent;
+
+    this.#nodes.set(id, next);
+
+    for (const child of this.#nodes.values()) {
+      if (child.parent === previous) {
+        child.parent = next;
+      }
+    }
+
+    previous.parent = null;
+
+    return next;
+  }
+
+  /**
    * Gives up one watcher on a leaf, and takes it off the chain once it was the
    * last.
    *

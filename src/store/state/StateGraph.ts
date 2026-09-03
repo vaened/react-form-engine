@@ -157,7 +157,7 @@ export class StateGraph {
       aggregate: new StateAggregate(),
     };
 
-    const parent = this.#chain.parentOf(id);
+    const parent = this.#ensureNode(this.#chain.parentOf(id));
     const held = parent.flags;
     const inserted = this.#chain.insert(node);
 
@@ -188,7 +188,7 @@ export class StateGraph {
       return;
     }
 
-    const parent = removal.parent;
+    const parent = this.#ensureNode(removal.parent);
     const held = parent.flags;
 
     this.#contribute(parent, node.flags, 0);
@@ -222,20 +222,21 @@ export class StateGraph {
     let moved = changed;
 
     while (node) {
-      const held = node.flags;
+      const settled = this.#ensureNode(node);
+      const held = settled.flags;
 
-      this.#contribute(node, before, after);
+      this.#contribute(settled, before, after);
 
-      if (node.flags === held) {
+      if (settled.flags === held) {
         break;
       }
 
       moved ??= [];
-      moved.push(node);
+      moved.push(settled);
 
       before = held;
-      after = node.flags;
-      node = node.parent;
+      after = settled.flags;
+      node = settled.parent;
     }
 
     return moved ?? NOTHING_MOVED;
@@ -267,6 +268,48 @@ export class StateGraph {
     if (node.flags !== held) {
       this.#propagate(node.parent, held, node.flags);
     }
+  }
+
+  /**
+   * An ancestor resolved through the chain may, at runtime, still be the field
+   * it used to be: the index reopens a location the instant something
+   * registers beneath it, but this graph's own entry keeps its shape until
+   * something walks through it and asks it to derive again. This is where it
+   * catches up.
+   *
+   * The cast is the one place `ObservationChain<StateEntry, StateNodeEntry>`'s
+   * own promise — that a parent is always a node — is not yet true: that is
+   * exactly the case this method exists to close before anyone reads `node`
+   * any further.
+   */
+  #ensureNode(node: StateNodeEntry): StateNodeEntry {
+    return node.kind === StateKind.Node ? node : this.#promote(node as unknown as StateFieldEntry);
+  }
+
+  /**
+   * A field promoted to a node owns nothing it used to. Touched has no single
+   * child to inherit it. Invalid and validating described a direct validation
+   * that a node cannot run. Dirty is left to be rederived once its fields
+   * compare their own values against their own defaults.
+   */
+  #promote(field: StateFieldEntry): StateNodeEntry {
+    const parent = field.parent;
+
+    if (parent) {
+      const settled = this.#ensureNode(parent);
+      const held = settled.flags;
+
+      this.#contribute(settled, field.flags, 0);
+      this.#settle(settled, held);
+    }
+
+    return this.#chain.replace(field.id, {
+      id: field.id,
+      kind: StateKind.Node,
+      parent: null,
+      flags: 0,
+      aggregate: new StateAggregate(),
+    });
   }
 
   static #asField(entry: StateEntry): StateFieldEntry {
