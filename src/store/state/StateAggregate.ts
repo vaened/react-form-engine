@@ -8,14 +8,9 @@ import { hasFlag, StateFlag, setFlag } from "./StateFlag";
 /**
  * How many reactive children of a node carry each flag.
  *
- * One of these belongs to each materialized node and to nobody else, which is
- * what makes it safe to keep in place instead of replacing it on every change:
- * the counters are nobody's but the node's, and the node reports upward by
- * comparing the number `derive` gives back, never the aggregate itself.
- *
- * Counting rather than storing a boolean is what lets a flag survive until the
- * last child lets go of it, and what lets a node tell an ancestor that nothing
- * changed even though one of its children just did.
+ * One belongs to a single materialized node and to nobody else, which is what
+ * makes it safe to mutate in place: an ancestor is told by comparing what
+ * `derive` returns, never the aggregate itself.
  */
 export class StateAggregate {
   dirty = 0;

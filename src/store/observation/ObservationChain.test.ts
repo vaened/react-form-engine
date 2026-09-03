@@ -9,7 +9,7 @@ import { InvoiceStructure } from "./__fixtures__/invoice";
 import { RootHasNoParent, RootObservationRequired, UnknownObservation } from "./errors";
 import { ObservationChain } from "./ObservationChain";
 
-/** Whatever the owner of the chain keeps beside the link is none of its business. */
+/** `label` stands in for whatever an owner keeps beside the link. */
 type Node = {
   readonly id: EntryId;
   parent: Node | null;
@@ -41,7 +41,6 @@ describe("ObservationChain", () => {
     return { node: created, claimed: chain.insert(created) };
   };
 
-  /** The way up from a location, which is the only thing the chain exists for. */
   const upward = (from: EntryId) => {
     const walked: string[] = [];
 
@@ -100,11 +99,6 @@ describe("ObservationChain", () => {
       expect(chain.originOf(form.city0)).toBe(city);
     });
 
-    /**
-     * The whole reason the chain reads the shape: a write onto an array or an
-     * object nobody watches used to begin nowhere and tell nobody, while an
-     * ancestor was watching the entire time.
-     */
     it("climbs from a location nobody watches, which is never on the chain", () => {
       join(form.city0, "city");
 
@@ -202,15 +196,11 @@ describe("ObservationChain", () => {
       expect(upward(form.city0)).toEqual(["city", "address0", "client", "invoice"]);
     });
 
-    /**
-     * The list comes from the shape, so handing over somebody else's child is
-     * impossible rather than merely refused: these two already report to a
-     * closer watcher and are not `client`'s to take.
-     */
     it("leaves alone the ones that report to a closer watcher", () => {
       const address = insert(form.address0, "address0").node;
       const { claimed } = insert(form.client, "client");
 
+      // Both already report to `address0`, so they are not `client`'s to take.
       expect(claimed).toEqual([address]);
       expect(city.parent).toBe(address);
       expect(reference.parent).toBe(address);

@@ -213,8 +213,7 @@ describe("ValueGraph", () => {
   /**
    * A value can be written at any height: a whole node, or an array taking and
    * losing items. Those locations are not on the chain unless somebody watches
-   * them, and the walk used to begin nowhere and tell nobody while an ancestor
-   * was watching the entire time.
+   * them, so the walk has to be told where to start.
    */
   describe("writing above a field", () => {
     it("reaches a watched ancestor when the array itself is not watched", () => {

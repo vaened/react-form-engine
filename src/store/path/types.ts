@@ -93,19 +93,11 @@ export type PathDescendants = {
 /**
  * What is inside what, read only, keyed by identity.
  *
- * Whoever needs to know the shape of a form — the reactive chains, an array hook
- * listing its items — depends on this rather than on `PathIndex` itself. Two
- * things come out of that. Nothing here registers a path or moves an item, so a
- * reader cannot quietly turn into a writer. And nothing carries the value type
- * or a path string: this side of the index speaks in entries alone, which is why
- * it can be named for the tree and not for the paths that built it.
- *
- * It is the whole tree rather than the slice today's callers happen to use. The
- * index already answers all six, and a view that only fits one consumer stops
- * being the shape of the form and becomes that consumer's errand list.
+ * Whatever needs the shape of a form depends on this rather than on `PathIndex`
+ * itself. Nothing here registers a path or moves an item, so a reader cannot
+ * turn into a writer, and nothing carries the value type or a path string.
  */
 export interface EntryTree {
-  /** Where every walk ends, and what a chain builds its own root around. */
   root(): PathIndexRootEntry;
   entry(id: EntryId): PathIndexEntry;
   /** One step up, or `null` at the root. */

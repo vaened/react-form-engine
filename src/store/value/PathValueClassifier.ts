@@ -13,12 +13,10 @@ export type ClassifiedKind = PathKind.Field | PathKind.Object | PathKind.Array;
  * Reads a value and says what kind of location holds it.
  *
  * This is what stops a registration from taking a value apart forever: an
- * object is expanded into its parts unless a {@link Scalar} claims it, and the
- * same claim carries the comparison that decides whether it changed.
+ * object is expanded into its parts unless a {@link Scalar} claims it.
  *
- * Scalars given by the caller are offered the value before the built-in ones,
- * so treating a `Date` as a day rather than an instant is a matter of passing
- * one in.
+ * Given scalars are offered the value before the built-in ones, so treating a
+ * `Date` as a day rather than an instant is a matter of passing one in.
  */
 export class PathValueClassifier {
   readonly #scalars: readonly Scalar[];
@@ -40,11 +38,8 @@ export class PathValueClassifier {
   }
 
   /**
-   * The scalar that claims a value, if any.
-   *
-   * Exposed so that a caller writing to the same location over and over can
-   * resolve this once and keep the answer, instead of offering the value to
-   * every scalar on each write.
+   * Exposed so that a caller writing to one location repeatedly can resolve the
+   * scalar once and keep it, instead of offering the value to every scalar.
    */
   for(value: unknown): Scalar | undefined {
     if (!PathValueClassifier.#isComposite(value)) {
@@ -61,12 +56,8 @@ export class PathValueClassifier {
   }
 
   /**
-   * Whether two values at the same location are the same one.
-   *
-   * Values that are not composite settle on identity, so nothing is offered to
-   * a scalar that could not have claimed them. Two values only reach a scalar's
-   * own comparison when that same scalar claims both: a `Money` and a `null`
-   * are never the same, whatever the user wrote.
+   * Two values reach a scalar's own comparison only when that scalar claims
+   * both, so a `Money` and a `null` are never the same, whatever the user wrote.
    */
   equals(left: unknown, right: unknown): boolean {
     if (Object.is(left, right)) {

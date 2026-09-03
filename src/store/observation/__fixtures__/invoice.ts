@@ -25,12 +25,7 @@ export type Invoice = {
   };
 };
 
-/**
- * The canonical form, registered for real.
- *
- * The chain now reads the shape instead of being handed made-up parents, so the
- * ids have to come from somewhere that actually knows what is inside what.
- */
+/** The canonical form of `docs/FormValue.example.json`, registered for real. */
 export class InvoiceStructure {
   readonly index = new PathIndex<Invoice>(new PathRegistry<Path<Invoice>>());
 

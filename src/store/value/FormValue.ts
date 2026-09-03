@@ -12,12 +12,8 @@ import type { ValueContainer } from "./types";
 /**
  * The live value of a form, plus the defaults it is compared against.
  *
- * Reads and writes are addressed by entry, never by path string: the entry
- * carries the key and its parent carries the container, so nothing here splits
- * a path or walks from the root on every keystroke.
- *
- * It knows nothing about state, propagation or publication, and it does not
- * know the index either — only the shape of an entry.
+ * An entry carries the key and its parent carries the container, so nothing
+ * here splits a path or walks from the root.
  */
 export class FormValue<TValues extends FormValues = FormValues> {
   readonly #defaults: TValues;
@@ -64,11 +60,8 @@ export class FormValue<TValues extends FormValues = FormValues> {
   }
 
   /**
-   * Writes, creating whatever containers the destination needs.
-   *
-   * A missing container is never a special case: it reads the same whether it
-   * came from `null`, from `undefined` or from an initial value that never had
-   * that branch. The most specific instruction wins.
+   * Writes, creating whatever containers the destination needs. A missing
+   * container is never a special case, however it came to be missing.
    */
   write(entry: PathIndexEntry, value: unknown): void {
     if (!entry.parent) {
@@ -81,22 +74,9 @@ export class FormValue<TValues extends FormValues = FormValues> {
   }
 
   /**
-   * Drops the cached container.
-   *
-   * Structural operations do not need this: reordering an array moves pointers
-   * around while the item objects stay the same, so a cached container survives
-   * a move untouched.
-   *
-   * Writes do not need it either, and that is worth stating because it is not
-   * obvious. A descent caches every level it passes, so the slot is always left
-   * holding the container of the entry that was just written into, which was
-   * reached through the live value a moment earlier. Replacing a whole node
-   * therefore evicts any descendant of the object it replaced. A cache with
-   * more than one slot would lose that property and would have to invalidate
-   * descendants explicitly.
-   *
-   * What is left for this method is a value that changed without going through
-   * `write` at all.
+   * For a value that changed without going through `write`. Neither writes nor
+   * array operations need it: a descent leaves the slot holding the container
+   * it just reached, and reordering keeps the item objects themselves.
    */
   clear(): void {
     this.#containers.clear();
@@ -167,12 +147,7 @@ export class FormValue<TValues extends FormValues = FormValues> {
     return container;
   }
 
-  /**
-   * How an entry is named by its parent.
-   *
-   * An array item has no segment because its name is the position it occupies,
-   * which belongs to the parent and not to the item.
-   */
+  /** How an entry is named by its parent. */
   static #keyOf(entry: PathIndexEntry): string | number {
     if (entry.segment !== null) {
       return entry.segment;

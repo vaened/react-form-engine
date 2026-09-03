@@ -89,12 +89,7 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
     return this.#root;
   }
 
-  /**
-   * Ensures the whole branch of `path` exists and remembers how to reach it.
-   *
-   * Cold path: this is where the string is split, the branch is walked and the
-   * route is built. It runs once per public path.
-   */
+  /** Ensures the whole branch of `path` exists and remembers how to reach it. */
   register(path: FormPath<TValues>, kind: RegisterableKind): PathIndexChildEntry {
     const pathId = this.#paths.register(path);
     const known = this.#routes.get(pathId);
@@ -158,10 +153,7 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
     return leaf;
   }
 
-  /**
-   * Resolves a registered public path id to the entry that currently occupies
-   * it. This is the hot path: no split, no walk from root, no search.
-   */
+  /** Resolves a path id to the entry that currently occupies it. */
   locate(pathId: PathId<FormPath<TValues>>): PathIndexEntry {
     const route = this.#routes.get(pathId);
 
@@ -242,12 +234,7 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
     return { nodes, fields };
   }
 
-  /**
-   * Rebuilds the public path of an entry.
-   *
-   * Cold path only. Each array level costs an `indexOf` over its children,
-   * because position is derived from the order and is not stored on the item.
-   */
+  /** Rebuilds the public path of an entry. */
   describe(id: EntryId): string {
     const segments: string[] = [];
 
@@ -285,9 +272,6 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
    * same whether an item was inserted, renamed or wholly replaced. Only the
    * operation carries the intent, which is what lets the shifted items keep
    * their identity.
-   *
-   * The item is born childless, like any other {@link PathIndexChildEntry} the
-   * index creates for a position. See `#create`.
    */
   insert(arrayId: EntryId, index: number, kind: RegisterableKind): PathIndexChildEntry {
     const array = this.#array(arrayId);
@@ -403,18 +387,11 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
   }
 
   /**
-   * Opens a field so that something can be registered inside it.
+   * A location is a field when nothing was known to live inside it. Registering
+   * below it is newer and more specific information, so it stops being terminal.
    *
-   * A location is registered as a field when nothing was known to live inside
-   * it, which happens whenever its base value was absent when it was first
-   * claimed. Someone registering below it says otherwise, and that is newer and
-   * more specific information: it stops being terminal and starts deriving from
-   * whatever now lives underneath.
-   *
-   * The entry is opened in place rather than replaced, because routes hold it
-   * by reference and a replacement would leave them reaching a dead entry. That
-   * is why this is the one place that reshapes an entry, and the one place that
-   * has to go around the discriminated union to do it.
+   * It is opened in place rather than replaced because routes hold it by
+   * reference, which is why this is the one place that goes around the union.
    */
   #open(field: PathIndexFieldEntry, inner: string): PathIndexStructuralEntry {
     const opened = field as unknown as OpenedEntry;
@@ -431,10 +408,8 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
   }
 
   /**
-   * The kind is only held against an entry that is being claimed, never against
-   * one that is merely on the way: what a path passes through is whatever is
-   * already there, and a field standing in the middle is opened rather than
-   * refused.
+   * The kind is only held against an entry being claimed, never against one
+   * merely on the way: a field standing in the middle is opened, not refused.
    */
   #ensureChild(
     parent: PathIndexRootEntry | PathIndexObjectEntry,
@@ -461,12 +436,9 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
   }
 
   /**
-   * Returns the item at `index`, creating it and every position before it.
-   *
    * Registration is independent of the value, so a path may claim any position
    * without the ones before it being in use. An ordered list cannot hold gaps,
-   * so those positions become real entries rather than JavaScript holes. Items
-   * of an array share a kind, so they take the kind the caller asked for.
+   * so those become real entries rather than JavaScript holes.
    */
   #ensureItem(
     array: PathIndexArrayEntry,
@@ -494,15 +466,6 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
     return children[index];
   }
 
-  /**
-   * Mints an occurrence: an identity, and nothing looked at inside it yet.
-   *
-   * Every entry is born childless, whether it came from a registration, from a
-   * position filled to keep an ordered list contiguous, or from an insert. The
-   * identity is the payload; children appear only when something registers a
-   * path under it, and an occurrence nobody ever looks into stays childless for
-   * good without that being an incomplete state.
-   */
   #create(parent: PathIndexStructuralEntry, segment: string | null, kind: RegisterableKind): PathIndexChildEntry {
     const id = this.#mint();
 

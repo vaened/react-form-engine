@@ -262,16 +262,12 @@ describe("StateGraph", () => {
       expect(has(graph.root(), Dirty)).toBe(false);
     });
 
-    /**
-     * The list of children comes from the shape now, so a node cannot take one
-     * that already reports to somebody closer: that would count its weight in
-     * two places at once.
-     */
     it("leaves alone the ones that report to a closer node", () => {
       const field = graph.register(form.city0, { flags: Touched });
       const address = graph.materialize(form.address0);
       const client = graph.materialize(form.client);
 
+      // Taking it would count its weight in two places at once.
       expect(field.parent).toBe(address);
       expect(client.aggregate.touched).toBe(1);
       expect(address.aggregate.touched).toBe(1);
@@ -414,10 +410,7 @@ describe("StateGraph", () => {
       expect(has(graph.root(), Touched)).toBe(true);
     });
 
-    /**
-     * What an array insert produces: the item's fields mount afterwards and have
-     * to find the same ancestor everything else under it reports to.
-     */
+    /** What an array insert produces: the new item's fields mount afterwards. */
     it("hangs a field of another item off the ancestor they share", () => {
       const client = graph.materialize(form.client);
       const other = graph.register(form.city1, { flags: Dirty });
