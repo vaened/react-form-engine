@@ -347,6 +347,168 @@ describe("ValueStore", () => {
     });
   });
 
+  /**
+   * What a subscriber compares with `Object.is` against what it read last, to
+   * decide whether to re-render.
+   */
+  describe("snapshots", () => {
+    it("reads a field straight from the live value, uncached", () => {
+      expect(store.snapshot(form.city0)).toBe("Lima");
+
+      store.write(form.index.entry(form.city0), "Chorrillos", () => {});
+
+      expect(store.snapshot(form.city0)).toBe("Chorrillos");
+    });
+
+    it("stays the same reference across reads while nothing below it changed", () => {
+      store.materialize(form.client);
+
+      expect(store.snapshot(form.client)).toBe(store.snapshot(form.client));
+    });
+
+    it("changes reference once something below it is written", () => {
+      store.materialize(form.client);
+
+      const before = store.snapshot(form.client);
+
+      store.write(form.index.entry(form.city0), "Chorrillos", () => {});
+
+      const after = store.snapshot(form.client);
+
+      expect(after).not.toBe(before);
+    });
+
+    it("carries correct data for everything below it without cloning it", () => {
+      store.materialize(form.client);
+      store.write(form.index.entry(form.city0), "Chorrillos", () => {});
+
+      const client = store.snapshot(form.client) as { addresses: { city: string }[] };
+
+      expect(client.addresses[0]?.city).toBe("Chorrillos");
+    });
+
+    it("leaves a materialized sibling's snapshot untouched", () => {
+      store.materialize(form.client);
+      store.materialize(form.details);
+
+      const untouched = store.snapshot(form.details);
+
+      store.write(form.index.entry(form.city0), "Chorrillos", () => {});
+
+      expect(store.snapshot(form.details)).toBe(untouched);
+    });
+
+    it("collapses two writes to the same node into a single rebuild", () => {
+      store.materialize(form.client);
+
+      store.write(form.index.entry(form.city0), "Chorrillos", () => {});
+      store.write(form.index.entry(form.name), "Grace Hopper", () => {});
+
+      const client = store.snapshot(form.client) as { name: string; addresses: { city: string }[] };
+
+      expect(client.name).toBe("Grace Hopper");
+      expect(client.addresses[0]?.city).toBe("Chorrillos");
+      expect(store.snapshot(form.client)).toBe(client);
+    });
+
+    it("returns an array for an array node, not an object with numeric keys", () => {
+      store.materialize(form.addresses);
+
+      expect(Array.isArray(store.snapshot(form.addresses))).toBe(true);
+    });
+
+    it("builds correctly the first time a node is materialized, before any write", () => {
+      store.materialize(form.client);
+
+      expect(store.snapshot(form.client)).toEqual(sampleInvoice().invoice.client);
+    });
+
+    it("does not throw when an array node has no value yet", () => {
+      const empty = new ValueStore(form.index, {} as never);
+
+      empty.materialize(form.addresses);
+
+      expect(empty.snapshot(form.addresses)).toEqual([]);
+    });
+
+    it("does not throw when an object node has no value yet", () => {
+      const empty = new ValueStore(form.index, {} as never);
+
+      empty.materialize(form.client);
+
+      expect(empty.snapshot(form.client)).toEqual({});
+    });
+
+    it("throws for a node that was never materialized", () => {
+      expect(() => store.snapshot(form.client)).toThrow(UnknownObservation);
+    });
+
+    it("reads a field that was never registered, same as any other read", () => {
+      expect(store.snapshot(form.email)).toBe("ada@example.com");
+    });
+
+    it("returns a field's own value by identity, never a copy", () => {
+      const attachment = { name: "invoice.pdf" };
+
+      store.write(form.index.entry(form.email), attachment, () => {});
+
+      expect(store.snapshot(form.email)).toBe(attachment);
+    });
+
+    describe("the root", () => {
+      it("builds and stays stable while nothing changed", () => {
+        store.materialize(form.root);
+
+        expect(store.snapshot(form.root)).toBe(store.snapshot(form.root));
+      });
+
+      it("changes reference for any write anywhere, since it is always on the chain", () => {
+        store.materialize(form.root);
+
+        const before = store.snapshot(form.root);
+
+        store.write(form.index.entry(form.city0), "Chorrillos", () => {});
+
+        expect(store.snapshot(form.root)).not.toBe(before);
+      });
+
+      it("carries the same correct nested data as any other materialized node", () => {
+        store.materialize(form.root);
+        store.write(form.index.entry(form.city0), "Chorrillos", () => {});
+
+        const root = store.snapshot(form.root) as typeof store.value;
+
+        expect(root.invoice.client.addresses[0]?.city).toBe("Chorrillos");
+      });
+    });
+
+    it("changes every materialized ancestor's reference in one write, and nobody else's", () => {
+      store.materialize(form.client);
+      store.materialize(form.root);
+      store.materialize(form.details);
+
+      const clientBefore = store.snapshot(form.client);
+      const rootBefore = store.snapshot(form.root);
+      const detailsBefore = store.snapshot(form.details);
+
+      store.write(form.index.entry(form.city0), "Chorrillos", () => {});
+
+      expect(store.snapshot(form.client)).not.toBe(clientBefore);
+      expect(store.snapshot(form.root)).not.toBe(rootBefore);
+      expect(store.snapshot(form.details)).toBe(detailsBefore);
+    });
+
+    it("resets to a fresh snapshot after a node leaves and is materialized again", () => {
+      store.materialize(form.client);
+      store.snapshot(form.client);
+
+      store.dematerialize(form.client);
+      store.materialize(form.client);
+
+      expect(store.snapshot(form.client)).toEqual(sampleInvoice().invoice.client);
+    });
+  });
+
   describe("guards", () => {
     it("finds an unknown entry as undefined but requiring it throws", () => {
       expect(store.find(form.city0)).toBeUndefined();
