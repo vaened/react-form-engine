@@ -71,6 +71,13 @@ export class FormValue<TValues extends FormValues = FormValues> {
     const container = this.#build(entry.parent);
 
     FormValue.#assign(container, FormValue.#keyOf(entry), value);
+
+    // Writing a field replaces a leaf nobody descends through, but writing a
+    // node replaces the very container this and everything under it is reached
+    // by, and the descent that would notice is the one being remembered.
+    if (entry.kind !== PathKind.Field) {
+      this.clear();
+    }
   }
 
   /**

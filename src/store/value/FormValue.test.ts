@@ -257,6 +257,33 @@ describe("FormValue", () => {
       expect(value.value.invoice.client.phones).toEqual(["+51 988 888 888", "cambiado"]);
     });
 
+    /**
+     * A node whose parent is the root is reached without descending into any
+     * container, so the descent that replaces it never passes through the one
+     * being remembered.
+     */
+    it("does not survive replacing a node that hangs from the root", () => {
+      const invoice = index.register("invoice", PathKind.Object);
+      const series = field("invoice.series");
+
+      expect(value.read(series)).toBe("F001");
+
+      value.write(invoice, { series: "F002" });
+
+      expect(value.read(series)).toBe("F002");
+    });
+
+    it("does not survive replacing a node deeper down either", () => {
+      const client = index.register("invoice.client", PathKind.Object);
+      const name = field("invoice.client.name");
+
+      expect(value.read(name)).toBe("Ada Lovelace");
+
+      value.write(client, { name: "Grace Hopper" });
+
+      expect(value.read(name)).toBe("Grace Hopper");
+    });
+
     it("is dropped by clear", () => {
       const city = field(CITY_0);
 
