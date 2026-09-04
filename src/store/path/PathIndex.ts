@@ -173,6 +173,8 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
     segment: string,
     kind: RegisterableKind,
   ): PathIndexChildEntry {
+    PathIndex.#assertValidSegment(segment);
+
     const existing = parent.children.get(segment);
 
     if (existing) {
@@ -552,8 +554,13 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
     }
   }
 
+  /**
+   * `__proto__` is refused because writing it does not name a property: it
+   * replaces the prototype of the object holding it, and a path is allowed to
+   * reach values, never the shape of the objects carrying them.
+   */
   static #assertValidSegment(segment: string): void {
-    if (!segment || segment.trim() !== segment || segment.includes(".")) {
+    if (!segment || segment.trim() !== segment || segment.includes(".") || segment === "__proto__") {
       throw new InvalidPathSegment(segment);
     }
   }
