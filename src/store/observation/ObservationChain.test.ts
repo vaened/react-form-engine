@@ -284,6 +284,49 @@ describe("ObservationChain", () => {
     });
   });
 
+  describe("replacing what occupies a location", () => {
+    it("re-parents every child that reported to the one it replaces, not just one", () => {
+      insert(form.address0, "address0");
+
+      const city = join(form.city0, "city");
+      const reference = join(form.reference0, "reference");
+
+      const next = chain.replace(form.address0, node(form.address0, "reshaped"));
+
+      expect(city.parent).toBe(next);
+      expect(reference.parent).toBe(next);
+    });
+
+    it("keeps whoever the replaced occupant reported to", () => {
+      const address = insert(form.address0, "address0").node;
+      const reportedTo = address.parent;
+
+      const next = chain.replace(form.address0, node(form.address0, "reshaped"));
+
+      expect(next.parent).toBe(reportedTo);
+    });
+
+    it("detaches the old occupant and puts the new one on the chain in its place", () => {
+      const address = insert(form.address0, "address0").node;
+
+      const next = chain.replace(form.address0, node(form.address0, "reshaped"));
+
+      expect(address.parent).toBeNull();
+      expect(chain.node(form.address0)).toBe(next);
+    });
+
+    it("leaves an unrelated child untouched", () => {
+      insert(form.address0, "address0");
+      insert(form.client, "client");
+
+      const untouched = join(form.name, "name");
+
+      chain.replace(form.address0, node(form.address0, "reshaped"));
+
+      expect(untouched.parent?.label).toBe("client");
+    });
+  });
+
   describe("counting watchers", () => {
     it("keeps one node however many times it is joined", () => {
       const first = join(form.city0, "city");
