@@ -234,6 +234,36 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
     return { nodes, fields };
   }
 
+  /**
+   * Walks down from `id`, stopping the instant a field or an array answers for
+   * itself, and descending through anything else on the assumption that a key
+   * still names the same location it always did.
+   *
+   * An array never gets that assumption: position is not identity, so nothing
+   * below one can be reached this way. Only the array itself is reported.
+   */
+  reconcile(
+    id: EntryId,
+    onField: (entry: PathIndexFieldEntry) => void,
+    onArray: (entry: PathIndexArrayEntry) => void,
+  ): void {
+    const entry = this.entry(id);
+
+    if (entry.kind === PathKind.Field) {
+      onField(entry);
+      return;
+    }
+
+    if (entry.kind === PathKind.Array) {
+      onArray(entry);
+      return;
+    }
+
+    for (const child of PathIndex.#children(entry)) {
+      this.reconcile(child.id, onField, onArray);
+    }
+  }
+
   /** Rebuilds the public path of an entry. */
   describe(id: EntryId): string {
     const segments: string[] = [];

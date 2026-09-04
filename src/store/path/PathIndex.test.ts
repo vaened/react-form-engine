@@ -301,6 +301,57 @@ describe("PathIndex", () => {
     });
   });
 
+  describe("reconcile", () => {
+    it("reports a field to onField, and never touches onArray", () => {
+      const name = index.register("invoice.client.name", PathKind.Field);
+      const fields: EntryId[] = [];
+      const arrays: EntryId[] = [];
+
+      index.reconcile(
+        name.id,
+        (field) => fields.push(field.id),
+        (array) => arrays.push(array.id),
+      );
+
+      expect(fields).toEqual([name.id]);
+      expect(arrays).toEqual([]);
+    });
+
+    it("reports an array to onArray without descending into its items", () => {
+      const { addresses } = registerAddresses();
+      const fields: EntryId[] = [];
+      const arrays: EntryId[] = [];
+
+      index.reconcile(
+        addresses.id,
+        (field) => fields.push(field.id),
+        (array) => arrays.push(array.id),
+      );
+
+      expect(arrays).toEqual([addresses.id]);
+      expect(fields).toEqual([]);
+    });
+
+    it("descends through objects at any depth, stopping only at a field or an array", () => {
+      const name = index.register("invoice.client.name", PathKind.Field);
+      const { addresses, lima, arequipa } = registerAddresses();
+      const client = index.register("invoice.client", PathKind.Object);
+      const fields: EntryId[] = [];
+      const arrays: EntryId[] = [];
+
+      index.reconcile(
+        client.id,
+        (field) => fields.push(field.id),
+        (array) => arrays.push(array.id),
+      );
+
+      expect(fields).toEqual([name.id]);
+      expect(arrays).toEqual([addresses.id]);
+      expect(fields).not.toContain(lima.id);
+      expect(fields).not.toContain(arequipa.id);
+    });
+  });
+
   describe("move", () => {
     it("keeps the routes correct without touching them", () => {
       const { addresses, lima, arequipa } = registerAddresses();
