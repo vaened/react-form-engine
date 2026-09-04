@@ -29,12 +29,8 @@ export class PatchWrite<TValues extends FormValues = FormValues> implements Valu
     this.#classifier = classifier;
   }
 
-  write(entry: PathIndexEntry, value: unknown): readonly PathIndexEntry[] {
-    const written: PathIndexEntry[] = [];
-
-    this.#descend(entry, value, written);
-
-    return written;
+  write(entry: PathIndexEntry, value: unknown, visit: (written: PathIndexEntry) => void): void {
+    this.#descend(entry, value, visit);
   }
 
   /**
@@ -42,14 +38,14 @@ export class PatchWrite<TValues extends FormValues = FormValues> implements Valu
    * object, and at anything the classifier answers for on its own, such as a
    * date, which is an object nobody means to be walked into.
    */
-  #descend(at: PathIndexEntry, incoming: unknown, written: PathIndexEntry[]): void {
+  #descend(at: PathIndexEntry, incoming: unknown, visit: (written: PathIndexEntry) => void): void {
     if (
       at.kind !== PathKind.Object ||
       !PatchWrite.#keyed(incoming) ||
       this.#classifier.classify(incoming) !== PathKind.Object
     ) {
       this.#value.write(at, incoming, () => {});
-      written.push(at);
+      visit(at);
 
       return;
     }
@@ -57,7 +53,7 @@ export class PatchWrite<TValues extends FormValues = FormValues> implements Valu
     for (const key of Object.keys(incoming)) {
       const child = this.#index.ensureChild(at, key, this.#classifier.classify(incoming[key]));
 
-      this.#descend(child, incoming[key], written);
+      this.#descend(child, incoming[key], visit);
     }
   }
 

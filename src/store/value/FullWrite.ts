@@ -16,9 +16,9 @@ export class FullWrite<TValues extends FormValues = FormValues> implements Value
     this.#value = value;
   }
 
-  write(entry: PathIndexEntry, value: unknown): readonly PathIndexEntry[] {
+  write(entry: PathIndexEntry, value: unknown, visit: (written: PathIndexEntry) => void): void {
     this.#value.write(entry, value, () => {});
 
-    return [entry];
+    visit(entry);
   }
 }
