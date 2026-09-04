@@ -6,6 +6,7 @@
 export { StateAggregateUnderflow, StateKindConflict } from "./errors";
 export { type PathId, type PathIdentifier, PathRegistry } from "./PathRegistry";
 export { StateAggregate } from "./StateAggregate";
+export { StateAssessor } from "./StateAssessor";
 export { hasFlag, StateFlag, setFlag } from "./StateFlag";
 export { StateGraph } from "./StateGraph";
 export type { FieldStateInput, StateEntry, StateFieldEntry, StateNodeEntry } from "./types";
