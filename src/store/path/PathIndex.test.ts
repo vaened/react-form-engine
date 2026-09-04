@@ -300,6 +300,37 @@ describe("PathIndex", () => {
     });
   });
 
+  describe("ensure", () => {
+    it("returns an existing location untouched, whatever kind is asked for", () => {
+      const client = index.register("invoice.client", PathKind.Object);
+
+      const reached = index.ensure("invoice.client", PathKind.Field);
+
+      expect(reached).toBe(client);
+      expect(reached.kind).toBe(PathKind.Object);
+    });
+
+    it("reaches a location nobody named, created on the way to a descendant", () => {
+      const name = index.register("invoice.client.name", PathKind.Field);
+
+      expect(index.ensure("invoice.client", PathKind.Field)).toBe(name.parent);
+    });
+
+    it("creates with the kind it is given when nothing is there yet", () => {
+      const created = index.ensure("invoice.client.email", PathKind.Field);
+
+      expect(created.kind).toBe(PathKind.Field);
+      expect(index.describe(created.id)).toBe("invoice.client.email");
+    });
+
+    it("refuses nothing, where registering the same thing would conflict", () => {
+      index.register("invoice.client", PathKind.Object);
+
+      expect(() => index.ensure("invoice.client", PathKind.Field)).not.toThrow();
+      expect(() => index.register("invoice.client", PathKind.Field)).toThrow(PathKindConflict);
+    });
+  });
+
   describe("reconcile", () => {
     it("reports a field to onField, and never touches onArray", () => {
       const name = index.register("invoice.client.name", PathKind.Field);

@@ -89,15 +89,18 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
     return this.#root;
   }
 
-  /** Ensures the whole branch of `path` exists and remembers how to reach it. */
-  register(path: FormPath<TValues>, kind: RegisterableKind): PathIndexChildEntry {
+  /**
+   * Ensures the whole branch of `path` exists and remembers how to reach it.
+   *
+   * `kind` is what a location is created as, never what an existing one is held
+   * against: reaching a location is not the same as claiming it.
+   */
+  ensure(path: FormPath<TValues>, kind: RegisterableKind): PathIndexChildEntry {
     const pathId = this.#paths.register(path);
     const known = this.#routes.get(pathId);
     const reachable = known && this.#reachable(known);
 
     if (reachable) {
-      this.#assertKind(reachable, path, kind);
-
       // A registered path always has at least one segment, so it never lands on root.
       return reachable as PathIndexChildEntry;
     }
@@ -136,10 +139,6 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
         }
       }
 
-      if (last) {
-        this.#assertKind(child, path, kind);
-      }
-
       if (steps.length === 0) {
         anchor = child;
       }
@@ -155,6 +154,14 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
     this.#routes.set(pathId, { anchor, steps });
 
     return leaf;
+  }
+
+  register(path: FormPath<TValues>, kind: RegisterableKind): PathIndexChildEntry {
+    const entry = this.ensure(path, kind);
+
+    this.#assertKind(entry, path, kind);
+
+    return entry;
   }
 
   /** Resolves a path id to the entry that currently occupies it. */
