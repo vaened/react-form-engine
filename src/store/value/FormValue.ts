@@ -17,7 +17,7 @@ import type { ValueContainer } from "./types";
  */
 export class FormValue<TValues extends FormValues = FormValues> {
   readonly #defaults: TValues;
-  readonly #containers = new SingleEntryCache<PathIndexEntry, ValueContainer>();
+  readonly #container = new SingleEntryCache<PathIndexEntry, ValueContainer>();
 
   #root: TValues;
 
@@ -86,7 +86,7 @@ export class FormValue<TValues extends FormValues = FormValues> {
    * it just reached, and reordering keeps the item objects themselves.
    */
   clear(): void {
-    this.#containers.clear();
+    this.#container.clear();
   }
 
   replace(values: TValues): void {
@@ -102,7 +102,7 @@ export class FormValue<TValues extends FormValues = FormValues> {
       return from;
     }
 
-    const cached = from === this.#root ? this.#containers.get(entry) : undefined;
+    const cached = from === this.#root ? this.#container.get(entry) : undefined;
 
     if (cached) {
       return cached;
@@ -121,7 +121,7 @@ export class FormValue<TValues extends FormValues = FormValues> {
     }
 
     if (from === this.#root) {
-      this.#containers.set(entry, current);
+      this.#container.set(entry, current);
     }
 
     return current;
@@ -133,7 +133,7 @@ export class FormValue<TValues extends FormValues = FormValues> {
       return this.#root;
     }
 
-    const cached = this.#containers.get(entry);
+    const cached = this.#container.get(entry);
 
     if (cached) {
       return cached;
@@ -149,7 +149,7 @@ export class FormValue<TValues extends FormValues = FormValues> {
       FormValue.#assign(parent, key, container);
     }
 
-    this.#containers.set(entry, container);
+    this.#container.set(entry, container);
 
     return container;
   }
