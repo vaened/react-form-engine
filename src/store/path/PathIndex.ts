@@ -124,16 +124,20 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
       if (holder.kind === PathKind.Array) {
         const position = PathIndex.#toIndex(path, segment);
 
-        child = this.#ensureItem(holder, position, childKind, path, last);
+        child = this.#ensureItem(holder, position, childKind);
         steps.push({ at: position });
       } else {
         PathIndex.#assertValidSegment(segment);
 
-        child = this.#ensureChild(holder, segment, childKind, path, last);
+        child = this.#ensureChild(holder, segment, childKind);
 
         if (steps.length > 0) {
           steps.push({ key: segment });
         }
+      }
+
+      if (last) {
+        this.#assertKind(child, path, kind);
       }
 
       if (steps.length === 0) {
@@ -439,24 +443,14 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
     return opened;
   }
 
-  /**
-   * The kind is only held against an entry being claimed, never against one
-   * merely on the way: a field standing in the middle is opened, not refused.
-   */
   #ensureChild(
     parent: PathIndexRootEntry | PathIndexObjectEntry,
     segment: string,
     kind: RegisterableKind,
-    path: string,
-    claimed: boolean,
   ): PathIndexChildEntry {
     const existing = parent.children.get(segment);
 
     if (existing) {
-      if (claimed) {
-        this.#assertKind(existing, path, kind);
-      }
-
       return existing;
     }
 
@@ -472,23 +466,11 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
    * without the ones before it being in use. An ordered list cannot hold gaps,
    * so those become real entries rather than JavaScript holes.
    */
-  #ensureItem(
-    array: PathIndexArrayEntry,
-    index: number,
-    kind: RegisterableKind,
-    path: string,
-    claimed: boolean,
-  ): PathIndexChildEntry {
+  #ensureItem(array: PathIndexArrayEntry, index: number, kind: RegisterableKind): PathIndexChildEntry {
     const { children } = array;
 
     if (index < children.length) {
-      const existing = children[index];
-
-      if (claimed) {
-        this.#assertKind(existing, path, kind);
-      }
-
-      return existing;
+      return children[index];
     }
 
     while (children.length <= index) {
