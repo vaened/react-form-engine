@@ -21,7 +21,7 @@ export class FormValue<TValues extends FormValues = FormValues> {
 
   #root: TValues;
 
-  constructor(values: TValues, defaults: TValues = values) {
+  constructor(values: TValues, defaults: TValues = structuredClone(values)) {
     FormValue.#assertRoot(values);
     FormValue.#assertRoot(defaults);
 

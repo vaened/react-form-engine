@@ -60,11 +60,21 @@ describe("FormValue", () => {
       expect(() => new FormValue(null as never)).toThrow(InvalidRootValue);
     });
 
-    it("defaults to the values themselves when no defaults are given", () => {
+    it("clones the values when no defaults are given, instead of sharing the reference", () => {
       const only = sample();
       const single = new FormValue<Invoice>(only);
 
-      expect(single.defaults).toBe(only);
+      expect(single.defaults).toEqual(only);
+      expect(single.defaults).not.toBe(only);
+    });
+
+    it("keeps defaults untouched by a later write, even when none were given explicitly", () => {
+      const only = sample();
+      const single = new FormValue<Invoice>(only);
+
+      single.write(field("invoice.client.name"), "Grace Hopper");
+
+      expect(single.defaults.invoice.client.name).toBe("Ada Lovelace");
     });
   });
 
