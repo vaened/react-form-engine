@@ -132,7 +132,7 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
       } else {
         PathIndex.#assertValidSegment(segment);
 
-        child = this.#ensureChild(holder, segment, childKind);
+        child = this.ensureChild(holder, segment, childKind);
 
         if (steps.length > 0) {
           steps.push({ key: segment });
@@ -162,6 +162,28 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
     this.#assertKind(entry, path, kind);
 
     return entry;
+  }
+
+  /**
+   * The same as `ensure`, one level and without a path string, for a caller
+   * that already holds the parent and is naming its child.
+   */
+  ensureChild(
+    parent: PathIndexRootEntry | PathIndexObjectEntry,
+    segment: string,
+    kind: RegisterableKind,
+  ): PathIndexChildEntry {
+    const existing = parent.children.get(segment);
+
+    if (existing) {
+      return existing;
+    }
+
+    const child = this.#create(parent, segment, kind);
+
+    parent.children.set(segment, child);
+
+    return child;
   }
 
   /** Resolves a path id to the entry that currently occupies it. */
@@ -448,24 +470,6 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
     }
 
     return opened;
-  }
-
-  #ensureChild(
-    parent: PathIndexRootEntry | PathIndexObjectEntry,
-    segment: string,
-    kind: RegisterableKind,
-  ): PathIndexChildEntry {
-    const existing = parent.children.get(segment);
-
-    if (existing) {
-      return existing;
-    }
-
-    const child = this.#create(parent, segment, kind);
-
-    parent.children.set(segment, child);
-
-    return child;
   }
 
   /**
