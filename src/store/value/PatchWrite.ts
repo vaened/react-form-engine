@@ -6,6 +6,7 @@
 import type { FormValues } from "../../path";
 import type { PathIndex } from "../path/PathIndex";
 import { type PathIndexEntry, PathKind } from "../path/types";
+import { CircularPatchValue } from "./errors";
 import type { PathValueClassifier } from "./PathValueClassifier";
 import type { ValueStore } from "./ValueStore";
 import type { ValueWrite } from "./ValueWrite";
@@ -30,7 +31,7 @@ export class PatchWrite<TValues extends FormValues = FormValues> implements Valu
   }
 
   write(entry: PathIndexEntry, value: unknown, visit: (written: PathIndexEntry) => void): void {
-    this.#descend(entry, value, visit);
+    this.#descend(entry, value, visit, undefined);
   }
 
   /**
@@ -38,7 +39,12 @@ export class PatchWrite<TValues extends FormValues = FormValues> implements Valu
    * object, and at anything the classifier answers for on its own, such as a
    * date, which is an object nobody means to be walked into.
    */
-  #descend(at: PathIndexEntry, incoming: unknown, visit: (written: PathIndexEntry) => void): void {
+  #descend(
+    at: PathIndexEntry,
+    incoming: unknown,
+    visit: (written: PathIndexEntry) => void,
+    descending: Set<object> | undefined,
+  ): void {
     if (
       at.kind !== PathKind.Object ||
       !PatchWrite.#keyed(incoming) ||
@@ -50,11 +56,23 @@ export class PatchWrite<TValues extends FormValues = FormValues> implements Valu
       return;
     }
 
+    // Only a descent can loop, and a leaf write never descends, so the set that
+    // remembers the way down is not built until there is a way down.
+    const inside = descending ?? new Set<object>();
+
+    if (inside.has(incoming)) {
+      throw new CircularPatchValue(this.#index.describe(at.id));
+    }
+
+    inside.add(incoming);
+
     for (const key of Object.keys(incoming)) {
       const child = this.#index.ensureChild(at, key, this.#classifier.classify(incoming[key]));
 
-      this.#descend(child, incoming[key], visit);
+      this.#descend(child, incoming[key], visit, inside);
     }
+
+    inside.delete(incoming);
   }
 
   static #keyed(value: unknown): value is Record<string, unknown> {

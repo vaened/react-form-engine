@@ -9,3 +9,10 @@ export class InvalidRootValue extends Error {
     this.name = "InvalidRootValue";
   }
 }
+
+export class CircularPatchValue extends Error {
+  constructor(path: string) {
+    super(`The value assigned to "${path}" reaches itself, so it has no end to write.`);
+    this.name = "CircularPatchValue";
+  }
+}

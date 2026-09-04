@@ -3,7 +3,7 @@
  * @link https://vaened.dev DevFolio
  */
 
-export { InvalidRootValue } from "./errors";
+export { CircularPatchValue, InvalidRootValue } from "./errors";
 export { FormValue } from "./FormValue";
 export { FullWrite } from "./FullWrite";
 export { PatchWrite } from "./PatchWrite";
