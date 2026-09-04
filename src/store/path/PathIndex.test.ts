@@ -11,7 +11,6 @@ import {
   MissingArrayPosition,
   NotAnArrayEntry,
   PathKindConflict,
-  UnknownChildPath,
   UnknownEntryId,
   UnknownPathId,
 } from "./errors";
@@ -504,12 +503,12 @@ describe("PathIndex", () => {
       expect(index.contains(reference.id)).toBe(false);
     });
 
-    it("fails to resolve a position that no longer exists", () => {
+    it("resolves to nothing for a position that no longer exists, rather than throwing", () => {
       const { addresses } = registerAddresses();
 
       index.remove(addresses.id, 1);
 
-      expect(() => index.resolve(CITY_1)).toThrow(MissingArrayPosition);
+      expect(index.resolve(CITY_1)).toBeUndefined();
     });
   });
 
@@ -558,12 +557,12 @@ describe("PathIndex", () => {
       expect(nested.describe(rebuilt.id)).toBe("invoice.rows.0.tags.0.label");
     });
 
-    it("cannot resolve a positional route until the new occurrence is registered", () => {
+    it("resolves a positional route to nothing until the new occurrence is registered", () => {
       const { addresses } = registerAddresses();
 
       index.insert(addresses.id, 0, PathKind.Object);
 
-      expect(() => index.resolve(CITY_0)).toThrow(UnknownChildPath);
+      expect(index.resolve(CITY_0)).toBeUndefined();
     });
 
     it("repairs a positional route after an insert pushed a new occurrence in front", () => {

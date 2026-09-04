@@ -167,11 +167,13 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
   resolve(path: FormPath<TValues>): PathIndexEntry | undefined {
     const pathId = this.#paths.resolve(path);
 
-    if (pathId === undefined || !this.#routes.has(pathId)) {
+    if (pathId === undefined) {
       return undefined;
     }
 
-    return this.locate(pathId);
+    const route = this.#routes.get(pathId);
+
+    return route && this.#reachable(route);
   }
 
   find(id: EntryId): PathIndexEntry | undefined {
