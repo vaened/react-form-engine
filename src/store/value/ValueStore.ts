@@ -92,16 +92,27 @@ export class ValueStore<TValues extends FormValues = FormValues> {
   }
 
   /**
-   * Writes, then hands over everyone that has to hear about it, starting at the
-   * nearest watcher on or above the entry. A value can be written at any height,
-   * and a node nobody watches is not on the chain, so the start is resolved
-   * rather than assumed.
+   * Writes, then hands over everyone that has to hear about it, innermost
+   * first and the root last. A value can be written at any height, and a node
+   * nobody watches is not on the chain, so the start above is resolved rather
+   * than assumed.
+   *
+   * Writing anything but a field replaces the container everything below is
+   * reached through, which leaves those watchers holding a subtree the form no
+   * longer contains, so they are reached too.
    *
    * It visits rather than collects: this runs on every write and the answer is
    * never empty.
    */
   write(entry: PathIndexEntry, value: unknown, visit: (watcher: ValueEntry) => void): void {
     this.#value.write(entry, value);
+
+    if (entry.kind !== PathKind.Field) {
+      for (const inside of this.#chain.descendantsOf(entry.id)) {
+        inside.snapshot = STALE;
+        visit(inside);
+      }
+    }
 
     let watcher: ValueEntry | null = this.#chain.originOf(entry.id);
 

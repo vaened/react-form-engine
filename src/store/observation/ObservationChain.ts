@@ -107,19 +107,31 @@ export class ObservationChain<TNode extends ChainNode<TParent>, TParent extends 
   }
 
   /**
-   * The members that pass under a node when it starts being watched.
+   * The descendants of a location that answer to `parent`, which are the ones
+   * a node takes over when it starts being watched between the two.
    *
-   * A descendant already reporting to something closer belongs to that one, so
-   * only those still reporting to `parent` change hands.
+   * A descendant already reporting to something closer belongs to that one.
    */
-  claimableUnder(id: EntryId, parent: TParent): TNode[] {
+  reportingTo(id: EntryId, parent: TParent): TNode[] {
+    return this.descendantsOf(id).filter((descendant) => descendant.parent === parent);
+  }
+
+  /** The ones on the chain inside a location, whoever each one reports to. */
+  descendantsOf(id: EntryId): TNode[] {
     const { nodes, fields } = this.#tree.descendantsOf(id);
-    const claimable: TNode[] = [];
+    const descendants: TNode[] = [];
 
-    this.#gather(nodes, parent, claimable);
-    this.#gather(fields, parent, claimable);
+    for (const candidates of [nodes, fields]) {
+      for (const candidate of candidates) {
+        const descendant = this.#nodes.get(candidate.id);
 
-    return claimable;
+        if (descendant) {
+          descendants.push(descendant);
+        }
+      }
+    }
+
+    return descendants;
   }
 
   /**
@@ -157,7 +169,7 @@ export class ObservationChain<TNode extends ChainNode<TParent>, TParent extends 
     }
 
     const parent = this.#above(node.id);
-    const claimed = this.claimableUnder(node.id, parent);
+    const claimed = this.reportingTo(node.id, parent);
 
     node.parent = parent;
 
@@ -292,15 +304,5 @@ export class ObservationChain<TNode extends ChainNode<TParent>, TParent extends 
     this.#claims.delete(id);
 
     return true;
-  }
-
-  #gather(candidates: readonly { readonly id: EntryId }[], parent: TParent, into: TNode[]): void {
-    for (const candidate of candidates) {
-      const member = this.#nodes.get(candidate.id);
-
-      if (member && member.parent === parent) {
-        into.push(member);
-      }
-    }
   }
 }
