@@ -4,7 +4,7 @@
  */
 
 import type { FormStore, FormValues as StoreFormValues } from "../FormStore";
-import type { FormValues, HostNativeObject, NodePath, Path, PathValue, Primitive } from "../path";
+import type { FormValues, IsTerminal, NodePath, Path, PathValue } from "../path";
 import { MappedNodeControl } from "./MappedNodeControl";
 import type { ControlProjection, FocusedValue, ProjectionValue } from "./types";
 
@@ -122,7 +122,7 @@ export interface FieldControl<TValue> {
 type NodeControlValue<TValue> = TValue extends unknown
   ? TValue extends null | undefined
     ? never
-    : TValue extends Primitive | HostNativeObject
+    : IsTerminal<TValue> extends true
       ? never
       : TValue extends FormValues
         ? TValue
@@ -134,7 +134,7 @@ type ArrayControlValue<TValue> = TValue extends unknown ? (TValue extends readon
 type FieldControlValue<TValue> = TValue extends unknown
   ? TValue extends null | undefined
     ? never
-    : TValue extends Primitive | HostNativeObject
+    : IsTerminal<TValue> extends true
       ? TValue
       : TValue extends object
         ? never

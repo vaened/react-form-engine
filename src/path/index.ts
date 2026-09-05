@@ -6,8 +6,10 @@
 export type {
   ArrayPath,
   FieldPath,
+  FormScalar,
   FormValues,
   HostNativeObject,
+  IsTerminal,
   NodePath,
   Path,
   PathValue,

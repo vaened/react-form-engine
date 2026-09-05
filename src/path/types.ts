@@ -23,6 +23,46 @@ export type Primitive = bigint | boolean | null | number | string | symbol | und
 
 export type HostNativeObject = Blob | Date | File | FileList;
 
+declare const FORM_SCALAR: unique symbol;
+
+/**
+ * Marks a type as a single value, so paths stop at it instead of continuing
+ * into its properties.
+ *
+ * By default the engine takes any object apart: every property it holds becomes
+ * a location with its own path, its own state and its own dirty flag. A domain
+ * type is rarely meant to be read that way — a `Money` is one amount, not an
+ * `amount` and a `currency` that drifted apart.
+ *
+ * A marked type is terminal everywhere it appears: `Path` and `FieldPath` end
+ * at it, `NodePath` skips it, and `Control` resolves to a `FieldControl` rather
+ * than a `NodeControl`.
+ *
+ * Mark a type by merging this interface into it. Only an `interface` or a
+ * `class` can be marked, because a `type` alias cannot be reopened.
+ *
+ * @example
+ * // Where the type is declared:
+ * export class Money {
+ *   constructor(readonly amount: number, readonly currency: string) {}
+ * }
+ *
+ * export interface Money extends FormScalar {}
+ *
+ * @example
+ * // From anywhere else, including for a type you do not own:
+ * declare module "./domain" {
+ *   interface Money extends FormScalar {}
+ * }
+ *
+ * The declaration is erased at compile time and has no effect at runtime. The
+ * engine still has to be given a `Scalar` that knows how to recognise the type
+ * and compare two of its values.
+ */
+export interface FormScalar {
+  readonly [FORM_SCALAR]?: true;
+}
+
 // biome-ignore lint/suspicious/noExplicitAny: Interfaces require an open record constraint without losing their exact value types.
 export type FormValues = Record<string, any>;
 
@@ -34,13 +74,17 @@ type Present<T> = Exclude<T, null | undefined>;
 
 type IsTuple<T extends readonly unknown[]> = number extends T["length"] ? false : true;
 
-type IsTerminal<T> = T extends Primitive | HostNativeObject
+type IsScalar<T> = typeof FORM_SCALAR extends keyof T ? true : false;
+
+export type IsTerminal<T> = T extends Primitive | HostNativeObject
   ? true
-  : T extends readonly unknown[]
-    ? false
-    : T extends object
+  : IsScalar<T> extends true
+    ? true
+    : T extends readonly unknown[]
       ? false
-      : true;
+      : T extends object
+        ? false
+        : true;
 
 type IsEqual<TLeft, TRight> =
   (<TValue>() => TValue extends TLeft ? 1 : 2) extends <TValue>() => TValue extends TRight ? 1 : 2 ? true : false;
