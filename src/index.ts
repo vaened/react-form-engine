@@ -5,15 +5,11 @@
 
 export type { Control as ControlType, FieldControl, NodeControl } from "./control";
 export { Control } from "./control";
-export {
-  type FieldState,
-  type FormMode,
-  FormStore,
-  type FormStoreOptions,
-} from "./FormStore";
+export { type FormMode, FormStore, type FormStoreOptions } from "./FormStore";
 export type {
   ArrayPath,
   FieldPath,
+  FormScalar,
   FormValues,
   HostNativeObject,
   NodePath,

@@ -3,31 +3,26 @@
  * @link https://vaened.dev DevFolio
  */
 
-import type { Path, PathValue } from "./path";
+import type { FormValues, Path, PathValue } from "./path";
+import { PathIndex } from "./store/path/PathIndex";
+import type { PathIndexEntry } from "./store/path/types";
+import { PathKind } from "./store/path/types";
+import { Reconciler } from "./store/Reconciler";
 import { type PathIdentifier, PathRegistry } from "./store/state/PathRegistry";
+import { StateAssessor } from "./store/state/StateAssessor";
+import { StateGraph } from "./store/state/StateGraph";
+import type { StateEntry } from "./store/state/types";
+import { FullWrite } from "./store/value/FullWrite";
+import { isolate } from "./store/value/isolate";
+import { PatchWrite } from "./store/value/PatchWrite";
+import { PathValueClassifier } from "./store/value/PathValueClassifier";
+import { ValueStore } from "./store/value/ValueStore";
+import type { ValueWrite } from "./store/value/ValueWrite";
+import type { DeepReadonly } from "./types";
 
-// biome-ignore lint/suspicious/noExplicitAny: Interfaces require an open record constraint without losing their exact value types.
-export type FormValues = Record<string, any>;
+export type { FormValues } from "./path";
 
 export type FormMode = "full" | "patch";
-
-export type FieldState = {
-  flags: number;
-  errors: unknown[];
-};
-
-type PathNode = {
-  children: Map<string, PathNode>;
-  parent: PathNode | null;
-  state?: FieldState;
-};
-
-function createFieldState(): FieldState {
-  return {
-    errors: [],
-    flags: 0,
-  };
-}
 
 export type FormStoreOptions<TValues extends FormValues> = {
   values: TValues;
@@ -36,137 +31,121 @@ export type FormStoreOptions<TValues extends FormValues> = {
 };
 
 export class FormStore<TValues extends FormValues> {
-  readonly #registry: PathRegistry<Path<TValues>>;
   readonly #mode: FormMode;
-  readonly #nodes = new Map<string, PathNode>();
-  readonly #root: PathNode;
-
-  #values: TValues;
-  #defaults: TValues;
-  #states = new Map<string, FieldState>();
+  readonly #paths: PathRegistry<Path<TValues>>;
+  readonly #index: PathIndex<TValues>;
+  readonly #state: StateGraph;
+  readonly #value: ValueStore<TValues>;
+  readonly #classifier = new PathValueClassifier();
+  readonly #assessor: StateAssessor;
+  readonly #reconciler: Reconciler<TValues>;
+  readonly #writer: ValueWrite;
+  readonly #reconcileWritten = (written: PathIndexEntry): void => this.#reconciler.reconcile(written);
 
   constructor(options: FormStoreOptions<TValues>) {
     this.#mode = options.mode ?? "full";
-    this.#values = options.values;
-    this.#defaults = options.defaults ?? options.values;
-    this.#registry = new PathRegistry<Path<TValues>>();
-    this.#root = {
-      children: new Map(),
-      parent: null,
-    };
+    this.#paths = new PathRegistry<Path<TValues>>();
+    this.#index = new PathIndex<TValues>(this.#paths);
+    this.#state = new StateGraph(this.#index);
+    this.#value = new ValueStore<TValues>(
+      this.#index,
+      options.values,
+      options.defaults ?? isolate(options.values, this.#classifier),
+    );
+    this.#assessor = new StateAssessor(this.#classifier);
+    this.#reconciler = new Reconciler(this.#index, this.#state, this.#value, this.#classifier, this.#assessor);
+    this.#writer =
+      this.#mode === "patch" ? new PatchWrite(this.#index, this.#value, this.#classifier) : new FullWrite(this.#value);
   }
 
   get mode(): FormMode {
     return this.#mode;
   }
 
-  get values(): TValues {
-    return this.#values;
+  /**
+   * The live value, handed over as something to read.
+   *
+   * Reaching in and changing it would leave the form believing whatever it
+   * believed before: nothing is reassessed and nobody is told. Changing a value
+   * is what `set` is for.
+   */
+  get values(): DeepReadonly<TValues> {
+    // Nothing is converted here: the same object is handed over with less that
+    // can be done to it. It has to be said out loud because a conditional type
+    // over a parameter that is still open cannot be checked against itself.
+    return this.#value.value as DeepReadonly<TValues>;
   }
 
-  get defaults(): TValues {
-    return this.#defaults;
-  }
-
-  get states(): ReadonlyMap<string, FieldState> {
-    return this.#states;
+  get defaults(): DeepReadonly<TValues> {
+    return this.#value.defaults as DeepReadonly<TValues>;
   }
 
   get identifier(): PathIdentifier<Path<TValues>> {
-    return this.#registry;
+    return this.#paths;
   }
 
-  register<TPath extends Path<TValues>>(path: TPath): FieldState {
-    const existingState = this.#states.get(path);
+  /**
+   * A path already in the index keeps whatever kind it was claimed with.
+   * A new one is classified from the value living there right now, so an
+   * absent branch registers as a field and opens into a node the moment
+   * something registers underneath it.
+   */
+  register<TPath extends Path<TValues>>(path: TPath): void {
+    const existing = this.#index.resolve(path);
 
-    if (existingState) {
-      return existingState;
+    if (existing) {
+      this.#join(existing);
+      return;
     }
 
-    const node = this.#ensureNode(path);
-    const state = createFieldState();
+    const kind = this.#classifier.classify(this.#read(path));
 
-    node.state = state;
-    this.#states.set(path, state);
-
-    return state;
+    this.#join(this.#index.register(path, kind));
   }
 
   unregister<TPath extends Path<TValues>>(path: TPath): void {
-    const node = this.#nodes.get(path);
+    const entry = this.#index.resolve(path);
 
-    if (!node?.state) {
+    if (!entry) {
       return;
     }
 
-    delete node.state;
-    this.#states.delete(path);
-  }
+    if (this.#state.has(entry.id)) {
+      entry.kind === PathKind.Field ? this.#state.unregister(entry.id) : this.#state.dematerialize(entry.id);
+    }
 
-  getState<TPath extends Path<TValues>>(path: TPath): FieldState | undefined {
-    return this.#states.get(path);
+    if (this.#value.has(entry.id)) {
+      entry.kind === PathKind.Field ? this.#value.unregister(entry.id) : this.#value.dematerialize(entry.id);
+    }
   }
 
   set<TPath extends Path<TValues>>(path: TPath, value: PathValue<TValues, TPath>): void {
-    FormStore.setAtPath(this.#values, path, value);
+    const entry = this.#index.resolve(path) ?? this.#index.ensure(path, this.#classifier.classify(value));
+
+    this.#writer.write(entry, value, this.#reconcileWritten);
   }
 
-  #ensureNode(path: string): PathNode {
-    const existingNode = this.#nodes.get(path);
+  getState<TPath extends Path<TValues>>(path: TPath): StateEntry | undefined {
+    const entry = this.#index.resolve(path);
 
-    if (existingNode) {
-      return existingNode;
-    }
-
-    const segments = path.split(".");
-
-    let currentNode = this.#root;
-    let currentPath = "";
-
-    for (const segment of segments) {
-      currentPath = currentPath ? `${currentPath}.${segment}` : segment;
-
-      let nextNode = currentNode.children.get(segment);
-
-      if (!nextNode) {
-        nextNode = {
-          children: new Map(),
-          parent: currentNode,
-        };
-
-        currentNode.children.set(segment, nextNode);
-        this.#nodes.set(currentPath, nextNode);
-      }
-
-      if (!nextNode) {
-        throw new Error(`Failed to create path node for \`${currentPath}\`.`);
-      }
-
-      currentNode = nextNode;
-    }
-
-    return currentNode;
+    return entry && this.#state.find(entry.id);
   }
 
-  static setAtPath<TValue>(target: unknown, path: string, value: TValue): void {
-    const segments = path.split(".");
+  #join(entry: PathIndexEntry): void {
+    if (entry.kind === PathKind.Field) {
+      const initial = this.#assessor.assess(this.#value.read(entry), this.#value.default(entry));
 
-    if (segments.length === 0) {
-      return;
+      this.#state.register(entry.id, initial);
+      this.#value.register(entry.id);
+    } else {
+      this.#state.materialize(entry.id);
+      this.#value.materialize(entry.id);
     }
+  }
 
-    let current = target as Record<string, unknown>;
-
-    for (const segment of segments.slice(0, -1)) {
-      current = current[segment] as Record<string, unknown>;
-    }
-
-    const lastSegment = segments[segments.length - 1];
-
-    if (lastSegment === undefined) {
-      return;
-    }
-
-    current[lastSegment] = value;
+  #read(path: string): unknown {
+    return path.split(".").reduce<unknown>((current, segment) => {
+      return current && typeof current === "object" ? (current as Record<string, unknown>)[segment] : undefined;
+    }, this.#value.value);
   }
 }
