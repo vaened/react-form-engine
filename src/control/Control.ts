@@ -30,7 +30,7 @@ export interface NodeControl<TValues extends FormValues> {
    * @example
    * control.register("person.name");
    */
-  register<TPath extends Path<TValues>>(path: TPath): void;
+  register: <TPath extends Path<TValues>>(path: TPath) => void;
 
   /**
    * Removes a path from the registration lifecycle without deleting or
@@ -41,7 +41,7 @@ export interface NodeControl<TValues extends FormValues> {
    * @example
    * control.unregister("person.name");
    */
-  unregister<TPath extends Path<TValues>>(path: TPath): void;
+  unregister: <TPath extends Path<TValues>>(path: TPath) => void;
 
   /**
    * Writes a value to a path in the current context without changing its
@@ -49,10 +49,15 @@ export interface NodeControl<TValues extends FormValues> {
    *
    * The value type is determined by the selected path.
    *
+   * Declared as a property rather than a method so that the value it takes is
+   * checked against, and not with, the one a caller expects: a control over a
+   * domain that only holds strings cannot stand in for one that also takes
+   * numbers, which would write past what the form declares.
+   *
    * @example
    * control.set("person.name", "Ada");
    */
-  set<TPath extends Path<TValues>>(path: TPath, value: PathValue<TValues, TPath>): void;
+  set: <TPath extends Path<TValues>>(path: TPath, value: PathValue<TValues, TPath>) => void;
 
   /**
    * Derives a new control lens from the current control scope.
@@ -74,10 +79,12 @@ export interface NodeControl<TValues extends FormValues> {
    *
    * summary.set("name", "Ada");
    */
-  lens<TPath extends NodePath<TValues>>(selection: TPath): NodeControl<FocusedValue<TValues, TPath>>;
-  lens<TProjection extends ControlProjection<TValues>>(
-    selection: TProjection,
-  ): NodeControl<ProjectionValue<TValues, TProjection>>;
+  lens: {
+    <TPath extends NodePath<TValues>>(selection: TPath): NodeControl<FocusedValue<TValues, TPath>>;
+    <TProjection extends ControlProjection<TValues>>(
+      selection: TProjection,
+    ): NodeControl<ProjectionValue<TValues, TProjection>>;
+  };
 }
 
 /**
@@ -99,7 +106,7 @@ export interface FieldControl<TValue> {
    * @example
    * control.register();
    */
-  register(): void;
+  register: () => void;
 
   /**
    * Removes this field from the registration lifecycle while preserving its
@@ -108,15 +115,20 @@ export interface FieldControl<TValue> {
    * @example
    * control.unregister();
    */
-  unregister(): void;
+  unregister: () => void;
 
   /**
    * Writes this field's value without changing whether it is registered.
    *
+   * Declared as a property rather than a method so that the value it takes is
+   * checked against, and not with, the one a caller expects: a control over a
+   * location that only holds strings cannot stand in for one that also takes
+   * numbers, which would write past what the form declares.
+   *
    * @example
    * control.set("Ada");
    */
-  set(value: TValue): void;
+  set: (value: TValue) => void;
 }
 
 type NodeControlValue<TValue> = TValue extends unknown

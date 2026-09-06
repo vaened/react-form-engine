@@ -219,3 +219,37 @@ address.set("city", 123);
 
 // @ts-expect-error an array cannot form a control domain
 arrayControl.register("0.city");
+
+/**
+ * A control carries the exact type of the location it points at, and a
+ * location that only holds strings never accepted anything else. Standing in
+ * for one that does would let a component write past what the form declares.
+ */
+declare const seriesControl: FieldControl<string>;
+declare const anyOfBoth: FieldControl<string | number>;
+
+// @ts-expect-error a control over a string is not a control that also takes numbers
+const widened: FieldControl<string | number> = seriesControl;
+
+// the other way round is safe: the field takes both, and only strings are written
+const narrowed: FieldControl<string> = anyOfBoth;
+
+void widened;
+void narrowed;
+
+/**
+ * A node control is invariant where a field control is only contravariant: it
+ * writes through `set` and reads through `lens`, so neither direction stands in
+ * for the other without lying on one of the two.
+ */
+declare const narrowNode: NodeControl<{ name: string }>;
+declare const wideNode: NodeControl<{ name: string | number }>;
+
+// @ts-expect-error a control over a string field is not one whose field also takes numbers
+const widenedNode: NodeControl<{ name: string | number }> = narrowNode;
+
+// @ts-expect-error and lensing the wider one would hand back more than the narrower promises
+const narrowedNode: NodeControl<{ name: string }> = wideNode;
+
+void widenedNode;
+void narrowedNode;
