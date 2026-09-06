@@ -11,8 +11,10 @@ export type DeepReadonly<TValue> = TValue extends DeepReadonlyPrimitive | ((...a
     ? ReadonlyMap<DeepReadonly<TKey>, DeepReadonly<TItem>>
     : TValue extends ReadonlySet<infer TItem>
       ? ReadonlySet<DeepReadonly<TItem>>
-      : TValue extends readonly (infer TItem)[]
-        ? readonly DeepReadonly<TItem>[]
+      : TValue extends readonly unknown[]
+        ? number extends TValue["length"]
+          ? readonly DeepReadonly<TValue[number]>[]
+          : { readonly [TKey in keyof TValue]: DeepReadonly<TValue[TKey]> }
         : TValue extends object
           ? { readonly [TKey in keyof TValue]: DeepReadonly<TValue[TKey]> }
           : TValue;
