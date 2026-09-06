@@ -656,6 +656,30 @@ describe("StateGraph", () => {
       expect(() => graph.materialize(form.city0)).toThrow(StateKindConflict);
     });
 
+    /**
+     * Refusing after joining would count a watcher that never arrived, and
+     * nothing could ever give it back: the entry outlives everyone watching it.
+     */
+    it("counts nobody when it refuses to materialize over a field", () => {
+      graph.register(form.city0);
+
+      expect(() => graph.materialize(form.city0)).toThrow(StateKindConflict);
+
+      graph.unregister(form.city0);
+
+      expect(graph.has(form.city0)).toBe(false);
+    });
+
+    it("counts nobody when it refuses to register over a node", () => {
+      graph.materialize(form.address0);
+
+      expect(() => graph.register(form.address0)).toThrow(StateKindConflict);
+
+      graph.dematerialize(form.address0);
+
+      expect(graph.has(form.address0)).toBe(false);
+    });
+
     it("leaves the errors alone when an update brings none, so typing does not touch them", () => {
       const field = graph.register(form.city0);
 

@@ -62,8 +62,21 @@ export class StateGraph {
   /**
    * Registering twice counts one more watcher and returns what is there, so a
    * second `Controller` on the same path keeps the state the first one had.
+   *
+   * Who is there is asked before joining, because joining counts a watcher and
+   * refusing afterwards would count one that never arrived.
    */
   register(id: EntryId, initial: FieldStateInput = {}): StateFieldEntry {
+    const occupant = this.#chain.find(id);
+
+    if (occupant) {
+      const field = StateGraph.#asField(occupant);
+
+      this.#chain.join(field);
+
+      return field;
+    }
+
     const field: StateFieldEntry = {
       id,
       kind: StateKind.Field,
@@ -72,12 +85,7 @@ export class StateGraph {
       errors: initial.errors ?? NO_ERRORS,
     };
 
-    const joined = this.#chain.join(field);
-
-    if (joined !== field) {
-      return StateGraph.#asField(joined);
-    }
-
+    this.#chain.join(field);
     this.#propagate(field.parent, 0, field.flags);
 
     return field;
@@ -151,6 +159,16 @@ export class StateGraph {
    * the node once, so their weight comes off before the node's goes on.
    */
   materialize(id: EntryId): StateNodeEntry {
+    const occupant = this.#chain.find(id);
+
+    if (occupant) {
+      const node = StateGraph.#asNode(occupant);
+
+      this.#chain.insert(node);
+
+      return node;
+    }
+
     const node: StateNodeEntry = {
       id,
       kind: StateKind.Node,
@@ -162,10 +180,6 @@ export class StateGraph {
     const parent = this.#chain.parentOf(id);
     const held = parent.flags;
     const inserted = this.#chain.insert(node);
-
-    if (inserted.node !== node) {
-      return StateGraph.#asNode(inserted.node);
-    }
 
     for (const child of inserted.claimed) {
       node.aggregate.add(child.flags);
