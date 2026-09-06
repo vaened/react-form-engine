@@ -119,7 +119,7 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
     // Either the path is new, or its route outlived the entries it used to
     // reach. Routes survive structural operations on purpose, so registering
     // again has to rebuild the branch instead of trusting the old one.
-    const segments = path.split(".");
+    const segments = PathIndex.#split(path);
     const steps: RouteStep[] = [];
 
     let current: PathIndexEntry = this.#root;
@@ -141,8 +141,6 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
         child = this.#ensureItem(holder, position, childKind);
         steps.push({ at: position });
       } else {
-        PathIndex.#assertValidSegment(segment);
-
         child = this.ensureChild(holder, segment, childKind);
 
         if (steps.length > 0) {
@@ -580,6 +578,28 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
     if (!segment || segment.trim() !== segment || segment.includes(".") || segment === "__proto__") {
       throw new InvalidPathSegment(segment);
     }
+  }
+
+  /**
+   * The segments of a path, none of which can still be refused.
+   *
+   * Walking a path opens whatever it passes through, so a segment refused
+   * halfway would leave behind a branch reshaped for a registration that never
+   * happened. Neither check needs to know what a segment lands on, so both are
+   * answered here, before there is anything to undo.
+   */
+  static #split(path: string): string[] {
+    const segments = path.split(".");
+
+    for (const segment of segments) {
+      PathIndex.#assertValidSegment(segment);
+
+      if (INDEX_SEGMENT.test(segment)) {
+        PathIndex.#toIndex(path, segment);
+      }
+    }
+
+    return segments;
   }
 
   static #toIndex(path: string, segment: string): number {

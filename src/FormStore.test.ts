@@ -5,7 +5,7 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 import { FormStore } from "./FormStore";
-import { InvalidPathSegment } from "./store/path/errors";
+import { InvalidArrayIndex, InvalidPathSegment } from "./store/path/errors";
 import { hasFlag, StateFlag } from "./store/state/StateFlag";
 import type { StateFieldEntry } from "./store/state/types";
 import { StateKind } from "./store/state/types";
@@ -503,6 +503,44 @@ describe("FormStore", () => {
       expect(() => patch.set("invoice.client", { billing: shared, shipping: shared } as never)).not.toThrow();
       expect((patch.values.invoice.client as Record<string, unknown>).billing).toEqual({ city: "Lima" });
       expect((patch.values.invoice.client as Record<string, unknown>).shipping).toEqual({ city: "Lima" });
+    });
+  });
+
+  /**
+   * Reaching a path opens whatever it passes through, so refusing one halfway
+   * would leave a branch reshaped for a registration that never happened.
+   */
+  describe("a registration that is refused", () => {
+    const withField = () => {
+      const empty = new FormStore<Invoice>({ values: {} as Invoice });
+
+      empty.register("invoice.client");
+
+      return empty;
+    };
+
+    it("leaves the branch it passed through as it found it, on an invalid segment", () => {
+      const empty = withField();
+
+      expect(() => empty.register("invoice.client.__proto__" as never)).toThrow(InvalidPathSegment);
+
+      expect(empty.getState("invoice.client")?.kind).toBe(StateKind.Field);
+    });
+
+    it("leaves it alone on an index no array could ever hold", () => {
+      const empty = withField();
+
+      expect(() => empty.register("invoice.client.99999999999999999999" as never)).toThrow(InvalidArrayIndex);
+
+      expect(empty.getState("invoice.client")?.kind).toBe(StateKind.Field);
+    });
+
+    it("says nothing happened, not even to whoever watches the shape", () => {
+      const empty = withField();
+
+      expect(() => empty.set("invoice.client.__proto__" as never, "x" as never)).toThrow(InvalidPathSegment);
+
+      expect(empty.getState("invoice.client")?.kind).toBe(StateKind.Field);
     });
   });
 
