@@ -111,15 +111,21 @@ export interface EntryTree {
 }
 
 /**
- * Told when the shape of a location changes under whoever kept something on it.
+ * How the shape of a location may change under whoever kept something on it.
  *
  * Only structure is reported. What each observer keeps about a location is its
- * own, and so is deciding whether anything of it still applies.
+ * own, and so is deciding whether anything of it still applies. An observer
+ * brings the changes it depends on and leaves out the rest.
  */
-export interface StructureObserver {
+export type StructureObserver = {
   /** A location that answered for itself now holds others that answer for it. */
-  reopened(id: EntryId): void;
-}
+  reopened?(id: EntryId): void;
+  /**
+   * Locations that stop existing, handed over whole rather than by id: they are
+   * about to leave the index, so afterwards there is nothing left to ask.
+   */
+  discarded?(entries: readonly PathIndexEntry[]): void;
+};
 
 /**
  * Where an observer says it depends on the shape, rather than on being handed

@@ -71,7 +71,8 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
   readonly #root: PathIndexRootEntry;
   readonly #entries = new Map<EntryId, PathIndexEntry>();
   readonly #routes = new Map<PathId<FormPath<TValues>>, Route>();
-  readonly #observers: StructureObserver[] = [];
+  readonly #onReopened: ((id: EntryId) => void)[] = [];
+  readonly #onDiscarded: ((entries: readonly PathIndexEntry[]) => void)[] = [];
 
   #nextEntryId = 0;
 
@@ -89,7 +90,13 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
   }
 
   observe(observer: StructureObserver): void {
-    this.#observers.push(observer);
+    if (observer.reopened) {
+      this.#onReopened.push(observer.reopened);
+    }
+
+    if (observer.discarded) {
+      this.#onDiscarded.push(observer.discarded);
+    }
   }
 
   root(): PathIndexRootEntry {
@@ -371,8 +378,13 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
     PathIndex.#assertPosition(array, index);
 
     const [removed] = array.children.splice(index, 1);
+    const gone: PathIndexEntry[] = [];
 
-    this.#forget(removed);
+    this.#forget(removed, gone);
+
+    for (const discarded of this.#onDiscarded) {
+      discarded(gone);
+    }
   }
 
   move(arrayId: EntryId, from: number, to: number): void {
@@ -478,8 +490,8 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
       opened.children = new Map();
     }
 
-    for (const observer of this.#observers) {
-      observer.reopened(opened.id);
+    for (const reopened of this.#onReopened) {
+      reopened(opened.id);
     }
 
     return opened;
@@ -519,11 +531,12 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
     return entry;
   }
 
-  #forget(entry: PathIndexEntry): void {
+  #forget(entry: PathIndexEntry, gone: PathIndexEntry[]): void {
     this.#entries.delete(entry.id);
+    gone.push(entry);
 
     for (const child of PathIndex.#children(entry)) {
-      this.#forget(child);
+      this.#forget(child, gone);
     }
   }
 

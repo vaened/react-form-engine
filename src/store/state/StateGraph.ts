@@ -4,7 +4,7 @@
  */
 
 import { ObservationChain } from "../observation/ObservationChain";
-import type { EntryId, EntryTree, ObservableStructure, StructureObserver } from "../path/types";
+import type { EntryId, EntryTree, ObservableStructure } from "../path/types";
 import { StateAggregateUnderflow, StateKindConflict } from "./errors";
 import { StateAggregate } from "./StateAggregate";
 import { type FieldStateInput, type StateEntry, type StateFieldEntry, StateKind, type StateNodeEntry } from "./types";
@@ -26,7 +26,7 @@ const NOTHING_MOVED: readonly StateEntry[] = Object.freeze([]);
  * folding a change into the counters above, and knowing where it stops
  * mattering.
  */
-export class StateGraph implements StructureObserver {
+export class StateGraph {
   /** A field never holds children, so only a node may be a parent. */
   readonly #chain: ObservationChain<StateEntry, StateNodeEntry>;
 
@@ -39,7 +39,7 @@ export class StateGraph implements StructureObserver {
       aggregate: new StateAggregate(),
     });
 
-    tree.observe(this);
+    tree.observe({ reopened: (id) => this.#reopened(id) });
   }
 
   /** Always materialized, so a form can always answer for itself as a whole. */
@@ -185,7 +185,7 @@ export class StateGraph implements StructureObserver {
    * applying the moment the location took children on. Nothing happens for a
    * location nobody watches, which is most of them.
    */
-  reopened(id: EntryId): void {
+  #reopened(id: EntryId): void {
     const entry = this.#chain.find(id);
 
     if (!entry || entry.kind === StateKind.Node) {

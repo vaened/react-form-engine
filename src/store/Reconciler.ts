@@ -45,6 +45,8 @@ export class Reconciler<TValues extends FormValues = FormValues> {
     this.#value = value;
     this.#classifier = classifier;
     this.#assessor = assessor;
+
+    index.observe({ discarded: (entries) => this.#discarded(entries) });
   }
 
   reconcile(entry: PathIndexEntry): void {
@@ -65,37 +67,26 @@ export class Reconciler<TValues extends FormValues = FormValues> {
     this.#state.update(this.#state.field(field.id), next);
   }
 
-  #array(array: PathIndexArrayEntry): void {
-    const items = this.#index.childrenOf(array.id);
-
-    for (const item of items) {
-      this.#discard(item);
+  /** Every watcher a discarded location ever claimed has to let go, not just one. */
+  #discarded(entries: readonly PathIndexEntry[]): void {
+    for (const entry of entries) {
+      if (entry.kind === PathKind.Field) {
+        this.#unregister(entry.id);
+      } else {
+        this.#dematerialize(entry.id);
+      }
     }
+  }
 
-    for (let i = 0; i < items.length; i++) {
+  #array(array: PathIndexArrayEntry): void {
+    const items = this.#index.childrenOf(array.id).length;
+
+    for (let i = 0; i < items; i++) {
       this.#index.remove(array.id, 0);
     }
 
     for (const itemValue of Reconciler.#itemsOf(this.#value.read(array))) {
       this.#index.append(array.id, this.#classifier.classify(itemValue));
-    }
-  }
-
-  #discard(item: PathIndexEntry): void {
-    const { fields, nodes } = this.#index.descendantsOf(item.id);
-
-    for (const field of fields) {
-      this.#unregister(field.id);
-    }
-
-    for (const node of nodes) {
-      this.#dematerialize(node.id);
-    }
-
-    if (item.kind === PathKind.Field) {
-      this.#unregister(item.id);
-    } else {
-      this.#dematerialize(item.id);
     }
   }
 
