@@ -13,6 +13,7 @@ import type { Equal, Expect, Extends } from "./type-assertions";
 declare class Money {
   readonly amount: number;
   readonly currency: string;
+  readonly history: { at: string; rate: number }[];
 }
 
 interface Money extends FormScalar {}
@@ -124,3 +125,14 @@ const client: Client = { documentNumber: "12345678", name: "Ada Lovelace" };
 
 void amount;
 void client;
+
+/** The four path families read the same rule, so a collection inside a marked
+ * type is no more reachable than anything else under it. */
+// @ts-expect-error a collection inside a marked type is not an array path
+const invalidScalarArrayPath: ArrayPath<ScalarValues> = "total.history";
+
+// @ts-expect-error nor is one inside a marked type sitting in an array item
+const invalidScalarItemArrayPath: ArrayPath<ScalarValues> = "details.0.unitPrice.history";
+
+void invalidScalarArrayPath;
+void invalidScalarItemArrayPath;
