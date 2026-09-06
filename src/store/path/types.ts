@@ -109,3 +109,23 @@ export interface EntryTree {
   /** Every level down, flattened and split by kind. */
   descendantsOf(id: EntryId): PathDescendants;
 }
+
+/**
+ * Told when the shape of a location changes under whoever kept something on it.
+ *
+ * Only structure is reported. What each observer keeps about a location is its
+ * own, and so is deciding whether anything of it still applies.
+ */
+export interface StructureObserver {
+  /** A location that answered for itself now holds others that answer for it. */
+  reopened(id: EntryId): void;
+}
+
+/**
+ * Where an observer says it depends on the shape, rather than on being handed
+ * it. Whoever keeps something keyed by a location has to be here, or it keeps
+ * describing a location that stopped being what it was.
+ */
+export interface ObservableStructure {
+  observe(observer: StructureObserver): void;
+}

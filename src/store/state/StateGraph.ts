@@ -4,7 +4,7 @@
  */
 
 import { ObservationChain } from "../observation/ObservationChain";
-import type { EntryId, EntryTree } from "../path/types";
+import type { EntryId, EntryTree, ObservableStructure, StructureObserver } from "../path/types";
 import { StateAggregateUnderflow, StateKindConflict } from "./errors";
 import { StateAggregate } from "./StateAggregate";
 import { type FieldStateInput, type StateEntry, type StateFieldEntry, StateKind, type StateNodeEntry } from "./types";
@@ -26,11 +26,11 @@ const NOTHING_MOVED: readonly StateEntry[] = Object.freeze([]);
  * folding a change into the counters above, and knowing where it stops
  * mattering.
  */
-export class StateGraph {
+export class StateGraph implements StructureObserver {
   /** A field never holds children, so only a node may be a parent. */
   readonly #chain: ObservationChain<StateEntry, StateNodeEntry>;
 
-  constructor(tree: EntryTree) {
+  constructor(tree: EntryTree & ObservableStructure) {
     this.#chain = new ObservationChain<StateEntry, StateNodeEntry>(tree, {
       id: tree.root().id,
       kind: StateKind.Node,
@@ -38,6 +38,8 @@ export class StateGraph {
       flags: 0,
       aggregate: new StateAggregate(),
     });
+
+    tree.observe(this);
   }
 
   /** Always materialized, so a form can always answer for itself as a whole. */
@@ -176,6 +178,21 @@ export class StateGraph {
     this.#settle(parent, held);
 
     return node;
+  }
+
+  /**
+   * A field owns state that a node cannot hold, so what it was keeping stopped
+   * applying the moment the location took children on. Nothing happens for a
+   * location nobody watches, which is most of them.
+   */
+  reopened(id: EntryId): void {
+    const entry = this.#chain.find(id);
+
+    if (!entry || entry.kind === StateKind.Node) {
+      return;
+    }
+
+    this.#promote(entry);
   }
 
   /** The mirror of `materialize`: the children go back to reporting upward. */

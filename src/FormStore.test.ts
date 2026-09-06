@@ -191,6 +191,37 @@ describe("FormStore", () => {
 
       expect(empty.getState("invoice.client")?.kind).toBe(StateKind.Node);
     });
+
+    it("stops being a field the moment a write reaches through it", () => {
+      const empty = new FormStore<Invoice>({ values: {} as Invoice });
+
+      empty.register("invoice.client");
+
+      expect(empty.getState("invoice.client")?.kind).toBe(StateKind.Field);
+
+      empty.set("invoice.client.name", "Ada Lovelace");
+
+      expect(empty.getState("invoice.client")?.kind).toBe(StateKind.Node);
+    });
+
+    it("can still be unregistered afterwards, from the kind it is now", () => {
+      const empty = new FormStore<Invoice>({ values: {} as Invoice });
+
+      empty.register("invoice.client");
+      empty.set("invoice.client.name", "Ada Lovelace");
+
+      empty.unregister("invoice.client");
+
+      expect(empty.getState("invoice.client")).toBeUndefined();
+    });
+
+    it("leaves a location nobody watches alone", () => {
+      const empty = new FormStore<Invoice>({ values: {} as Invoice });
+
+      empty.set("invoice.client.name", "Ada Lovelace");
+
+      expect(empty.getState("invoice.client")).toBeUndefined();
+    });
   });
 
   describe("unregistering", () => {

@@ -18,6 +18,7 @@ import {
 import {
   type EntryId,
   type EntryTree,
+  type ObservableStructure,
   type PathDescendants,
   type PathIndexArrayEntry,
   type PathIndexChildEntry,
@@ -30,6 +31,7 @@ import {
   type RegisterableKind,
   type Route,
   type RouteStep,
+  type StructureObserver,
 } from "./types";
 
 const INDEX_SEGMENT = /^\d+$/;
@@ -64,11 +66,12 @@ type OpenedEntry = PathIndexStructuralEntry & {
  * That is what lets `move`, `insert`, `remove` and `swap` run without rewriting
  * a single route and without reassigning a single entry id.
  */
-export class PathIndex<TValues extends FormValues = FormValues> implements EntryTree {
+export class PathIndex<TValues extends FormValues = FormValues> implements EntryTree, ObservableStructure {
   readonly #paths: PathIdentifier<FormPath<TValues>>;
   readonly #root: PathIndexRootEntry;
   readonly #entries = new Map<EntryId, PathIndexEntry>();
   readonly #routes = new Map<PathId<FormPath<TValues>>, Route>();
+  readonly #observers: StructureObserver[] = [];
 
   #nextEntryId = 0;
 
@@ -83,6 +86,10 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
     };
 
     this.#entries.set(this.#root.id, this.#root);
+  }
+
+  observe(observer: StructureObserver): void {
+    this.#observers.push(observer);
   }
 
   root(): PathIndexRootEntry {
@@ -469,6 +476,10 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
     } else {
       opened.kind = PathKind.Object;
       opened.children = new Map();
+    }
+
+    for (const observer of this.#observers) {
+      observer.reopened(opened.id);
     }
 
     return opened;
