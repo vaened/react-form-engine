@@ -159,7 +159,7 @@ export class StateGraph implements StructureObserver {
       aggregate: new StateAggregate(),
     };
 
-    const parent = this.#ensureNode(this.#chain.parentOf(id));
+    const parent = this.#chain.parentOf(id);
     const held = parent.flags;
     const inserted = this.#chain.insert(node);
 
@@ -205,7 +205,7 @@ export class StateGraph implements StructureObserver {
       return;
     }
 
-    const parent = this.#ensureNode(removal.parent);
+    const parent = removal.parent;
     const held = parent.flags;
 
     this.#contribute(parent, node.flags, 0);
@@ -239,21 +239,20 @@ export class StateGraph implements StructureObserver {
     let moved = changed;
 
     while (node) {
-      const settled = this.#ensureNode(node);
-      const held = settled.flags;
+      const held = node.flags;
 
-      this.#contribute(settled, before, after);
+      this.#contribute(node, before, after);
 
-      if (settled.flags === held) {
+      if (node.flags === held) {
         break;
       }
 
       moved ??= [];
-      moved.push(settled);
+      moved.push(node);
 
       before = held;
-      after = settled.flags;
-      node = settled.parent;
+      after = node.flags;
+      node = node.parent;
     }
 
     return moved ?? NOTHING_MOVED;
@@ -288,22 +287,6 @@ export class StateGraph implements StructureObserver {
   }
 
   /**
-   * An ancestor resolved through the chain may, at runtime, still be the field
-   * it used to be: the index reopens a location the instant something
-   * registers beneath it, but this graph's own entry keeps its shape until
-   * something walks through it and asks it to derive again. This is where it
-   * catches up.
-   *
-   * The cast is the one place `ObservationChain<StateEntry, StateNodeEntry>`'s
-   * own promise — that a parent is always a node — is not yet true: that is
-   * exactly the case this method exists to close before anyone reads `node`
-   * any further.
-   */
-  #ensureNode(node: StateNodeEntry): StateNodeEntry {
-    return node.kind === StateKind.Node ? node : this.#promote(node as unknown as StateFieldEntry);
-  }
-
-  /**
    * A field promoted to a node owns nothing it used to. Touched has no single
    * child to inherit it. Invalid and validating described a direct validation
    * that a node cannot run. Dirty is left to be rederived once its fields
@@ -313,11 +296,10 @@ export class StateGraph implements StructureObserver {
     const parent = field.parent;
 
     if (parent) {
-      const settled = this.#ensureNode(parent);
-      const held = settled.flags;
+      const held = parent.flags;
 
-      this.#contribute(settled, field.flags, 0);
-      this.#settle(settled, held);
+      this.#contribute(parent, field.flags, 0);
+      this.#settle(parent, held);
     }
 
     return this.#chain.replace(field.id, {
