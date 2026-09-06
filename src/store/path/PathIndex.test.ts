@@ -490,6 +490,32 @@ describe("PathIndex", () => {
       expect(() => index.swap(addresses.id, 0, 4)).toThrow(MissingArrayPosition);
       expect(() => index.insert(addresses.id, 9, PathKind.Object)).toThrow(MissingArrayPosition);
     });
+
+    /**
+     * A position is a place in the order, so anything that is not one has no
+     * place to be. `NaN` compares false against every bound, and a fraction sits
+     * between two positions rather than on one.
+     */
+    it("rejects a position that is not a whole number", () => {
+      const { addresses } = registerAddresses();
+
+      expect(() => index.remove(addresses.id, Number.NaN)).toThrow(MissingArrayPosition);
+      expect(() => index.remove(addresses.id, 0.5)).toThrow(MissingArrayPosition);
+      expect(() => index.move(addresses.id, Number.NaN, 1)).toThrow(MissingArrayPosition);
+      expect(() => index.move(addresses.id, 0, 1.5)).toThrow(MissingArrayPosition);
+      expect(() => index.swap(addresses.id, Number.NaN, 1)).toThrow(MissingArrayPosition);
+      expect(() => index.insert(addresses.id, 0.5, PathKind.Object)).toThrow(MissingArrayPosition);
+    });
+
+    it("leaves the order untouched when it refuses one", () => {
+      const { addresses } = registerAddresses();
+      const order = index.childrenOf(addresses.id);
+
+      expect(() => index.remove(addresses.id, Number.NaN)).toThrow(MissingArrayPosition);
+      expect(() => index.swap(addresses.id, Number.NaN, 1)).toThrow(MissingArrayPosition);
+
+      expect(index.childrenOf(addresses.id)).toEqual(order);
+    });
   });
 
   describe("insert", () => {

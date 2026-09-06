@@ -349,12 +349,11 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
    * operation carries the intent, which is what lets the shifted items keep
    * their identity.
    */
+  /** The one position past the end is where an insert appends. */
   insert(arrayId: EntryId, index: number, kind: RegisterableKind): PathIndexChildEntry {
     const array = this.#array(arrayId);
 
-    if (index < 0 || index > array.children.length) {
-      throw new MissingArrayPosition(index, array.children.length);
-    }
+    PathIndex.#assertPosition(array, index, array.children.length);
 
     const item = this.#create(array, null, kind);
 
@@ -563,8 +562,13 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
     return entry.kind === PathKind.Array ? entry.children : entry.children.values();
   }
 
-  static #assertPosition(array: PathIndexArrayEntry, index: number): void {
-    if (index < 0 || index >= array.children.length) {
+  /**
+   * A position is a place in the order, so anything that is not a whole number
+   * has none: `NaN` compares false against every bound and would reach `splice`
+   * as a zero, and a fraction sits between two positions rather than on one.
+   */
+  static #assertPosition(array: PathIndexArrayEntry, index: number, limit = array.children.length - 1): void {
+    if (!Number.isInteger(index) || index < 0 || index > limit) {
       throw new MissingArrayPosition(index, array.children.length);
     }
   }
