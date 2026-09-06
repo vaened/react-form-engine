@@ -46,7 +46,7 @@ export class Reconciler<TValues extends FormValues = FormValues> {
     this.#classifier = classifier;
     this.#assessor = assessor;
 
-    index.observe({ discarded: (entries) => this.#discarded(entries) });
+    index.on("discarded", (entries) => this.#discarded(entries));
   }
 
   reconcile(entry: PathIndexEntry): void {

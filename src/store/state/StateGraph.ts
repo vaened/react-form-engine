@@ -39,7 +39,7 @@ export class StateGraph {
       aggregate: new StateAggregate(),
     });
 
-    tree.observe({ reopened: (id) => this.#reopened(id) });
+    tree.on("reopened", (id) => this.#reopened(id));
   }
 
   /** Always materialized, so a form can always answer for itself as a whole. */

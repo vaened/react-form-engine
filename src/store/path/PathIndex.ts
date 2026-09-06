@@ -3,6 +3,7 @@
  * @link https://vaened.dev DevFolio
  */
 
+import { EventEmitter, type Unsubscribe } from "../../EventEmitter";
 import type { Path as FormPath, FormValues } from "../../path";
 import type { PathId, PathIdentifier } from "../state/PathRegistry";
 import {
@@ -31,7 +32,7 @@ import {
   type RegisterableKind,
   type Route,
   type RouteStep,
-  type StructureObserver,
+  type StructureEvents,
 } from "./types";
 
 const INDEX_SEGMENT = /^\d+$/;
@@ -71,8 +72,7 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
   readonly #root: PathIndexRootEntry;
   readonly #entries = new Map<EntryId, PathIndexEntry>();
   readonly #routes = new Map<PathId<FormPath<TValues>>, Route>();
-  readonly #onReopened: ((id: EntryId) => void)[] = [];
-  readonly #onDiscarded: ((entries: readonly PathIndexEntry[]) => void)[] = [];
+  readonly #events = new EventEmitter<StructureEvents>();
 
   #nextEntryId = 0;
 
@@ -89,14 +89,11 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
     this.#entries.set(this.#root.id, this.#root);
   }
 
-  observe(observer: StructureObserver): void {
-    if (observer.reopened) {
-      this.#onReopened.push(observer.reopened);
-    }
-
-    if (observer.discarded) {
-      this.#onDiscarded.push(observer.discarded);
-    }
+  on<TType extends keyof StructureEvents>(
+    type: TType,
+    handler: (payload: StructureEvents[TType]) => void,
+  ): Unsubscribe {
+    return this.#events.on(type, handler);
   }
 
   root(): PathIndexRootEntry {
@@ -382,9 +379,7 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
 
     this.#forget(removed, gone);
 
-    for (const discarded of this.#onDiscarded) {
-      discarded(gone);
-    }
+    this.#events.emit("discarded", gone);
   }
 
   move(arrayId: EntryId, from: number, to: number): void {
@@ -490,9 +485,7 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
       opened.children = new Map();
     }
 
-    for (const reopened of this.#onReopened) {
-      reopened(opened.id);
-    }
+    this.#events.emit("reopened", opened.id);
 
     return opened;
   }

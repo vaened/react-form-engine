@@ -3,6 +3,8 @@
  * @link https://vaened.dev DevFolio
  */
 
+import type { Unsubscribe } from "../../EventEmitter";
+
 declare const entryIdBrand: unique symbol;
 
 /**
@@ -113,25 +115,24 @@ export interface EntryTree {
 /**
  * How the shape of a location may change under whoever kept something on it.
  *
- * Only structure is reported. What each observer keeps about a location is its
- * own, and so is deciding whether anything of it still applies. An observer
- * brings the changes it depends on and leaves out the rest.
+ * Only structure travels here. What each listener keeps about a location is its
+ * own, and so is deciding whether anything of it still applies.
  */
-export type StructureObserver = {
+export type StructureEvents = {
   /** A location that answered for itself now holds others that answer for it. */
-  reopened?(id: EntryId): void;
+  reopened: EntryId;
   /**
    * Locations that stop existing, handed over whole rather than by id: they are
    * about to leave the index, so afterwards there is nothing left to ask.
    */
-  discarded?(entries: readonly PathIndexEntry[]): void;
+  discarded: readonly PathIndexEntry[];
 };
 
 /**
- * Where an observer says it depends on the shape, rather than on being handed
+ * Where a listener says it depends on the shape, rather than on being handed
  * it. Whoever keeps something keyed by a location has to be here, or it keeps
  * describing a location that stopped being what it was.
  */
 export interface ObservableStructure {
-  observe(observer: StructureObserver): void;
+  on<TType extends keyof StructureEvents>(type: TType, handler: (payload: StructureEvents[TType]) => void): Unsubscribe;
 }
