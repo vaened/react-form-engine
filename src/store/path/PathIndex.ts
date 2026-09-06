@@ -379,6 +379,31 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
     this.#events.emit("discarded", gone);
   }
 
+  /**
+   * Empties an array in one operation.
+   *
+   * Taking the items out one at a time shifts the order on every step and says
+   * what went once per item; emptying is one thing that happens, so it walks
+   * what is inside once and says it once.
+   */
+  clear(arrayId: EntryId): void {
+    const array = this.#array(arrayId);
+
+    if (array.children.length === 0) {
+      return;
+    }
+
+    const gone: PathIndexEntry[] = [];
+
+    for (const item of array.children) {
+      this.#forget(item, gone);
+    }
+
+    array.children.length = 0;
+
+    this.#events.emit("discarded", gone);
+  }
+
   move(arrayId: EntryId, from: number, to: number): void {
     const array = this.#array(arrayId);
 

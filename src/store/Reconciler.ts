@@ -79,11 +79,7 @@ export class Reconciler<TValues extends FormValues = FormValues> {
   }
 
   #array(array: PathIndexArrayEntry): void {
-    const items = this.#index.childrenOf(array.id).length;
-
-    for (let i = 0; i < items; i++) {
-      this.#index.remove(array.id, 0);
-    }
+    this.#index.clear(array.id);
 
     for (const itemValue of Reconciler.#itemsOf(this.#value.read(array))) {
       this.#index.append(array.id, this.#classifier.classify(itemValue));

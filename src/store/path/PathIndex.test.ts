@@ -569,6 +569,65 @@ describe("PathIndex", () => {
     });
   });
 
+  /**
+   * Emptying an array is one thing that happens, not one thing repeated: taking
+   * the items out one at a time shifts the order on every step and wakes every
+   * listener once per item.
+   */
+  describe("clear", () => {
+    it("leaves the array holding nothing", () => {
+      const { addresses } = registerAddresses();
+
+      index.clear(addresses.id);
+
+      expect(index.childrenOf(addresses.id)).toEqual([]);
+    });
+
+    it("forgets every item and everything under it", () => {
+      const { addresses, lima, arequipa } = registerAddresses();
+      const reference = index.register(REFERENCE_0, PathKind.Field);
+      const item = lima.parent;
+
+      index.clear(addresses.id);
+
+      expect(index.contains(item.id)).toBe(false);
+      expect(index.contains(lima.id)).toBe(false);
+      expect(index.contains(arequipa.id)).toBe(false);
+      expect(index.contains(reference.id)).toBe(false);
+    });
+
+    it("says what went once, however many items went", () => {
+      const { addresses, lima, arequipa } = registerAddresses();
+      const rounds: number[] = [];
+
+      index.on("discarded", (entries) => rounds.push(entries.length));
+
+      index.clear(addresses.id);
+
+      expect(rounds).toHaveLength(1);
+      expect(rounds[0]).toBe(index.descendantsOf(addresses.id).fields.length + 4);
+      expect(index.contains(lima.id)).toBe(false);
+      expect(index.contains(arequipa.id)).toBe(false);
+    });
+
+    it("says nothing about an array that was already empty", () => {
+      const addresses = index.register(ADDRESSES, PathKind.Array);
+      const rounds: number[] = [];
+
+      index.on("discarded", (entries) => rounds.push(entries.length));
+
+      index.clear(addresses.id);
+
+      expect(rounds).toEqual([]);
+    });
+
+    it("refuses on something that is not an array", () => {
+      const name = index.register("invoice.client.name", PathKind.Field);
+
+      expect(() => index.clear(name.id)).toThrow(NotAnArrayEntry);
+    });
+  });
+
   describe("re-registration after a structural change", () => {
     it("rebuilds the branch when the route outlived its entries", () => {
       const { addresses, lima } = registerAddresses();
