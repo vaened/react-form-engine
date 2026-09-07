@@ -92,7 +92,7 @@ describe("FormStore", () => {
 
       const field = withDefaults.getState("invoice.client.name") as StateFieldEntry;
 
-      expect(hasFlag(field.flags, StateFlag.Dirty)).toBe(false);
+      expect(hasFlag(field.state.flags, StateFlag.Dirty)).toBe(false);
     });
 
     /** Editing an existing record: the value already differs before anyone types. */
@@ -106,7 +106,7 @@ describe("FormStore", () => {
 
       const field = editing.getState("invoice.client.name") as StateFieldEntry;
 
-      expect(hasFlag(field.flags, StateFlag.Dirty)).toBe(true);
+      expect(hasFlag(field.state.flags, StateFlag.Dirty)).toBe(true);
     });
 
     it("is never touched at registration, dirty or not", () => {
@@ -119,7 +119,7 @@ describe("FormStore", () => {
 
       const field = editing.getState("invoice.client.name") as StateFieldEntry;
 
-      expect(hasFlag(field.flags, StateFlag.Touched)).toBe(false);
+      expect(hasFlag(field.state.flags, StateFlag.Touched)).toBe(false);
     });
 
     it("is never dirty when values and defaults are the same object", () => {
@@ -131,7 +131,7 @@ describe("FormStore", () => {
 
       const field = shared.getState("invoice.client.name") as StateFieldEntry;
 
-      expect(hasFlag(field.flags, StateFlag.Dirty)).toBe(false);
+      expect(hasFlag(field.state.flags, StateFlag.Dirty)).toBe(false);
     });
   });
 
@@ -296,7 +296,7 @@ describe("FormStore", () => {
 
       const field = store.getState("invoice.client.name") as StateFieldEntry;
 
-      expect(hasFlag(field.flags, StateFlag.Dirty)).toBe(true);
+      expect(hasFlag(field.state.flags, StateFlag.Dirty)).toBe(true);
     });
 
     it("leaves a registered field clean when the write matches the default", () => {
@@ -306,7 +306,7 @@ describe("FormStore", () => {
 
       const field = store.getState("invoice.client.name") as StateFieldEntry;
 
-      expect(hasFlag(field.flags, StateFlag.Dirty)).toBe(false);
+      expect(hasFlag(field.state.flags, StateFlag.Dirty)).toBe(false);
     });
 
     it("clears dirty once a later write brings the value back to the default", () => {
@@ -317,7 +317,7 @@ describe("FormStore", () => {
 
       const field = store.getState("invoice.client.name") as StateFieldEntry;
 
-      expect(hasFlag(field.flags, StateFlag.Dirty)).toBe(false);
+      expect(hasFlag(field.state.flags, StateFlag.Dirty)).toBe(false);
     });
 
     it("does not create state for a field nobody registered", () => {
@@ -360,7 +360,7 @@ describe("FormStore", () => {
       const field = store.getState("invoice.client.name") as StateFieldEntry;
 
       expect(field).toBeDefined();
-      expect(hasFlag(field.flags, StateFlag.Dirty)).toBe(true);
+      expect(hasFlag(field.state.flags, StateFlag.Dirty)).toBe(true);
     });
 
     it("reassesses a registered field under a replaced node that hangs from the root", () => {
@@ -371,7 +371,7 @@ describe("FormStore", () => {
       const field = store.getState("invoice.series") as StateFieldEntry;
 
       expect(store.values.invoice.series).toBe("F002");
-      expect(hasFlag(field.flags, StateFlag.Dirty)).toBe(true);
+      expect(hasFlag(field.state.flags, StateFlag.Dirty)).toBe(true);
     });
 
     it("reassesses a registered field nested under a replaced object", () => {
@@ -387,7 +387,7 @@ describe("FormStore", () => {
 
       const field = store.getState("invoice.client.name") as StateFieldEntry;
 
-      expect(hasFlag(field.flags, StateFlag.Dirty)).toBe(true);
+      expect(hasFlag(field.state.flags, StateFlag.Dirty)).toBe(true);
     });
 
     it("finds nothing for a stale path once its array item is destroyed and rebuilt", () => {
@@ -406,7 +406,7 @@ describe("FormStore", () => {
       const field = store.getState("invoice.client.addresses.0.city") as StateFieldEntry;
 
       expect(field.kind).toBe(StateKind.Field);
-      expect(hasFlag(field.flags, StateFlag.Dirty)).toBe(true);
+      expect(hasFlag(field.state.flags, StateFlag.Dirty)).toBe(true);
     });
   });
 
@@ -445,8 +445,12 @@ describe("FormStore", () => {
 
       patch.set("invoice.client", { name: "Grace Hopper" } as never);
 
-      expect(hasFlag((patch.getState("invoice.client.name") as StateFieldEntry).flags, StateFlag.Dirty)).toBe(true);
-      expect(hasFlag((patch.getState("invoice.client.email") as StateFieldEntry).flags, StateFlag.Dirty)).toBe(false);
+      expect(hasFlag((patch.getState("invoice.client.name") as StateFieldEntry).state.flags, StateFlag.Dirty)).toBe(
+        true,
+      );
+      expect(hasFlag((patch.getState("invoice.client.email") as StateFieldEntry).state.flags, StateFlag.Dirty)).toBe(
+        false,
+      );
     });
 
     /** The whole point of a patch: what it never named keeps its identity. */
@@ -523,7 +527,7 @@ describe("FormStore", () => {
 
       expect(born.values.billing.city).toBe("Cusco");
       expect(born.values.shipping.city).toBe("Lima");
-      expect(hasFlag(born.getState("shipping.city")?.flags ?? 0, StateFlag.Dirty)).toBe(false);
+      expect(hasFlag(born.getState("shipping.city")?.state.flags ?? 0, StateFlag.Dirty)).toBe(false);
     });
 
     it("keeps two rows apart when the same one was handed in twice", () => {
@@ -596,7 +600,7 @@ describe("FormStore", () => {
       born.register("invoice.client.name");
 
       expect(born.values.invoice.client.name).toBe("Ada Lovelace");
-      expect(hasFlag(born.getState("invoice.client.name")?.flags ?? 0, StateFlag.Dirty)).toBe(false);
+      expect(hasFlag(born.getState("invoice.client.name")?.state.flags ?? 0, StateFlag.Dirty)).toBe(false);
     });
 
     it("starts wherever it is told to, which is not always its base", () => {
@@ -609,7 +613,7 @@ describe("FormStore", () => {
 
       expect(born.values.invoice.client.name).toBe("Grace Hopper");
       expect(born.defaults.invoice.client.name).toBe("Ada Lovelace");
-      expect(hasFlag(born.getState("invoice.client.name")?.flags ?? 0, StateFlag.Dirty)).toBe(true);
+      expect(hasFlag(born.getState("invoice.client.name")?.state.flags ?? 0, StateFlag.Dirty)).toBe(true);
     });
 
     it("keeps its own tree, so what it was handed is never written into", () => {
@@ -684,7 +688,7 @@ describe("FormStore", () => {
       same.register("client.name");
       same.set("client.name", "Grace Hopper");
 
-      expect(hasFlag(same.getState("client.name")?.flags ?? 0, StateFlag.Dirty)).toBe(true);
+      expect(hasFlag(same.getState("client.name")?.state.flags ?? 0, StateFlag.Dirty)).toBe(true);
     });
 
     it("still shares what only compares as itself", () => {
@@ -701,7 +705,7 @@ describe("FormStore", () => {
 
       dated.register("when");
 
-      expect(hasFlag(dated.getState("when")?.flags ?? 0, StateFlag.Dirty)).toBe(false);
+      expect(hasFlag(dated.getState("when")?.state.flags ?? 0, StateFlag.Dirty)).toBe(false);
     });
 
     it("is dirty once a real instant replaces it", () => {
@@ -710,7 +714,7 @@ describe("FormStore", () => {
       dated.register("when");
       dated.set("when", new Date(0));
 
-      expect(hasFlag(dated.getState("when")?.flags ?? 0, StateFlag.Dirty)).toBe(true);
+      expect(hasFlag(dated.getState("when")?.state.flags ?? 0, StateFlag.Dirty)).toBe(true);
     });
   });
 

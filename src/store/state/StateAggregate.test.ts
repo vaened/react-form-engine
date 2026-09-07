@@ -40,7 +40,7 @@ describe("StateAggregate", () => {
       const aggregate = new StateAggregate();
 
       expect(counters(aggregate)).toEqual({ dirty: 0, touched: 0, invalid: 0, validating: 0 });
-      expect(aggregate.derive()).toBe(0);
+      expect(aggregate.flags).toBe(0);
       expect(aggregate.isUnderflowed()).toBe(false);
     });
 
@@ -50,7 +50,7 @@ describe("StateAggregate", () => {
 
       first.add(ALL);
 
-      expect(second.derive()).toBe(0);
+      expect(second.flags).toBe(0);
     });
   });
 
@@ -94,30 +94,27 @@ describe("StateAggregate", () => {
       }
     });
 
-    it("is the only flag derive produces from its counter", () => {
+    it("is the only flag its counter produces", () => {
       const aggregate = new StateAggregate();
 
-      aggregate[counter] = 1;
+      aggregate.add(flag);
 
-      expect(aggregate.derive()).toBe(flag);
+      expect(aggregate.flags).toBe(flag);
     });
 
-    it("is the only flag missing when derive sees every other counter", () => {
+    it("is the only flag missing when every other counter is up", () => {
       const aggregate = new StateAggregate();
 
-      for (const candidate of FLAGS) {
-        aggregate[candidate.counter] = 1;
-      }
+      aggregate.add(ALL);
+      aggregate.fold(flag, 0);
 
-      aggregate[counter] = 0;
-
-      expect(aggregate.derive()).toBe(setFlag(ALL, flag, false));
+      expect(aggregate.flags).toBe(setFlag(ALL, flag, false));
     });
 
     it("reports an underflow on its own counter", () => {
       const aggregate = new StateAggregate();
 
-      aggregate[counter] = -1;
+      aggregate.fold(flag, 0);
 
       expect(aggregate.isUnderflowed()).toBe(true);
     });
@@ -157,16 +154,16 @@ describe("StateAggregate", () => {
       aggregate.fold(0, Touched);
 
       expect(aggregate.touched).toBe(2);
-      expect(hasFlag(aggregate.derive(), Touched)).toBe(true);
+      expect(hasFlag(aggregate.flags, Touched)).toBe(true);
 
       aggregate.fold(Touched, 0);
 
       expect(aggregate.touched).toBe(1);
-      expect(hasFlag(aggregate.derive(), Touched)).toBe(true);
+      expect(hasFlag(aggregate.flags, Touched)).toBe(true);
 
       aggregate.fold(Touched, 0);
 
-      expect(hasFlag(aggregate.derive(), Touched)).toBe(false);
+      expect(hasFlag(aggregate.flags, Touched)).toBe(false);
     });
   });
 
@@ -194,27 +191,36 @@ describe("StateAggregate", () => {
     it("produces every flag when every counter is positive", () => {
       const aggregate = new StateAggregate();
 
-      Object.assign(aggregate, { dirty: 1, touched: 2, invalid: 3, validating: 4 });
+      aggregate.add(ALL);
+      aggregate.add(Touched | Invalid | Validating);
+      aggregate.add(Invalid | Validating);
+      aggregate.add(Validating);
 
-      expect(aggregate.derive()).toBe(ALL);
+      expect(counters(aggregate)).toEqual({ dirty: 1, touched: 2, invalid: 3, validating: 4 });
+      expect(aggregate.flags).toBe(ALL);
     });
 
     it("does not change while a count stays above zero", () => {
       const many = new StateAggregate();
       const one = new StateAggregate();
 
-      many.dirty = 3;
-      one.dirty = 1;
+      many.add(Dirty);
+      many.add(Dirty);
+      many.add(Dirty);
+      one.add(Dirty);
 
-      expect(many.derive()).toBe(one.derive());
+      expect(many.dirty).toBe(3);
+      expect(many.flags).toBe(one.flags);
     });
 
     it("treats an underflowed counter as absent rather than present", () => {
       const aggregate = new StateAggregate();
 
-      aggregate.dirty = -2;
+      aggregate.fold(Dirty, 0);
+      aggregate.fold(Dirty, 0);
 
-      expect(aggregate.derive()).toBe(0);
+      expect(aggregate.dirty).toBe(-2);
+      expect(aggregate.flags).toBe(0);
     });
   });
 
@@ -222,8 +228,12 @@ describe("StateAggregate", () => {
     it("accepts counters at zero or above", () => {
       const aggregate = new StateAggregate();
 
-      Object.assign(aggregate, { dirty: 4, touched: 0, invalid: 2, validating: 1 });
+      aggregate.add(Dirty | Invalid | Validating);
+      aggregate.add(Dirty | Invalid);
+      aggregate.add(Dirty);
+      aggregate.add(Dirty);
 
+      expect(counters(aggregate)).toEqual({ dirty: 4, touched: 0, invalid: 2, validating: 1 });
       expect(aggregate.isUnderflowed()).toBe(false);
     });
 

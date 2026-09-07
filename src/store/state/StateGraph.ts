@@ -6,11 +6,9 @@
 import { ObservationChain } from "../observation/ObservationChain";
 import type { EntryId, EntryTree, ObservableStructure } from "../path/types";
 import { StateAggregateUnderflow, StateKindConflict } from "./errors";
+import { FieldState } from "./FieldState";
 import { StateAggregate } from "./StateAggregate";
 import { type FieldStateInput, type StateEntry, type StateFieldEntry, StateKind, type StateNodeEntry } from "./types";
-
-/** Shared so that registering a form's worth of fields does not leave one empty array each. */
-const NO_ERRORS: readonly unknown[] = Object.freeze([]);
 
 /** Shared so that a keystroke that moves nothing does not allocate to say so. */
 const NOTHING_MOVED: readonly StateEntry[] = Object.freeze([]);
@@ -35,8 +33,7 @@ export class StateGraph {
       id: tree.root().id,
       kind: StateKind.Node,
       parent: null,
-      flags: 0,
-      aggregate: new StateAggregate(),
+      state: new StateAggregate(),
     });
 
     tree.on("reopened", (id) => this.#reopened(id));
@@ -81,12 +78,11 @@ export class StateGraph {
       id,
       kind: StateKind.Field,
       parent: null,
-      flags: initial.flags ?? 0,
-      errors: initial.errors ?? NO_ERRORS,
+      state: new FieldState(initial.flags, initial.errors),
     };
 
     this.#chain.join(field);
-    this.#propagate(field.parent, 0, field.flags);
+    this.#propagate(field.parent, 0, field.state.flags);
 
     return field;
   }
@@ -113,7 +109,7 @@ export class StateGraph {
       return NOTHING_MOVED;
     }
 
-    return this.#propagate(parent, field.flags, 0);
+    return this.#propagate(parent, field.state.flags, 0);
   }
 
   /**
@@ -130,20 +126,20 @@ export class StateGraph {
    * what keeps typing into an already touched field from waking the root.
    */
   update(field: StateFieldEntry, next: FieldStateInput): readonly StateEntry[] {
-    const previousFlags = field.flags;
-    const previousErrors = field.errors;
+    const previousFlags = field.state.flags;
+    const previousErrors = field.state.errors;
 
-    field.flags = next.flags ?? 0;
+    field.state.flags = next.flags ?? 0;
 
     if (next.errors !== undefined) {
-      field.errors = next.errors;
+      field.state.errors = next.errors;
     }
 
-    if (field.flags === previousFlags) {
-      return field.errors === previousErrors ? NOTHING_MOVED : [field];
+    if (field.state.flags === previousFlags) {
+      return field.state.errors === previousErrors ? NOTHING_MOVED : [field];
     }
 
-    return this.#propagate(field.parent, previousFlags, field.flags, [field]);
+    return this.#propagate(field.parent, previousFlags, field.state.flags, [field]);
   }
 
   /** For callers that do not hold the field, such as an imperative set. */
@@ -169,26 +165,18 @@ export class StateGraph {
       return node;
     }
 
-    const node: StateNodeEntry = {
-      id,
-      kind: StateKind.Node,
-      parent: null,
-      flags: 0,
-      aggregate: new StateAggregate(),
-    };
+    const node: StateNodeEntry = { id, kind: StateKind.Node, parent: null, state: new StateAggregate() };
 
     const parent = this.#chain.parentOf(id);
-    const held = parent.flags;
+    const held = parent.state.flags;
     const inserted = this.#chain.insert(node);
 
     for (const child of inserted.claimed) {
-      node.aggregate.add(child.flags);
-      this.#contribute(parent, child.flags, 0);
+      node.state.add(child.state.flags);
+      this.#contribute(parent, child.state.flags, 0);
     }
 
-    node.flags = node.aggregate.derive();
-
-    this.#contribute(parent, 0, node.flags);
+    this.#contribute(parent, 0, node.state.flags);
     this.#settle(parent, held);
 
     return node;
@@ -220,12 +208,12 @@ export class StateGraph {
     }
 
     const parent = removal.parent;
-    const held = parent.flags;
+    const held = parent.state.flags;
 
-    this.#contribute(parent, node.flags, 0);
+    this.#contribute(parent, node.state.flags, 0);
 
     for (const child of removal.adopted) {
-      this.#contribute(parent, 0, child.flags);
+      this.#contribute(parent, 0, child.state.flags);
     }
 
     this.#settle(parent, held);
@@ -253,11 +241,11 @@ export class StateGraph {
     let moved = changed;
 
     while (node) {
-      const held = node.flags;
+      const held = node.state.flags;
 
       this.#contribute(node, before, after);
 
-      if (node.flags === held) {
+      if (node.state.flags === held) {
         break;
       }
 
@@ -265,7 +253,7 @@ export class StateGraph {
       moved.push(node);
 
       before = held;
-      after = node.flags;
+      after = node.state.flags;
       node = node.parent;
     }
 
@@ -279,13 +267,11 @@ export class StateGraph {
    * rather than leave a form quietly claiming less than it holds.
    */
   #contribute(node: StateNodeEntry, previous: number, current: number): void {
-    node.aggregate.fold(previous, current);
+    node.state.fold(previous, current);
 
-    if (node.aggregate.isUnderflowed()) {
+    if (node.state.isUnderflowed()) {
       throw new StateAggregateUnderflow(node.id as number);
     }
-
-    node.flags = node.aggregate.derive();
   }
 
   /**
@@ -295,8 +281,8 @@ export class StateGraph {
    * against each intermediate step.
    */
   #settle(node: StateNodeEntry, held: number): void {
-    if (node.flags !== held) {
-      this.#propagate(node.parent, held, node.flags);
+    if (node.state.flags !== held) {
+      this.#propagate(node.parent, held, node.state.flags);
     }
   }
 
@@ -310,9 +296,9 @@ export class StateGraph {
     const parent = field.parent;
 
     if (parent) {
-      const held = parent.flags;
+      const held = parent.state.flags;
 
-      this.#contribute(parent, field.flags, 0);
+      this.#contribute(parent, field.state.flags, 0);
       this.#settle(parent, held);
     }
 
@@ -320,8 +306,7 @@ export class StateGraph {
       id: field.id,
       kind: StateKind.Node,
       parent: null,
-      flags: 0,
-      aggregate: new StateAggregate(),
+      state: new StateAggregate(),
     });
   }
 

@@ -36,7 +36,7 @@ describe("Reconciler", () => {
 
       reconciler.reconcile(form.index.entry(form.name));
 
-      expect(hasFlag(state.field(form.name).flags, StateFlag.Dirty)).toBe(true);
+      expect(hasFlag(state.field(form.name).state.flags, StateFlag.Dirty)).toBe(true);
     });
 
     it("leaves it clean when the observed value still matches the default", () => {
@@ -45,7 +45,7 @@ describe("Reconciler", () => {
 
       reconciler.reconcile(form.index.entry(form.name));
 
-      expect(hasFlag(state.field(form.name).flags, StateFlag.Dirty)).toBe(false);
+      expect(hasFlag(state.field(form.name).state.flags, StateFlag.Dirty)).toBe(false);
     });
 
     it("does nothing for a field nobody observed", () => {
@@ -62,7 +62,7 @@ describe("Reconciler", () => {
 
       reconciler.reconcile(form.index.entry(form.client));
 
-      expect(hasFlag(state.field(form.name).flags, StateFlag.Dirty)).toBe(true);
+      expect(hasFlag(state.field(form.name).state.flags, StateFlag.Dirty)).toBe(true);
     });
 
     it("does not disturb a field beneath it that nobody observed", () => {
