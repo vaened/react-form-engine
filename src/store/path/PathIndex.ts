@@ -119,7 +119,7 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
     // Either the path is new, or its route outlived the entries it used to
     // reach. Routes survive structural operations on purpose, so registering
     // again has to rebuild the branch instead of trusting the old one.
-    const segments = PathIndex.#split(path);
+    const segments = this.segmentsOf(path);
     const steps: RouteStep[] = [];
 
     let current: PathIndexEntry = this.#root;
@@ -660,7 +660,7 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
    * happened. Neither check needs to know what a segment lands on, so both are
    * answered here, before there is anything to undo.
    */
-  static #split(path: string): string[] {
+  segmentsOf(path: string): string[] {
     const segments = path.split(".");
 
     for (const segment of segments) {
