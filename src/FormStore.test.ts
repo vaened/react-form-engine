@@ -9,7 +9,7 @@ import { InvalidArrayIndex, InvalidPathSegment } from "./store/path/errors";
 import { hasFlag, StateFlag } from "./store/state/StateFlag";
 import type { StateFieldEntry } from "./store/state/types";
 import { StateKind } from "./store/state/types";
-import { CircularPatchValue, PathInsideValue } from "./store/value/errors";
+import { CircularPatchValue, CircularValue, PathInsideValue } from "./store/value/errors";
 
 /** Shape of docs/FormValue.example.json. */
 type Invoice = {
@@ -510,6 +510,41 @@ describe("FormStore", () => {
    * Reaching a path opens whatever it passes through, so refusing one halfway
    * would leave a branch reshaped for a registration that never happened.
    */
+  describe("one place, one value", () => {
+    type Two = { billing: { city: string }; shipping: { city: string } };
+
+    it("keeps two places apart when they were handed in as one", () => {
+      const address = { city: "Lima" };
+      const born = new FormStore<Two>({ defaults: { billing: address, shipping: address } });
+
+      born.register("billing.city");
+      born.register("shipping.city");
+      born.set("billing.city", "Cusco");
+
+      expect(born.values.billing.city).toBe("Cusco");
+      expect(born.values.shipping.city).toBe("Lima");
+      expect(hasFlag(born.getState("shipping.city")?.flags ?? 0, StateFlag.Dirty)).toBe(false);
+    });
+
+    it("keeps two rows apart when the same one was handed in twice", () => {
+      const row = { city: "Lima" };
+      const born = new FormStore<{ rows: { city: string }[] }>({ defaults: { rows: [row, row] } });
+
+      born.register("rows.0.city");
+      born.register("rows.1.city");
+      born.set("rows.0.city", "Cusco");
+
+      expect(born.values.rows[1].city).toBe("Lima");
+    });
+
+    it("refuses a value that points back at itself", () => {
+      const client: Record<string, unknown> = { name: "Ada" };
+      client.itself = client;
+
+      expect(() => new FormStore({ defaults: { client } } as never)).toThrow(CircularValue);
+    });
+  });
+
   describe("what the form is born from", () => {
     it("starts at its defaults when nothing else is said", () => {
       const born = new FormStore<Invoice>({ defaults: sample() });

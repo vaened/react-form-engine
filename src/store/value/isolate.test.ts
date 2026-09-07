@@ -5,6 +5,7 @@
 
 import { describe, expect, it } from "vitest";
 import { PathKind } from "../path/types";
+import { CircularValue } from "./errors";
 import { isolate } from "./isolate";
 import { PathValueClassifier } from "./PathValueClassifier";
 import type { Scalar } from "./Scalar";
@@ -162,24 +163,53 @@ describe("isolate", () => {
     });
   });
 
-  describe("a shape that points back at itself", () => {
-    it("hands back the same copy for the same object, so it is never followed forever", () => {
-      const client: Record<string, unknown> = { name: "Ada" };
-      client.itself = client;
-
-      const base = isolate({ client }, classifier) as { client: Record<string, unknown> };
-
-      expect(base.client.itself).toBe(base.client);
-      expect(base.client).not.toBe(client);
-    });
-
-    it("keeps one object reached twice as one object", () => {
+  describe("a place reached more than once", () => {
+    it("gives each place its own, so writing one never reaches the other", () => {
       const address = { city: "Lima" };
 
       const base = isolate({ billing: address, shipping: address }, classifier);
 
-      expect(base.billing).toBe(base.shipping);
+      expect(base.billing).not.toBe(base.shipping);
+      expect(base.billing).toEqual(base.shipping);
       expect(base.billing).not.toBe(address);
+    });
+
+    it("does the same for a place reached twice through a list", () => {
+      const row = { city: "Lima" };
+
+      const base = isolate({ rows: [row, row] }, classifier);
+
+      expect(base.rows[0]).not.toBe(base.rows[1]);
+      expect(base.rows[0]).toEqual({ city: "Lima" });
+    });
+
+    it("leaves alone what is reached twice but never written into", () => {
+      const attachment = new File(["x"], "invoice.pdf");
+
+      const base = isolate({ billing: attachment, shipping: attachment }, classifier);
+
+      expect(base.billing).toBe(attachment);
+      expect(base.shipping).toBe(attachment);
+    });
+
+    it("refuses a shape that points back at itself, which has no end to copy", () => {
+      const client: Record<string, unknown> = { name: "Ada" };
+      client.itself = client;
+
+      expect(() => isolate({ client }, classifier)).toThrow(CircularValue);
+    });
+
+    it("says where the shape closed on itself", () => {
+      const client: Record<string, unknown> = { name: "Ada" };
+      client.itself = client;
+
+      expect(() => isolate({ invoice: { client } }, classifier)).toThrow(/invoice\.client\.itself/);
+    });
+
+    it("does not take two places reaching one thing for a shape that closes", () => {
+      const address = { city: "Lima" };
+
+      expect(() => isolate({ billing: address, shipping: address }, classifier)).not.toThrow();
     });
   });
 });

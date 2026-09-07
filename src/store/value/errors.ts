@@ -17,6 +17,13 @@ export class PathInsideValue extends Error {
   }
 }
 
+export class CircularValue extends Error {
+  constructor(path: string) {
+    super(`The value at "${path}" reaches itself, so it has no end to copy.`);
+    this.name = "CircularValue";
+  }
+}
+
 export class CircularPatchValue extends Error {
   constructor(path: string) {
     super(`The value assigned to "${path}" reaches itself, so it has no end to write.`);
