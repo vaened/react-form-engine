@@ -46,6 +46,26 @@ describe("PathValueClassifier", () => {
       expect(classifier.classify([])).toBe(PathKind.Array);
     });
 
+    it("stops at anything it has no way to walk into", () => {
+      class Money {
+        constructor(
+          readonly amount: number,
+          readonly currency: string,
+        ) {}
+      }
+
+      for (const value of [new Map([["k", 1]]), new Set([1]), /abc/g, new Uint8Array([1]), new Money(10, "PEN")]) {
+        expect(classifier.classify(value)).toBe(PathKind.Field);
+      }
+    });
+
+    it("takes an object with no prototype apart, because it is still a plain record", () => {
+      const bare = Object.create(null);
+      bare.name = "Ada";
+
+      expect(classifier.classify(bare)).toBe(PathKind.Object);
+    });
+
     it("stops at a date instead of taking it apart", () => {
       expect(classifier.classify(new Date())).toBe(PathKind.Field);
     });

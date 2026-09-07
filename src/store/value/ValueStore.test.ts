@@ -424,7 +424,7 @@ describe("ValueStore", () => {
     });
 
     it("does not throw when an array node has no value yet", () => {
-      const empty = new ValueStore(form.index, {} as never);
+      const empty = new ValueStore(form.index, {} as never, {} as never);
 
       empty.materialize(form.addresses);
 
@@ -432,7 +432,7 @@ describe("ValueStore", () => {
     });
 
     it("does not throw when an object node has no value yet", () => {
-      const empty = new ValueStore(form.index, {} as never);
+      const empty = new ValueStore(form.index, {} as never, {} as never);
 
       empty.materialize(form.client);
 

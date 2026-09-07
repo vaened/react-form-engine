@@ -20,7 +20,7 @@ const state = new StateGraph(form.index);
 
 type StateRootExpectation = Expect<Equal<ReturnType<typeof state.root>, StateNodeEntry>>;
 
-const values = new ValueStore(form.index, sampleInvoice());
+const values = new ValueStore(form.index, sampleInvoice(), sampleInvoice());
 
 type ValueRootExpectation = Expect<Equal<ReturnType<typeof values.root>, ReturnType<typeof values.entry>>>;
 

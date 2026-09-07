@@ -510,6 +510,61 @@ describe("FormStore", () => {
    * Reaching a path opens whatever it passes through, so refusing one halfway
    * would leave a branch reshaped for a registration that never happened.
    */
+  describe("defaults handed in by the caller", () => {
+    type Model = { client: { name: string } };
+
+    it("does not move when a field is written through a branch they came sharing", () => {
+      const client = { name: "Ada" };
+      const shared = new FormStore<Model>({ values: { client }, defaults: { client } });
+
+      shared.register("client.name");
+      shared.set("client.name", "Grace Hopper");
+
+      expect(shared.values.client.name).toBe("Grace Hopper");
+      expect(shared.defaults.client.name).toBe("Ada");
+    });
+
+    it("does not move when the very same object is handed in as both", () => {
+      const data: Model = { client: { name: "Ada" } };
+      const same = new FormStore<Model>({ values: data, defaults: data });
+
+      same.register("client.name");
+      same.set("client.name", "Grace Hopper");
+
+      expect(same.defaults.client.name).toBe("Ada");
+    });
+
+    it("does not move when they were separated only at the top", () => {
+      const data: Model = { client: { name: "Ada" } };
+      const spread = new FormStore<Model>({ values: { ...data }, defaults: { ...data } });
+
+      spread.register("client.name");
+      spread.set("client.name", "Grace Hopper");
+
+      expect(spread.defaults.client.name).toBe("Ada");
+    });
+
+    it("leaves the field dirty, which is what a base that stayed put means", () => {
+      const data: Model = { client: { name: "Ada" } };
+      const same = new FormStore<Model>({ values: data, defaults: data });
+
+      same.register("client.name");
+      same.set("client.name", "Grace Hopper");
+
+      expect(hasFlag(same.getState("client.name")?.flags ?? 0, StateFlag.Dirty)).toBe(true);
+    });
+
+    it("still shares what only compares as itself", () => {
+      const attachment = new File(["x"], "invoice.pdf");
+      const withFile = new FormStore<{ attachment: File }>({
+        values: { attachment },
+        defaults: { attachment },
+      });
+
+      expect(withFile.defaults.attachment).toBe(attachment);
+    });
+  });
+
   describe("a registration that is refused", () => {
     const withField = () => {
       const empty = new FormStore<Invoice>({ values: {} as Invoice });

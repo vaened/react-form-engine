@@ -57,25 +57,12 @@ describe("FormValue", () => {
 
   describe("root", () => {
     it("rejects a root that is not an object", () => {
-      expect(() => new FormValue(index, [] as never)).toThrow(InvalidRootValue);
-      expect(() => new FormValue(index, null as never)).toThrow(InvalidRootValue);
+      expect(() => new FormValue(index, [] as never, sample())).toThrow(InvalidRootValue);
+      expect(() => new FormValue(index, null as never, sample())).toThrow(InvalidRootValue);
     });
 
-    it("clones the values when no defaults are given, instead of sharing the reference", () => {
-      const only = sample();
-      const single = new FormValue<Invoice>(index, only);
-
-      expect(single.defaults).toEqual(only);
-      expect(single.defaults).not.toBe(only);
-    });
-
-    it("keeps defaults untouched by a later write, even when none were given explicitly", () => {
-      const only = sample();
-      const single = new FormValue<Invoice>(index, only);
-
-      single.write(field("invoice.client.name"), "Grace Hopper");
-
-      expect(single.defaults.invoice.client.name).toBe("Ada Lovelace");
+    it("rejects defaults that are not an object either", () => {
+      expect(() => new FormValue(index, sample(), [] as never)).toThrow(InvalidRootValue);
     });
   });
 
@@ -202,7 +189,7 @@ describe("FormValue", () => {
     });
 
     it("creates a branch that never existed in the initial value", () => {
-      const empty = new FormValue<Invoice>(index, {} as Invoice);
+      const empty = new FormValue<Invoice>(index, {} as Invoice, {} as Invoice);
 
       empty.write(field("invoice.client.name"), "Ada");
 
@@ -210,7 +197,7 @@ describe("FormValue", () => {
     });
 
     it("creates an array where the entry says array, and an object where it says object", () => {
-      const empty = new FormValue<Invoice>(index, {} as Invoice);
+      const empty = new FormValue<Invoice>(index, {} as Invoice, {} as Invoice);
 
       index.register(ADDRESSES, PathKind.Array);
       empty.write(field(CITY_0), "Lima");
@@ -481,7 +468,7 @@ describe("FormValue", () => {
     });
 
     it("builds both levels when neither exists yet", () => {
-      const empty = new FormValue<Grid>(nested, {} as Grid);
+      const empty = new FormValue<Grid>(nested, {} as Grid, {} as Grid);
 
       nested.register("invoice.grid", PathKind.Array);
       nested.register("invoice.grid.0", PathKind.Array);

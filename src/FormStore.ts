@@ -50,7 +50,7 @@ export class FormStore<TValues extends FormValues> {
     this.#value = new ValueStore<TValues>(
       this.#index,
       options.values,
-      options.defaults ?? isolate(options.values, this.#classifier),
+      isolate(options.defaults ?? options.values, this.#classifier),
     );
     this.#assessor = new StateAssessor(this.#classifier);
     this.#reconciler = new Reconciler(this.#index, this.#state, this.#value, this.#classifier, this.#assessor);

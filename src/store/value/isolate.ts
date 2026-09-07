@@ -24,14 +24,10 @@ export const isolate = <TValue>(value: TValue, classifier: PathValueClassifier):
 };
 
 const copy = (value: unknown, classifier: PathValueClassifier, made: Map<object, unknown>): unknown => {
-  const scalar = classifier.for(value);
+  if (!classifier.isContainer(value)) {
+    const scalar = classifier.for(value);
 
-  if (scalar) {
-    return scalar.isolate ? scalar.isolate(value) : value;
-  }
-
-  if (typeof value !== "object" || value === null) {
-    return value;
+    return scalar?.isolate ? scalar.isolate(value) : value;
   }
 
   const already = made.get(value);
@@ -52,28 +48,13 @@ const copy = (value: unknown, classifier: PathValueClassifier, made: Map<object,
     return items;
   }
 
-  const entries = Object.entries(value);
-
-  // What a `Map` or a `RegExp` holds does not live in properties anybody can
-  // read, so copying one produces an empty shell of the right shape. Nothing
-  // readable means nothing copyable, and sharing beats quietly emptying it.
-  if (entries.length === 0 && !isPlain(value)) {
-    return value;
-  }
-
   const properties: Record<string, unknown> = Object.create(Object.getPrototypeOf(value));
 
   made.set(value, properties);
 
-  for (const [key, held] of entries) {
+  for (const [key, held] of Object.entries(value)) {
     properties[key] = copy(held, classifier, made);
   }
 
   return properties;
-};
-
-const isPlain = (value: object): boolean => {
-  const prototype = Object.getPrototypeOf(value);
-
-  return prototype === Object.prototype || prototype === null;
 };

@@ -28,7 +28,7 @@ export class ValueStore<TValues extends FormValues = FormValues> {
   readonly #tree: EntryTree;
   readonly #chain: ObservationChain<ValueEntry>;
 
-  constructor(tree: EntryTree, values: TValues, defaults?: TValues) {
+  constructor(tree: EntryTree, values: TValues, defaults: TValues) {
     this.#value = new FormValue(tree, values, defaults);
     this.#tree = tree;
     this.#chain = new ObservationChain<ValueEntry>(tree, { id: tree.root().id, parent: null, snapshot: STALE });

@@ -29,17 +29,6 @@ describe("isolate", () => {
 
       expect(base.rows).toHaveLength(1);
     });
-
-    it("keeps the prototype of whatever it copies", () => {
-      class Client {
-        constructor(public name: string) {}
-      }
-
-      const base = isolate({ client: new Client("Ada") }, classifier);
-
-      expect(base.client).toBeInstanceOf(Client);
-      expect(base.client.name).toBe("Ada");
-    });
   });
 
   describe("what it leaves alone", () => {
@@ -63,6 +52,45 @@ describe("isolate", () => {
       expect(base.tags.size).toBe(1);
       expect(base.seen.size).toBe(3);
       expect(base.pattern.source).toBe("^invoice");
+    });
+
+    it("shares an instance rather than handing back a hollow one of the same shape", () => {
+      class Money {
+        #amount: number;
+        readonly currency = "PEN";
+
+        constructor(amount: number) {
+          this.#amount = amount;
+        }
+
+        get amount() {
+          return this.#amount;
+        }
+      }
+
+      const total = new Money(10);
+      const base = isolate({ total }, classifier);
+
+      expect(base.total).toBe(total);
+      expect(base.total.amount).toBe(10);
+    });
+
+    it("shares a pattern carrying its own properties, which copying would break", () => {
+      const pattern: RegExp & { label?: string } = /^invoice/g;
+      pattern.label = "code";
+
+      const base = isolate({ pattern }, classifier);
+
+      expect(base.pattern).toBe(pattern);
+      expect(base.pattern.test("invoice-1")).toBe(true);
+    });
+
+    it("shares a typed array, whose indices read as properties but are not one", () => {
+      const bytes = new Uint8Array([1, 2, 3]);
+      const base = isolate({ bytes }, classifier);
+
+      expect(base.bytes).toBe(bytes);
+      expect(base.bytes.length).toBe(3);
     });
 
     it("still copies an empty object, which has nothing to read but plenty to write", () => {

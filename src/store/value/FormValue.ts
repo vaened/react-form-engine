@@ -7,8 +7,6 @@ import type { FormValues } from "../../path";
 import { SingleEntryCache } from "../../SingleEntryCache";
 import { type EntryTree, type PathIndexEntry, type PathIndexStructuralEntry, PathKind } from "../path/types";
 import { InvalidRootValue } from "./errors";
-import { isolate } from "./isolate";
-import { PathValueClassifier } from "./PathValueClassifier";
 import type { ValueContainer } from "./types";
 
 /**
@@ -24,7 +22,7 @@ export class FormValue<TValues extends FormValues = FormValues> {
 
   #root: TValues;
 
-  constructor(tree: EntryTree, values: TValues, defaults: TValues = isolate(values, new PathValueClassifier())) {
+  constructor(tree: EntryTree, values: TValues, defaults: TValues) {
     FormValue.#assertRoot(values);
     FormValue.#assertRoot(defaults);
 
