@@ -13,7 +13,7 @@ type InvoiceValues = {
 };
 
 const store = new FormStore<InvoiceValues>({
-  values: {
+  defaults: {
     invoice: {
       amount: 100,
       client: {

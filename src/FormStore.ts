@@ -25,8 +25,10 @@ export type { FormValues } from "./path";
 export type FormMode = "full" | "patch";
 
 export type FormStoreOptions<TValues extends FormValues> = {
-  values: TValues;
-  defaults?: TValues;
+  /** What the form is measured against, and what `reset` returns it to. */
+  defaults: TValues;
+  /** Where the form starts, when that is not its base. */
+  values?: TValues;
   mode?: FormMode;
 };
 
@@ -50,8 +52,8 @@ export class FormStore<TValues extends FormValues> {
     this.#value = new ValueStore<TValues>(
       this.#index,
       this.#classifier,
-      options.values,
-      isolate(options.defaults ?? options.values, this.#classifier),
+      isolate(options.values ?? options.defaults, this.#classifier),
+      isolate(options.defaults, this.#classifier),
     );
     this.#assessor = new StateAssessor(this.#classifier);
     this.#reconciler = new Reconciler(this.#index, this.#state, this.#value, this.#classifier, this.#assessor);

@@ -36,7 +36,7 @@ type AliasedValues = {
 };
 
 const store = new FormStore<InvoiceValues>({
-  values: {
+  defaults: {
     invoice: {
       client: {
         contact: {

@@ -13,7 +13,7 @@ type Invoice = {
 };
 
 const store = new FormStore<Invoice>({
-  values: { invoice: { series: "F001", client: { name: "Ada", addresses: [] } } },
+  defaults: { invoice: { series: "F001", client: { name: "Ada", addresses: [] } } },
 });
 
 // reading is what it is for

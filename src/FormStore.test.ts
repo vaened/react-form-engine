@@ -48,7 +48,7 @@ describe("FormStore", () => {
   let store: FormStore<Invoice>;
 
   beforeEach(() => {
-    store = new FormStore<Invoice>({ values: sample() });
+    store = new FormStore<Invoice>({ defaults: sample() });
   });
 
   describe("registering a field", () => {
@@ -62,7 +62,7 @@ describe("FormStore", () => {
     });
 
     it("registers a branch nobody set yet, since an absent value classifies as a field", () => {
-      const empty = new FormStore<Invoice>({ values: {} as Invoice });
+      const empty = new FormStore<Invoice>({ defaults: {} as Invoice });
 
       empty.register("invoice.client.name");
 
@@ -125,7 +125,7 @@ describe("FormStore", () => {
     it("is never dirty when values and defaults are the same object", () => {
       // No separate defaults given: ValueStore falls back to `defaults = values`,
       // so reading either side always reaches the exact same data.
-      const shared = new FormStore<Invoice>({ values: sample() });
+      const shared = new FormStore<Invoice>({ defaults: sample() });
 
       shared.register("invoice.client.name");
 
@@ -181,7 +181,7 @@ describe("FormStore", () => {
    */
   describe("a field that turns out to have children", () => {
     it("stops being a field once something registers below it", () => {
-      const empty = new FormStore<Invoice>({ values: {} as Invoice });
+      const empty = new FormStore<Invoice>({ defaults: {} as Invoice });
 
       empty.register("invoice.client");
 
@@ -193,7 +193,7 @@ describe("FormStore", () => {
     });
 
     it("stops being a field the moment a write reaches through it", () => {
-      const empty = new FormStore<Invoice>({ values: {} as Invoice });
+      const empty = new FormStore<Invoice>({ defaults: {} as Invoice });
 
       empty.register("invoice.client");
 
@@ -205,7 +205,7 @@ describe("FormStore", () => {
     });
 
     it("can still be unregistered afterwards, from the kind it is now", () => {
-      const empty = new FormStore<Invoice>({ values: {} as Invoice });
+      const empty = new FormStore<Invoice>({ defaults: {} as Invoice });
 
       empty.register("invoice.client");
       empty.set("invoice.client.name", "Ada Lovelace");
@@ -216,7 +216,7 @@ describe("FormStore", () => {
     });
 
     it("leaves a location nobody watches alone", () => {
-      const empty = new FormStore<Invoice>({ values: {} as Invoice });
+      const empty = new FormStore<Invoice>({ defaults: {} as Invoice });
 
       empty.set("invoice.client.name", "Ada Lovelace");
 
@@ -283,7 +283,7 @@ describe("FormStore", () => {
     });
 
     it("registers the path if nothing had yet, so a write to a fresh path does not throw", () => {
-      const empty = new FormStore<Invoice>({ values: {} as Invoice });
+      const empty = new FormStore<Invoice>({ defaults: {} as Invoice });
 
       expect(() => empty.set("invoice.client.name", "Ada")).not.toThrow();
       expect(empty.values.invoice.client.name).toBe("Ada");
@@ -414,7 +414,7 @@ describe("FormStore", () => {
     let patch: FormStore<Invoice>;
 
     beforeEach(() => {
-      patch = new FormStore<Invoice>({ values: sample(), mode: "patch" });
+      patch = new FormStore<Invoice>({ defaults: sample(), mode: "patch" });
     });
 
     it("writes the keys the value carries and leaves the rest of the object alone", () => {
@@ -477,7 +477,7 @@ describe("FormStore", () => {
 
   describe("a patch value that reaches itself", () => {
     it("refuses a value holding a reference back to itself", () => {
-      const patch = new FormStore<Invoice>({ values: sample(), mode: "patch" });
+      const patch = new FormStore<Invoice>({ defaults: sample(), mode: "patch" });
       const client: Record<string, unknown> = { name: "Grace Hopper" };
       client.itself = client;
 
@@ -485,7 +485,7 @@ describe("FormStore", () => {
     });
 
     it("refuses a longer way round, not only a direct self reference", () => {
-      const patch = new FormStore<Invoice>({ values: sample(), mode: "patch" });
+      const patch = new FormStore<Invoice>({ defaults: sample(), mode: "patch" });
       const client: Record<string, unknown> = { name: "Grace Hopper" };
       client.address = { city: "Lima", client };
 
@@ -497,7 +497,7 @@ describe("FormStore", () => {
      * object the descent is currently inside of makes it one.
      */
     it("accepts the same object reached twice by different keys", () => {
-      const patch = new FormStore<Invoice>({ values: sample(), mode: "patch" });
+      const patch = new FormStore<Invoice>({ defaults: sample(), mode: "patch" });
       const shared = { city: "Lima" };
 
       expect(() => patch.set("invoice.client", { billing: shared, shipping: shared } as never)).not.toThrow();
@@ -510,6 +510,60 @@ describe("FormStore", () => {
    * Reaching a path opens whatever it passes through, so refusing one halfway
    * would leave a branch reshaped for a registration that never happened.
    */
+  describe("what the form is born from", () => {
+    it("starts at its defaults when nothing else is said", () => {
+      const born = new FormStore<Invoice>({ defaults: sample() });
+
+      born.register("invoice.client.name");
+
+      expect(born.values.invoice.client.name).toBe("Ada Lovelace");
+      expect(hasFlag(born.getState("invoice.client.name")?.flags ?? 0, StateFlag.Dirty)).toBe(false);
+    });
+
+    it("starts wherever it is told to, which is not always its base", () => {
+      const draft = sample();
+      draft.invoice.client.name = "Grace Hopper";
+
+      const born = new FormStore<Invoice>({ defaults: sample(), values: draft });
+
+      born.register("invoice.client.name");
+
+      expect(born.values.invoice.client.name).toBe("Grace Hopper");
+      expect(born.defaults.invoice.client.name).toBe("Ada Lovelace");
+      expect(hasFlag(born.getState("invoice.client.name")?.flags ?? 0, StateFlag.Dirty)).toBe(true);
+    });
+
+    it("keeps its own tree, so what it was handed is never written into", () => {
+      const mine = sample();
+      const born = new FormStore<Invoice>({ defaults: mine });
+
+      born.register("invoice.client.name");
+      born.set("invoice.client.name", "Grace Hopper");
+
+      expect(mine.invoice.client.name).toBe("Ada Lovelace");
+      expect(born.values.invoice).not.toBe(mine.invoice);
+    });
+
+    it("keeps the base out of reach of a write, whichever way it was born", () => {
+      const mine = sample();
+      const born = new FormStore<Invoice>({ defaults: mine, values: mine });
+
+      born.register("invoice.client.name");
+      born.set("invoice.client.name", "Grace Hopper");
+
+      expect(born.defaults.invoice.client.name).toBe("Ada Lovelace");
+      expect(mine.invoice.client.name).toBe("Ada Lovelace");
+    });
+
+    it("still shares what only compares as itself", () => {
+      const attachment = new File(["x"], "invoice.pdf");
+      const born = new FormStore<{ attachment: File }>({ defaults: { attachment } });
+
+      expect(born.values.attachment).toBe(attachment);
+      expect(born.defaults.attachment).toBe(attachment);
+    });
+  });
+
   describe("defaults handed in by the caller", () => {
     type Model = { client: { name: string } };
 
@@ -556,10 +610,7 @@ describe("FormStore", () => {
 
     it("still shares what only compares as itself", () => {
       const attachment = new File(["x"], "invoice.pdf");
-      const withFile = new FormStore<{ attachment: File }>({
-        values: { attachment },
-        defaults: { attachment },
-      });
+      const withFile = new FormStore<{ attachment: File }>({ defaults: { attachment } });
 
       expect(withFile.defaults.attachment).toBe(attachment);
     });
@@ -567,7 +618,7 @@ describe("FormStore", () => {
 
   describe("a date that names no instant", () => {
     it("is not dirty against the base it was born with", () => {
-      const dated = new FormStore<{ when: Date }>({ values: { when: new Date("nope") } });
+      const dated = new FormStore<{ when: Date }>({ defaults: { when: new Date("nope") } });
 
       dated.register("when");
 
@@ -575,7 +626,7 @@ describe("FormStore", () => {
     });
 
     it("is dirty once a real instant replaces it", () => {
-      const dated = new FormStore<{ when: Date }>({ values: { when: new Date("nope") } });
+      const dated = new FormStore<{ when: Date }>({ defaults: { when: new Date("nope") } });
 
       dated.register("when");
       dated.set("when", new Date(0));
@@ -593,7 +644,7 @@ describe("FormStore", () => {
     }
 
     it("refuses to register inside a date", () => {
-      const dated = new FormStore<{ when: Date }>({ values: { when: new Date(0) } });
+      const dated = new FormStore<{ when: Date }>({ defaults: { when: new Date(0) } });
 
       dated.register("when");
 
@@ -601,13 +652,13 @@ describe("FormStore", () => {
     });
 
     it("refuses to register inside an instance the form cannot take apart", () => {
-      const priced = new FormStore<{ total: Money }>({ values: { total: new Money(10, "PEN") } });
+      const priced = new FormStore<{ total: Money }>({ defaults: { total: new Money(10, "PEN") } });
 
       expect(() => priced.register("total.amount" as never)).toThrow(PathInsideValue);
     });
 
     it("refuses whichever way the branch is reached", () => {
-      const bagged = new FormStore<{ bag: Map<string, number> }>({ values: { bag: new Map() } });
+      const bagged = new FormStore<{ bag: Map<string, number> }>({ defaults: { bag: new Map() } });
 
       bagged.register("bag" as never);
 
@@ -616,7 +667,7 @@ describe("FormStore", () => {
     });
 
     it("refuses a write that would have created the branch on its way in", () => {
-      const bagged = new FormStore<{ bag: Map<string, number> }>({ values: { bag: new Map() } });
+      const bagged = new FormStore<{ bag: Map<string, number> }>({ defaults: { bag: new Map() } });
 
       expect(() => bagged.set("bag.k" as never, 99 as never)).toThrow(PathInsideValue);
       expect(Object.keys(bagged.values.bag)).toEqual([]);
@@ -632,21 +683,21 @@ describe("FormStore", () => {
     });
 
     it("still registers into a branch that is not there yet", () => {
-      const empty = new FormStore<Invoice>({ values: {} as Invoice });
+      const empty = new FormStore<Invoice>({ defaults: {} as Invoice });
 
       expect(() => empty.register("invoice.client.name")).not.toThrow();
     });
 
     it("still registers under a value that is only a leaf for now", () => {
       const leafy = new FormStore<{ invoice: { client: { name: string } } }>({
-        values: { invoice: { client: "Ada" as never } },
+        defaults: { invoice: { client: "Ada" as never } },
       });
 
       expect(() => leafy.register("invoice.client.name")).not.toThrow();
     });
 
     it("says which part of the path it could not go into", () => {
-      const bagged = new FormStore<{ bag: Map<string, number> }>({ values: { bag: new Map() } });
+      const bagged = new FormStore<{ bag: Map<string, number> }>({ defaults: { bag: new Map() } });
 
       expect(() => bagged.register("bag.k" as never)).toThrow(/bag/);
     });
@@ -654,7 +705,7 @@ describe("FormStore", () => {
 
   describe("a registration that is refused", () => {
     const withField = () => {
-      const empty = new FormStore<Invoice>({ values: {} as Invoice });
+      const empty = new FormStore<Invoice>({ defaults: {} as Invoice });
 
       empty.register("invoice.client");
 
@@ -692,7 +743,7 @@ describe("FormStore", () => {
      * from a server response is a real way to reach this.
      */
     it("refuses a __proto__ key carried by a patch", () => {
-      const patch = new FormStore<Invoice>({ values: sample(), mode: "patch" });
+      const patch = new FormStore<Invoice>({ defaults: sample(), mode: "patch" });
       const hostile = JSON.parse('{"__proto__": {"polluted": "yes"}}');
 
       expect(() => patch.set("invoice.client", hostile as never)).toThrow(InvalidPathSegment);

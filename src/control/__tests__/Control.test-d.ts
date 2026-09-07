@@ -39,7 +39,7 @@ declare const interfaceControlExpectation: InterfaceControlExpectation;
 void interfaceControlExpectation;
 
 const interfaceStore = new FormStore<InterfaceForm>({
-  values: {
+  defaults: {
     invoice: {
       client: {
         addresses: [

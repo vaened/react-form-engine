@@ -13,7 +13,7 @@ type InvoiceValues = {
 
 function createStore(): FormStore<InvoiceValues> {
   return new FormStore<InvoiceValues>({
-    values: {
+    defaults: {
       invoice: {
         client: {
           name: "Ada",
