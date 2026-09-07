@@ -28,23 +28,11 @@ export interface Scalar<T = unknown> {
 
 export const dateScalar: Scalar<Date> = {
   matches: (value): value is Date => value instanceof Date,
-  equals: (left, right) => left.getTime() === right.getTime(),
+  // Two dates that name no instant are the same nothing, but `NaN` compares
+  // equal to no value at all, so a form born on one would start out dirty
+  // against the base it was copied from.
+  equals: (left, right) => Object.is(left.getTime(), right.getTime()),
   isolate: (value) => new Date(value.getTime()),
 };
 
-export const blobScalar: Scalar<Blob> = {
-  matches: (value): value is Blob => typeof Blob !== "undefined" && value instanceof Blob,
-  equals: (left, right) => left === right,
-};
-
-export const fileScalar: Scalar<File> = {
-  matches: (value): value is File => typeof File !== "undefined" && value instanceof File,
-  equals: (left, right) => left === right,
-};
-
-export const fileListScalar: Scalar<FileList> = {
-  matches: (value): value is FileList => typeof FileList !== "undefined" && value instanceof FileList,
-  equals: (left, right) => left === right,
-};
-
-export const NATIVE_SCALARS: readonly Scalar[] = [dateScalar, fileScalar, fileListScalar, blobScalar];
+export const NATIVE_SCALARS: readonly Scalar[] = [dateScalar];

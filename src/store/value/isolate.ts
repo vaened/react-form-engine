@@ -5,6 +5,8 @@
 
 import type { PathValueClassifier } from "./PathValueClassifier";
 
+const PROTOTYPE_KEY = "__proto__";
+
 /**
  * A copy of a value that no later write can reach.
  *
@@ -53,6 +55,14 @@ const copy = (value: unknown, classifier: PathValueClassifier, made: Map<object,
   made.set(value, properties);
 
   for (const [key, held] of Object.entries(value)) {
+    // Assigning `__proto__` replaces the prototype of the copy instead of
+    // naming a property on it, which would leave the base a shape no path can
+    // reach and the engine no longer reads as a record. A path cannot name it
+    // either, so there is nothing on the other side to keep it for.
+    if (key === PROTOTYPE_KEY) {
+      continue;
+    }
+
     properties[key] = copy(held, classifier, made);
   }
 

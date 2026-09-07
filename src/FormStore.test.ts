@@ -565,6 +565,25 @@ describe("FormStore", () => {
     });
   });
 
+  describe("a date that names no instant", () => {
+    it("is not dirty against the base it was born with", () => {
+      const dated = new FormStore<{ when: Date }>({ values: { when: new Date("nope") } });
+
+      dated.register("when");
+
+      expect(hasFlag(dated.getState("when")?.flags ?? 0, StateFlag.Dirty)).toBe(false);
+    });
+
+    it("is dirty once a real instant replaces it", () => {
+      const dated = new FormStore<{ when: Date }>({ values: { when: new Date("nope") } });
+
+      dated.register("when");
+      dated.set("when", new Date(0));
+
+      expect(hasFlag(dated.getState("when")?.flags ?? 0, StateFlag.Dirty)).toBe(true);
+    });
+  });
+
   describe("a path that goes inside a single value", () => {
     class Money {
       constructor(

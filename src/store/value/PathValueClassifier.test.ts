@@ -103,6 +103,15 @@ describe("PathValueClassifier", () => {
       expect(classifier.equals(new Date(instant), new Date(instant + 1))).toBe(false);
     });
 
+    it("holds two dates that name no instant equal, so neither is dirty against the other", () => {
+      expect(classifier.equals(new Date("nope"), new Date("also nope"))).toBe(true);
+    });
+
+    it("still tells one that names no instant from one that does", () => {
+      expect(classifier.equals(new Date("nope"), new Date(0))).toBe(false);
+      expect(classifier.equals(new Date(0), new Date("nope"))).toBe(false);
+    });
+
     it("uses the comparison the scalar brought", () => {
       const scoped = new PathValueClassifier([moneyScalar]);
 

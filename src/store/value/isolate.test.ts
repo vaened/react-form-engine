@@ -4,6 +4,7 @@
  */
 
 import { describe, expect, it } from "vitest";
+import { PathKind } from "../path/types";
 import { isolate } from "./isolate";
 import { PathValueClassifier } from "./PathValueClassifier";
 import type { Scalar } from "./Scalar";
@@ -104,6 +105,28 @@ describe("isolate", () => {
 
       expect(() => isolate({ onSave }, classifier)).not.toThrow();
       expect(isolate({ onSave }, classifier).onSave).toBe(onSave);
+    });
+  });
+
+  describe("a key that is not a key", () => {
+    /** `JSON.parse` is the one way an own `__proto__` reaches a form value. */
+    it("leaves the copy a plain record, whatever the source carried", () => {
+      const parsed = JSON.parse('{"invoice":{"__proto__":{"polluted":true},"series":"F001"}}');
+
+      const base = isolate(parsed, classifier);
+
+      expect(Object.getPrototypeOf(base.invoice)).toBe(Object.prototype);
+      expect(base.invoice.series).toBe("F001");
+    });
+
+    it("keeps it out of the copy rather than assigning it, which would rewrite the prototype", () => {
+      const parsed = JSON.parse('{"invoice":{"__proto__":{"polluted":true}}}');
+
+      const base = isolate(parsed, classifier);
+
+      expect(Object.hasOwn(base.invoice, "__proto__")).toBe(false);
+      expect("polluted" in ({} as Record<string, unknown>)).toBe(false);
+      expect(classifier.classify(base.invoice)).toBe(PathKind.Object);
     });
   });
 
