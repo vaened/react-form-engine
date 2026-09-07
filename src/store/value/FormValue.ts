@@ -5,7 +5,7 @@
 
 import type { FormValues } from "../../path";
 import { SingleEntryCache } from "../../SingleEntryCache";
-import { type PathIndexEntry, type PathIndexStructuralEntry, PathKind } from "../path/types";
+import { type EntryTree, type PathIndexEntry, type PathIndexStructuralEntry, PathKind } from "../path/types";
 import { InvalidRootValue } from "./errors";
 import { isolate } from "./isolate";
 import { PathValueClassifier } from "./PathValueClassifier";
@@ -18,15 +18,17 @@ import type { ValueContainer } from "./types";
  * here splits a path or walks from the root.
  */
 export class FormValue<TValues extends FormValues = FormValues> {
+  readonly #tree: EntryTree;
   readonly #defaults: TValues;
   readonly #container = new SingleEntryCache<PathIndexEntry, ValueContainer>();
 
   #root: TValues;
 
-  constructor(values: TValues, defaults: TValues = isolate(values, new PathValueClassifier())) {
+  constructor(tree: EntryTree, values: TValues, defaults: TValues = isolate(values, new PathValueClassifier())) {
     FormValue.#assertRoot(values);
     FormValue.#assertRoot(defaults);
 
+    this.#tree = tree;
     this.#root = values;
     this.#defaults = defaults;
   }
@@ -47,7 +49,7 @@ export class FormValue<TValues extends FormValues = FormValues> {
 
     const container = this.#reach(entry.parent, this.#root);
 
-    return container === undefined ? undefined : FormValue.#at(container, FormValue.#keyOf(entry));
+    return container === undefined ? undefined : FormValue.#at(container, this.#keyOf(entry));
   }
 
   /** Reads the base value an entry is compared against to decide whether it is dirty. */
@@ -58,7 +60,7 @@ export class FormValue<TValues extends FormValues = FormValues> {
 
     const container = this.#reach(entry.parent, this.#defaults);
 
-    return container === undefined ? undefined : FormValue.#at(container, FormValue.#keyOf(entry));
+    return container === undefined ? undefined : FormValue.#at(container, this.#keyOf(entry));
   }
 
   /**
@@ -72,7 +74,7 @@ export class FormValue<TValues extends FormValues = FormValues> {
 
     const container = this.#build(entry.parent);
 
-    FormValue.#assign(container, FormValue.#keyOf(entry), value);
+    FormValue.#assign(container, this.#keyOf(entry), value);
 
     // Writing a field replaces a leaf nobody descends through, but writing a
     // node replaces the very container this and everything under it is reached
@@ -116,7 +118,7 @@ export class FormValue<TValues extends FormValues = FormValues> {
       return undefined;
     }
 
-    const current = FormValue.#at(parent, FormValue.#keyOf(entry));
+    const current = FormValue.#at(parent, this.#keyOf(entry));
 
     if (!FormValue.#isContainer(current)) {
       return undefined;
@@ -142,7 +144,7 @@ export class FormValue<TValues extends FormValues = FormValues> {
     }
 
     const parent = this.#build(entry.parent);
-    const key = FormValue.#keyOf(entry);
+    const key = this.#keyOf(entry);
     const current = FormValue.#at(parent, key);
 
     const container = FormValue.#isContainer(current) ? current : FormValue.#empty(entry);
@@ -157,16 +159,8 @@ export class FormValue<TValues extends FormValues = FormValues> {
   }
 
   /** How an entry is named by its parent. */
-  static #keyOf(entry: PathIndexEntry): string | number {
-    if (entry.segment !== null) {
-      return entry.segment;
-    }
-
-    if (!entry.parent || entry.parent.kind !== PathKind.Array) {
-      throw new InvalidRootValue();
-    }
-
-    return entry.parent.children.indexOf(entry as never);
+  #keyOf(entry: PathIndexEntry): string | number {
+    return entry.segment ?? this.#tree.positionOf(entry.id);
   }
 
   static #empty(entry: PathIndexEntry): ValueContainer {

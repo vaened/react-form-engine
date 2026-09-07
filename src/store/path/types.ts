@@ -47,6 +47,7 @@ export type PathIndexArrayEntry = EntryBase & {
   readonly kind: PathKind.Array;
   readonly parent: PathIndexStructuralEntry;
   readonly children: PathIndexChildEntry[];
+  positions?: Map<EntryId, number>;
 };
 
 export type PathIndexFieldEntry = EntryBase & {
@@ -106,6 +107,8 @@ export interface EntryTree {
   parentOf(id: EntryId): PathIndexStructuralEntry | null;
   /** One level down. On an array, this is the item order. */
   childrenOf(id: EntryId): PathIndexChildEntry[];
+  /** Where an entry sits in the array holding it. Refuses anything else. */
+  positionOf(id: EntryId): number;
   /** Every step up, nearest first. Never a field: only a node holds children. */
   ancestorsOf(id: EntryId): PathIndexStructuralEntry[];
   /** Every level down, flattened and split by kind. */

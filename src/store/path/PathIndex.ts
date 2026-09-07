@@ -246,6 +246,25 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
     return [...PathIndex.#children(this.entry(id))];
   }
 
+  /**
+   * Where an entry sits in the array holding it.
+   *
+   * `children` is the order, so it goes from a position to an entry directly
+   * and the other way only by looking. What was found last is kept, and trusted
+   * again only while that position still holds that same entry, so no array
+   * operation has to remember to discard it.
+   */
+  positionOf(id: EntryId): number {
+    const entry = this.entry(id);
+    const array = entry.parent;
+
+    if (!array || array.kind !== PathKind.Array) {
+      throw new NotAnArrayEntry(entry.parent?.id ?? id);
+    }
+
+    return PathIndex.#positionIn(array, entry);
+  }
+
   ancestorsOf(id: EntryId): PathIndexStructuralEntry[] {
     const ancestors: PathIndexStructuralEntry[] = [];
 
@@ -320,13 +339,7 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
       const parent: PathIndexStructuralEntry = current.parent;
 
       if (parent.kind === PathKind.Array) {
-        const position = parent.children.indexOf(current);
-
-        if (position < 0) {
-          throw new UnknownEntryId(current.id);
-        }
-
-        segments.push(String(position));
+        segments.push(String(PathIndex.#positionIn(parent, current)));
       } else {
         if (current.segment === null) {
           throw new UnknownEntryId(current.id);
@@ -577,6 +590,36 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
     this.#nextEntryId += 1;
 
     return id;
+  }
+
+  /**
+   * `children` is the order, so it goes from a position to an entry directly
+   * and the other way only by looking. What was found last is kept, and trusted
+   * again only while that position still holds that same entry, so no array
+   * operation has to remember to discard it.
+   */
+  static #positionIn(array: PathIndexArrayEntry, entry: PathIndexEntry): number {
+    const remembered = array.positions?.get(entry.id);
+
+    if (remembered !== undefined && array.children[remembered] === entry) {
+      return remembered;
+    }
+
+    const positions = new Map<EntryId, number>();
+
+    for (let position = 0; position < array.children.length; position++) {
+      positions.set(array.children[position].id, position);
+    }
+
+    array.positions = positions;
+
+    const position = positions.get(entry.id);
+
+    if (position === undefined) {
+      throw new UnknownEntryId(entry.id);
+    }
+
+    return position;
   }
 
   static #children(entry: PathIndexEntry): Iterable<PathIndexChildEntry> {

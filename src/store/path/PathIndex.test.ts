@@ -15,7 +15,7 @@ import {
   UnknownPathId,
 } from "./errors";
 import { PathIndex } from "./PathIndex";
-import { type EntryId, PathKind } from "./types";
+import { type EntryId, type PathIndexArrayEntry, PathKind } from "./types";
 
 /** Shape of docs/FormValue.example.json. */
 type Invoice = {
@@ -45,6 +45,16 @@ describe("PathIndex", () => {
   beforeEach(() => {
     index = new PathIndex<Invoice>(new PathRegistry<Path<Invoice>>());
   });
+
+  const arrayEntry = (id: EntryId): PathIndexArrayEntry => {
+    const entry = index.entry(id);
+
+    if (entry.kind !== PathKind.Array) {
+      throw new NotAnArrayEntry(id);
+    }
+
+    return entry;
+  };
 
   const registerAddresses = () => {
     const addresses = index.register(ADDRESSES, PathKind.Array);
@@ -625,6 +635,188 @@ describe("PathIndex", () => {
       const name = index.register("invoice.client.name", PathKind.Field);
 
       expect(() => index.clear(name.id)).toThrow(NotAnArrayEntry);
+    });
+  });
+
+  describe("positionOf", () => {
+    const items = (array: EntryId) => index.childrenOf(array);
+
+    it("answers where an item sits in its array", () => {
+      const { addresses } = registerAddresses();
+      const [first, second] = items(addresses.id);
+
+      expect(index.positionOf(first.id)).toBe(0);
+      expect(index.positionOf(second.id)).toBe(1);
+    });
+
+    it("refuses an entry whose parent is not an array", () => {
+      const name = index.register("invoice.client.name", PathKind.Field);
+
+      expect(() => index.positionOf(name.id)).toThrow(NotAnArrayEntry);
+    });
+
+    it("refuses the root", () => {
+      expect(() => index.positionOf(index.root().id)).toThrow(NotAnArrayEntry);
+    });
+
+    it("follows an item across an insert", () => {
+      const { addresses } = registerAddresses();
+      const [first, second] = items(addresses.id);
+
+      expect(index.positionOf(first.id)).toBe(0);
+
+      index.insert(addresses.id, 0, PathKind.Object);
+
+      expect(index.positionOf(first.id)).toBe(1);
+      expect(index.positionOf(second.id)).toBe(2);
+    });
+
+    it("follows an item across a remove", () => {
+      const { addresses } = registerAddresses();
+      const [, second] = items(addresses.id);
+
+      expect(index.positionOf(second.id)).toBe(1);
+
+      index.remove(addresses.id, 0);
+
+      expect(index.positionOf(second.id)).toBe(0);
+    });
+
+    it("follows an item across a move", () => {
+      const { addresses } = registerAddresses();
+      const [first, second] = items(addresses.id);
+
+      expect(index.positionOf(first.id)).toBe(0);
+
+      index.move(addresses.id, 0, 1);
+
+      expect(index.positionOf(first.id)).toBe(1);
+      expect(index.positionOf(second.id)).toBe(0);
+    });
+
+    it("follows an item across a swap", () => {
+      const { addresses } = registerAddresses();
+      const [first, second] = items(addresses.id);
+
+      expect(index.positionOf(first.id)).toBe(0);
+      expect(index.positionOf(second.id)).toBe(1);
+
+      index.swap(addresses.id, 0, 1);
+
+      expect(index.positionOf(first.id)).toBe(1);
+      expect(index.positionOf(second.id)).toBe(0);
+    });
+
+    it("stays right when an item lands back where it was remembered", () => {
+      const { addresses } = registerAddresses();
+      const [first, second] = items(addresses.id);
+
+      expect(index.positionOf(first.id)).toBe(0);
+      expect(index.positionOf(second.id)).toBe(1);
+
+      index.swap(addresses.id, 0, 1);
+      index.swap(addresses.id, 0, 1);
+
+      expect(index.positionOf(first.id)).toBe(0);
+      expect(index.positionOf(second.id)).toBe(1);
+    });
+
+    it("refuses an item the array no longer holds", () => {
+      const { addresses } = registerAddresses();
+      const [first] = items(addresses.id);
+
+      expect(index.positionOf(first.id)).toBe(0);
+
+      index.remove(addresses.id, 0);
+
+      expect(() => index.positionOf(first.id)).toThrow(UnknownEntryId);
+    });
+
+    it("refuses every item after the array is cleared", () => {
+      const { addresses } = registerAddresses();
+      const [first, second] = items(addresses.id);
+
+      expect(index.positionOf(first.id)).toBe(0);
+
+      index.clear(addresses.id);
+
+      expect(() => index.positionOf(first.id)).toThrow(UnknownEntryId);
+      expect(() => index.positionOf(second.id)).toThrow(UnknownEntryId);
+    });
+
+    it("sees an item appended after it already answered", () => {
+      const { addresses } = registerAddresses();
+      const [first] = items(addresses.id);
+
+      expect(index.positionOf(first.id)).toBe(0);
+
+      const appended = index.append(addresses.id, PathKind.Object);
+
+      expect(index.positionOf(appended.id)).toBe(2);
+    });
+
+    it("sees the positions a gap-filling registration created", () => {
+      const { addresses } = registerAddresses();
+      const [first] = items(addresses.id);
+
+      expect(index.positionOf(first.id)).toBe(0);
+
+      index.register("invoice.client.addresses.4.city", PathKind.Field);
+
+      expect(index.positionOf(items(addresses.id)[4].id)).toBe(4);
+    });
+
+    it("agrees with describe on every item", () => {
+      const { addresses } = registerAddresses();
+
+      index.append(addresses.id, PathKind.Object);
+      index.insert(addresses.id, 0, PathKind.Object);
+      index.swap(addresses.id, 0, 3);
+      index.move(addresses.id, 3, 1);
+
+      for (const item of items(addresses.id)) {
+        expect(index.describe(item.id)).toBe(`${ADDRESSES}.${index.positionOf(item.id)}`);
+      }
+    });
+
+    it("looks at the order once, however many items ask afterwards", () => {
+      const { addresses } = registerAddresses();
+      const order = arrayEntry(addresses.id);
+
+      index.positionOf(order.children[0].id);
+
+      const looked = order.positions;
+
+      for (const item of order.children) {
+        index.positionOf(item.id);
+      }
+
+      expect(order.positions).toBe(looked);
+    });
+
+    it("looks again once the order has changed under it", () => {
+      const { addresses } = registerAddresses();
+      const order = arrayEntry(addresses.id);
+
+      index.positionOf(order.children[0].id);
+
+      const looked = order.positions;
+
+      index.swap(addresses.id, 0, 1);
+      index.positionOf(order.children[0].id);
+
+      expect(order.positions).not.toBe(looked);
+    });
+
+    it("answers on an array a field was reopened into", () => {
+      const phones = index.register("invoice.client.phones", PathKind.Field);
+
+      index.register("invoice.client.phones.1", PathKind.Field);
+
+      const [first, second] = index.childrenOf(phones.id);
+
+      expect(index.positionOf(first.id)).toBe(0);
+      expect(index.positionOf(second.id)).toBe(1);
     });
   });
 

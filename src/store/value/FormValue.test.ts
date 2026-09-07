@@ -5,6 +5,7 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Path } from "../../path";
+import { UnknownEntryId } from "../path/errors";
 import { PathIndex } from "../path/PathIndex";
 import { PathKind } from "../path/types";
 import { PathRegistry } from "../state/PathRegistry";
@@ -49,20 +50,20 @@ describe("FormValue", () => {
 
   beforeEach(() => {
     index = new PathIndex<Invoice>(new PathRegistry<Path<Invoice>>());
-    value = new FormValue<Invoice>(sample(), sample());
+    value = new FormValue<Invoice>(index, sample(), sample());
   });
 
   const field = (path: Path<Invoice>) => index.register(path, PathKind.Field);
 
   describe("root", () => {
     it("rejects a root that is not an object", () => {
-      expect(() => new FormValue([] as never)).toThrow(InvalidRootValue);
-      expect(() => new FormValue(null as never)).toThrow(InvalidRootValue);
+      expect(() => new FormValue(index, [] as never)).toThrow(InvalidRootValue);
+      expect(() => new FormValue(index, null as never)).toThrow(InvalidRootValue);
     });
 
     it("clones the values when no defaults are given, instead of sharing the reference", () => {
       const only = sample();
-      const single = new FormValue<Invoice>(only);
+      const single = new FormValue<Invoice>(index, only);
 
       expect(single.defaults).toEqual(only);
       expect(single.defaults).not.toBe(only);
@@ -70,7 +71,7 @@ describe("FormValue", () => {
 
     it("keeps defaults untouched by a later write, even when none were given explicitly", () => {
       const only = sample();
-      const single = new FormValue<Invoice>(only);
+      const single = new FormValue<Invoice>(index, only);
 
       single.write(field("invoice.client.name"), "Grace Hopper");
 
@@ -167,6 +168,26 @@ describe("FormValue", () => {
         addresses: [{ city: "Trujillo" }],
       });
     });
+
+    it("refuses an item its array no longer holds instead of naming it -1", () => {
+      const addresses = index.register(ADDRESSES, PathKind.Array);
+      const item = field(CITY_0).parent;
+
+      index.remove(addresses.id, 0);
+
+      expect(() => value.write(item, { city: "Cusco" })).toThrow(UnknownEntryId);
+      expect(Object.keys(value.value.invoice.client.addresses)).toEqual(["0", "1"]);
+    });
+
+    it("refuses to read an item its array no longer holds", () => {
+      const addresses = index.register(ADDRESSES, PathKind.Array);
+      const item = field(CITY_0).parent;
+
+      index.remove(addresses.id, 0);
+
+      expect(() => value.read(item)).toThrow(UnknownEntryId);
+      expect(() => value.default(item)).toThrow(UnknownEntryId);
+    });
   });
 
   describe("creating the path", () => {
@@ -181,7 +202,7 @@ describe("FormValue", () => {
     });
 
     it("creates a branch that never existed in the initial value", () => {
-      const empty = new FormValue<Invoice>({} as Invoice);
+      const empty = new FormValue<Invoice>(index, {} as Invoice);
 
       empty.write(field("invoice.client.name"), "Ada");
 
@@ -189,7 +210,7 @@ describe("FormValue", () => {
     });
 
     it("creates an array where the entry says array, and an object where it says object", () => {
-      const empty = new FormValue<Invoice>({} as Invoice);
+      const empty = new FormValue<Invoice>(index, {} as Invoice);
 
       index.register(ADDRESSES, PathKind.Array);
       empty.write(field(CITY_0), "Lima");
@@ -210,7 +231,7 @@ describe("FormValue", () => {
     });
 
     it("never creates anything while reading a default", () => {
-      const empty = new FormValue<Invoice>({} as Invoice, {} as Invoice);
+      const empty = new FormValue<Invoice>(index, {} as Invoice, {} as Invoice);
 
       expect(empty.default(field("invoice.client.name"))).toBeUndefined();
       expect(empty.defaults).toEqual({});
@@ -315,6 +336,7 @@ describe("FormValue", () => {
 
       descents = 0;
       value = new FormValue<Invoice>(
+        index,
         {
           get invoice() {
             descents += 1;
@@ -411,7 +433,7 @@ describe("FormValue", () => {
 
     beforeEach(() => {
       nested = new PathIndex<Grid>(new PathRegistry<Path<Grid>>());
-      matrix = new FormValue<Grid>(raw(), raw());
+      matrix = new FormValue<Grid>(nested, raw(), raw());
     });
 
     it("reads through two consecutive positional steps", () => {
@@ -459,7 +481,7 @@ describe("FormValue", () => {
     });
 
     it("builds both levels when neither exists yet", () => {
-      const empty = new FormValue<Grid>({} as Grid);
+      const empty = new FormValue<Grid>(nested, {} as Grid);
 
       nested.register("invoice.grid", PathKind.Array);
       nested.register("invoice.grid.0", PathKind.Array);
