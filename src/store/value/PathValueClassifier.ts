@@ -47,7 +47,7 @@ export class PathValueClassifier {
    * properties, so the parts can be reached one by one and put back.
    */
   isContainer(value: unknown): value is ValueContainer {
-    if (!PathValueClassifier.#isComposite(value)) {
+    if (!PathValueClassifier.isComposite(value)) {
       return false;
     }
 
@@ -63,7 +63,7 @@ export class PathValueClassifier {
    * scalar once and keep it, instead of offering the value to every scalar.
    */
   for(value: unknown): Scalar | undefined {
-    if (!PathValueClassifier.#isComposite(value)) {
+    if (!PathValueClassifier.isComposite(value)) {
       return undefined;
     }
 
@@ -94,7 +94,8 @@ export class PathValueClassifier {
     return scalar.equals(left, right);
   }
 
-  static #isComposite(value: unknown): value is object {
+  /** Whether the value has an inside at all, whoever is allowed to look. */
+  static isComposite(value: unknown): value is object {
     return typeof value === "object" && value !== null;
   }
 

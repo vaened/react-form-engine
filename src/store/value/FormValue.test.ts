@@ -11,6 +11,7 @@ import { PathKind } from "../path/types";
 import { PathRegistry } from "../state/PathRegistry";
 import { InvalidRootValue } from "./errors";
 import { FormValue } from "./FormValue";
+import { PathValueClassifier } from "./PathValueClassifier";
 
 /** Shape of docs/FormValue.example.json. */
 type Invoice = {
@@ -44,25 +45,27 @@ const sample = (): Invoice => ({
   },
 });
 
+const classifier = new PathValueClassifier();
+
 describe("FormValue", () => {
   let index: PathIndex<Invoice>;
   let value: FormValue<Invoice>;
 
   beforeEach(() => {
     index = new PathIndex<Invoice>(new PathRegistry<Path<Invoice>>());
-    value = new FormValue<Invoice>(index, sample(), sample());
+    value = new FormValue<Invoice>(index, classifier, sample(), sample());
   });
 
   const field = (path: Path<Invoice>) => index.register(path, PathKind.Field);
 
   describe("root", () => {
     it("rejects a root that is not an object", () => {
-      expect(() => new FormValue(index, [] as never, sample())).toThrow(InvalidRootValue);
-      expect(() => new FormValue(index, null as never, sample())).toThrow(InvalidRootValue);
+      expect(() => new FormValue(index, classifier, [] as never, sample())).toThrow(InvalidRootValue);
+      expect(() => new FormValue(index, classifier, null as never, sample())).toThrow(InvalidRootValue);
     });
 
     it("rejects defaults that are not an object either", () => {
-      expect(() => new FormValue(index, sample(), [] as never)).toThrow(InvalidRootValue);
+      expect(() => new FormValue(index, classifier, sample(), [] as never)).toThrow(InvalidRootValue);
     });
   });
 
@@ -189,7 +192,7 @@ describe("FormValue", () => {
     });
 
     it("creates a branch that never existed in the initial value", () => {
-      const empty = new FormValue<Invoice>(index, {} as Invoice, {} as Invoice);
+      const empty = new FormValue<Invoice>(index, classifier, {} as Invoice, {} as Invoice);
 
       empty.write(field("invoice.client.name"), "Ada");
 
@@ -197,7 +200,7 @@ describe("FormValue", () => {
     });
 
     it("creates an array where the entry says array, and an object where it says object", () => {
-      const empty = new FormValue<Invoice>(index, {} as Invoice, {} as Invoice);
+      const empty = new FormValue<Invoice>(index, classifier, {} as Invoice, {} as Invoice);
 
       index.register(ADDRESSES, PathKind.Array);
       empty.write(field(CITY_0), "Lima");
@@ -218,7 +221,7 @@ describe("FormValue", () => {
     });
 
     it("never creates anything while reading a default", () => {
-      const empty = new FormValue<Invoice>(index, {} as Invoice, {} as Invoice);
+      const empty = new FormValue<Invoice>(index, classifier, {} as Invoice, {} as Invoice);
 
       expect(empty.default(field("invoice.client.name"))).toBeUndefined();
       expect(empty.defaults).toEqual({});
@@ -324,6 +327,7 @@ describe("FormValue", () => {
       descents = 0;
       value = new FormValue<Invoice>(
         index,
+        classifier,
         {
           get invoice() {
             descents += 1;
@@ -420,7 +424,7 @@ describe("FormValue", () => {
 
     beforeEach(() => {
       nested = new PathIndex<Grid>(new PathRegistry<Path<Grid>>());
-      matrix = new FormValue<Grid>(nested, raw(), raw());
+      matrix = new FormValue<Grid>(nested, classifier, raw(), raw());
     });
 
     it("reads through two consecutive positional steps", () => {
@@ -468,7 +472,7 @@ describe("FormValue", () => {
     });
 
     it("builds both levels when neither exists yet", () => {
-      const empty = new FormValue<Grid>(nested, {} as Grid, {} as Grid);
+      const empty = new FormValue<Grid>(nested, classifier, {} as Grid, {} as Grid);
 
       nested.register("invoice.grid", PathKind.Array);
       nested.register("invoice.grid.0", PathKind.Array);

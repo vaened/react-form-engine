@@ -13,6 +13,8 @@ import { StateGraph } from "./state/StateGraph";
 import { PathValueClassifier } from "./value/PathValueClassifier";
 import { ValueStore } from "./value/ValueStore";
 
+const classifier = new PathValueClassifier();
+
 describe("Reconciler", () => {
   let form: InvoiceStructure;
   let state: StateGraph;
@@ -22,10 +24,7 @@ describe("Reconciler", () => {
   beforeEach(() => {
     form = new InvoiceStructure();
     state = new StateGraph(form.index);
-    value = new ValueStore<Invoice>(form.index, sampleInvoice(), sampleInvoice());
-
-    const classifier = new PathValueClassifier();
-
+    value = new ValueStore<Invoice>(form.index, classifier, sampleInvoice(), sampleInvoice());
     reconciler = new Reconciler(form.index, state, value, classifier, new StateAssessor(classifier));
   });
 

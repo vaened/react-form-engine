@@ -5,7 +5,7 @@
 
 import type { FormValues, Path, PathValue } from "./path";
 import { PathIndex } from "./store/path/PathIndex";
-import type { PathIndexEntry } from "./store/path/types";
+import type { PathIndexChildEntry, PathIndexEntry, RegisterableKind } from "./store/path/types";
 import { PathKind } from "./store/path/types";
 import { Reconciler } from "./store/Reconciler";
 import { type PathIdentifier, PathRegistry } from "./store/state/PathRegistry";
@@ -49,6 +49,7 @@ export class FormStore<TValues extends FormValues> {
     this.#state = new StateGraph(this.#index);
     this.#value = new ValueStore<TValues>(
       this.#index,
+      this.#classifier,
       options.values,
       isolate(options.defaults ?? options.values, this.#classifier),
     );
@@ -98,7 +99,7 @@ export class FormStore<TValues extends FormValues> {
       return;
     }
 
-    const kind = this.#classifier.classify(this.#read(path));
+    const kind = this.#classifier.classify(this.#reach(path));
 
     this.#join(this.#index.register(path, kind));
   }
@@ -120,7 +121,7 @@ export class FormStore<TValues extends FormValues> {
   }
 
   set<TPath extends Path<TValues>>(path: TPath, value: PathValue<TValues, TPath>): void {
-    const entry = this.#index.resolve(path) ?? this.#index.ensure(path, this.#classifier.classify(value));
+    const entry = this.#index.resolve(path) ?? this.#claim(path, this.#classifier.classify(value));
 
     this.#writer.write(entry, value, this.#reconcileWritten);
   }
@@ -129,6 +130,13 @@ export class FormStore<TValues extends FormValues> {
     const entry = this.#index.resolve(path);
 
     return entry && this.#state.find(entry.id);
+  }
+
+  /** Reaches a path in the index, having made sure the value lets it through. */
+  #claim(path: Path<TValues>, kind: RegisterableKind): PathIndexChildEntry {
+    this.#reach(path);
+
+    return this.#index.ensure(path, kind);
   }
 
   #join(entry: PathIndexEntry): void {
@@ -143,9 +151,7 @@ export class FormStore<TValues extends FormValues> {
     }
   }
 
-  #read(path: string): unknown {
-    return path.split(".").reduce<unknown>((current, segment) => {
-      return current && typeof current === "object" ? (current as Record<string, unknown>)[segment] : undefined;
-    }, this.#value.value);
+  #reach(path: Path<TValues>): unknown {
+    return this.#value.reach(this.#index.segmentsOf(path));
   }
 }

@@ -9,7 +9,7 @@ import { InvalidArrayIndex, InvalidPathSegment } from "./store/path/errors";
 import { hasFlag, StateFlag } from "./store/state/StateFlag";
 import type { StateFieldEntry } from "./store/state/types";
 import { StateKind } from "./store/state/types";
-import { CircularPatchValue } from "./store/value/errors";
+import { CircularPatchValue, PathInsideValue } from "./store/value/errors";
 
 /** Shape of docs/FormValue.example.json. */
 type Invoice = {
@@ -562,6 +562,74 @@ describe("FormStore", () => {
       });
 
       expect(withFile.defaults.attachment).toBe(attachment);
+    });
+  });
+
+  describe("a path that goes inside a single value", () => {
+    class Money {
+      constructor(
+        readonly amount: number,
+        readonly currency: string,
+      ) {}
+    }
+
+    it("refuses to register inside a date", () => {
+      const dated = new FormStore<{ when: Date }>({ values: { when: new Date(0) } });
+
+      dated.register("when");
+
+      expect(() => dated.register("when.getTime" as never)).toThrow(PathInsideValue);
+    });
+
+    it("refuses to register inside an instance the form cannot take apart", () => {
+      const priced = new FormStore<{ total: Money }>({ values: { total: new Money(10, "PEN") } });
+
+      expect(() => priced.register("total.amount" as never)).toThrow(PathInsideValue);
+    });
+
+    it("refuses whichever way the branch is reached", () => {
+      const bagged = new FormStore<{ bag: Map<string, number> }>({ values: { bag: new Map() } });
+
+      bagged.register("bag" as never);
+
+      expect(() => bagged.register("bag.k" as never)).toThrow(PathInsideValue);
+      expect(() => bagged.register("bag.k.deeper" as never)).toThrow(PathInsideValue);
+    });
+
+    it("refuses a write that would have created the branch on its way in", () => {
+      const bagged = new FormStore<{ bag: Map<string, number> }>({ values: { bag: new Map() } });
+
+      expect(() => bagged.set("bag.k" as never, 99 as never)).toThrow(PathInsideValue);
+      expect(Object.keys(bagged.values.bag)).toEqual([]);
+    });
+
+    it("leaves the value it refused to reach into untouched", () => {
+      const bag = new Map<string, number>();
+      const bagged = new FormStore<{ bag: Map<string, number> }>({ values: { bag }, defaults: { bag } });
+
+      expect(() => bagged.set("bag.k" as never, 99 as never)).toThrow(PathInsideValue);
+      expect(bagged.values.bag).toBe(bag);
+      expect(bagged.defaults.bag).toBe(bag);
+    });
+
+    it("still registers into a branch that is not there yet", () => {
+      const empty = new FormStore<Invoice>({ values: {} as Invoice });
+
+      expect(() => empty.register("invoice.client.name")).not.toThrow();
+    });
+
+    it("still registers under a value that is only a leaf for now", () => {
+      const leafy = new FormStore<{ invoice: { client: { name: string } } }>({
+        values: { invoice: { client: "Ada" as never } },
+      });
+
+      expect(() => leafy.register("invoice.client.name")).not.toThrow();
+    });
+
+    it("says which part of the path it could not go into", () => {
+      const bagged = new FormStore<{ bag: Map<string, number> }>({ values: { bag: new Map() } });
+
+      expect(() => bagged.register("bag.k" as never)).toThrow(/bag/);
     });
   });
 

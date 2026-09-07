@@ -6,6 +6,7 @@
 import type { Equal, Expect } from "../../path/__tests__/type-assertions";
 import { StateGraph } from "../state/StateGraph";
 import type { StateFieldEntry, StateNodeEntry } from "../state/types";
+import { PathValueClassifier } from "../value/PathValueClassifier";
 import { ValueStore } from "../value/ValueStore";
 import { InvoiceStructure, sampleInvoice } from "./__fixtures__/invoice";
 import type { ObservationChain } from "./ObservationChain";
@@ -20,7 +21,9 @@ const state = new StateGraph(form.index);
 
 type StateRootExpectation = Expect<Equal<ReturnType<typeof state.root>, StateNodeEntry>>;
 
-const values = new ValueStore(form.index, sampleInvoice(), sampleInvoice());
+const classifier = new PathValueClassifier();
+
+const values = new ValueStore(form.index, classifier, sampleInvoice(), sampleInvoice());
 
 type ValueRootExpectation = Expect<Equal<ReturnType<typeof values.root>, ReturnType<typeof values.entry>>>;
 

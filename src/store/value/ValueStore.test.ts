@@ -7,7 +7,10 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { InvoiceStructure, sampleInvoice } from "../observation/__fixtures__/invoice";
 import { RootObservationRequired, UnknownObservation } from "../observation/errors";
 import { type EntryId, PathKind } from "../path/types";
+import { PathValueClassifier } from "./PathValueClassifier";
 import { type ValueEntry, ValueStore } from "./ValueStore";
+
+const classifier = new PathValueClassifier();
 
 describe("ValueStore", () => {
   let form: InvoiceStructure;
@@ -15,7 +18,7 @@ describe("ValueStore", () => {
 
   beforeEach(() => {
     form = new InvoiceStructure();
-    store = new ValueStore(form.index, sampleInvoice(), sampleInvoice());
+    store = new ValueStore(form.index, classifier, sampleInvoice(), sampleInvoice());
   });
 
   /** Everyone the store says has to hear about a write, in the order it says it. */
@@ -424,7 +427,7 @@ describe("ValueStore", () => {
     });
 
     it("does not throw when an array node has no value yet", () => {
-      const empty = new ValueStore(form.index, {} as never, {} as never);
+      const empty = new ValueStore(form.index, classifier, {} as never, {} as never);
 
       empty.materialize(form.addresses);
 
@@ -432,7 +435,7 @@ describe("ValueStore", () => {
     });
 
     it("does not throw when an object node has no value yet", () => {
-      const empty = new ValueStore(form.index, {} as never, {} as never);
+      const empty = new ValueStore(form.index, classifier, {} as never, {} as never);
 
       empty.materialize(form.client);
 

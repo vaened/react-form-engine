@@ -6,29 +6,59 @@
 import type { FormValues } from "../../path";
 import { SingleEntryCache } from "../../SingleEntryCache";
 import { type EntryTree, type PathIndexEntry, type PathIndexStructuralEntry, PathKind } from "../path/types";
-import { InvalidRootValue } from "./errors";
+import { InvalidRootValue, PathInsideValue } from "./errors";
+import { PathValueClassifier } from "./PathValueClassifier";
 import type { ValueContainer } from "./types";
 
 /**
  * The live value of a form, plus the defaults it is compared against.
  *
- * An entry carries the key and its parent carries the container, so nothing
- * here splits a path or walks from the root.
+ * An entry carries the key and its parent carries the container, so a descent
+ * driven by one never splits a path or walks from the root.
  */
 export class FormValue<TValues extends FormValues = FormValues> {
   readonly #tree: EntryTree;
+  readonly #classifier: PathValueClassifier;
   readonly #defaults: TValues;
   readonly #container = new SingleEntryCache<PathIndexEntry, ValueContainer>();
 
   #root: TValues;
 
-  constructor(tree: EntryTree, values: TValues, defaults: TValues) {
-    FormValue.#assertRoot(values);
-    FormValue.#assertRoot(defaults);
-
+  constructor(tree: EntryTree, classifier: PathValueClassifier, values: TValues, defaults: TValues) {
+    this.#classifier = classifier;
     this.#tree = tree;
+
+    this.#assertRoot(values);
+    this.#assertRoot(defaults);
+
     this.#root = values;
     this.#defaults = defaults;
+  }
+
+  /**
+   * The value a run of names lands on, for a caller holding no entry yet.
+   *
+   * A branch that is not there is `undefined`, which is what registering ahead
+   * of a value looks like. A location the form holds as one value is the one
+   * thing it refuses to go into: its parts are not properties, so there is
+   * nothing underneath to reach.
+   */
+  reach(segments: readonly string[]): unknown {
+    let current: unknown = this.#root;
+
+    for (let index = 0; index < segments.length; index++) {
+      if (!this.#classifier.isContainer(current)) {
+        if (PathValueClassifier.isComposite(current)) {
+          throw new PathInsideValue(segments.join("."), segments.slice(0, index).join("."));
+        }
+
+        return undefined;
+      }
+
+      current = FormValue.#at(current, segments[index]);
+    }
+
+    return current;
   }
 
   get value(): TValues {
@@ -92,7 +122,7 @@ export class FormValue<TValues extends FormValues = FormValues> {
   }
 
   replace(values: TValues): void {
-    FormValue.#assertRoot(values);
+    this.#assertRoot(values);
 
     this.#root = values;
     this.clear();
@@ -118,7 +148,7 @@ export class FormValue<TValues extends FormValues = FormValues> {
 
     const current = FormValue.#at(parent, this.#keyOf(entry));
 
-    if (!FormValue.#isContainer(current)) {
+    if (!this.#classifier.isContainer(current)) {
       return undefined;
     }
 
@@ -145,7 +175,7 @@ export class FormValue<TValues extends FormValues = FormValues> {
     const key = this.#keyOf(entry);
     const current = FormValue.#at(parent, key);
 
-    const container = FormValue.#isContainer(current) ? current : FormValue.#empty(entry);
+    const container = this.#classifier.isContainer(current) ? current : FormValue.#empty(entry);
 
     if (container !== current) {
       FormValue.#assign(parent, key, container);
@@ -173,12 +203,8 @@ export class FormValue<TValues extends FormValues = FormValues> {
     (container as Record<string | number, unknown>)[key] = value;
   }
 
-  static #isContainer(value: unknown): value is ValueContainer {
-    return typeof value === "object" && value !== null;
-  }
-
-  static #assertRoot(value: unknown): void {
-    if (!FormValue.#isContainer(value) || Array.isArray(value)) {
+  #assertRoot(value: unknown): void {
+    if (this.#classifier.classify(value) !== PathKind.Object) {
       throw new InvalidRootValue();
     }
   }

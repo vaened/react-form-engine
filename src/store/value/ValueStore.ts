@@ -7,6 +7,7 @@ import type { FormValues } from "../../path";
 import { ObservationChain } from "../observation/ObservationChain";
 import { type EntryId, type EntryTree, type PathIndexEntry, PathKind } from "../path/types";
 import { FormValue } from "./FormValue";
+import type { PathValueClassifier } from "./PathValueClassifier";
 
 const STALE = Symbol("stale");
 
@@ -28,8 +29,8 @@ export class ValueStore<TValues extends FormValues = FormValues> {
   readonly #tree: EntryTree;
   readonly #chain: ObservationChain<ValueEntry>;
 
-  constructor(tree: EntryTree, values: TValues, defaults: TValues) {
-    this.#value = new FormValue(tree, values, defaults);
+  constructor(tree: EntryTree, classifier: PathValueClassifier, values: TValues, defaults: TValues) {
+    this.#value = new FormValue(tree, classifier, values, defaults);
     this.#tree = tree;
     this.#chain = new ObservationChain<ValueEntry>(tree, { id: tree.root().id, parent: null, snapshot: STALE });
   }
@@ -48,6 +49,10 @@ export class ValueStore<TValues extends FormValues = FormValues> {
 
   default(entry: PathIndexEntry): unknown {
     return this.#value.default(entry);
+  }
+
+  reach(segments: readonly string[]): unknown {
+    return this.#value.reach(segments);
   }
 
   replace(values: TValues): void {
