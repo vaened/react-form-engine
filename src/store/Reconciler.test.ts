@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { type Invoice, InvoiceStructure, sampleInvoice } from "./observation/__fixtures__/invoice";
 import { PathKind } from "./path/types";
 import { Reconciler } from "./Reconciler";
+import { FieldState } from "./state/FieldState";
 import { StateAssessor } from "./state/StateAssessor";
 import { hasFlag, StateFlag } from "./state/StateFlag";
 import { StateGraph } from "./state/StateGraph";
@@ -14,6 +15,15 @@ import { PathValueClassifier } from "./value/PathValueClassifier";
 import { ValueStore } from "./value/ValueStore";
 
 const classifier = new PathValueClassifier();
+
+const fieldState = (flags: number, errors: readonly unknown[] = []) => {
+  const state = new FieldState();
+
+  state.flags = flags;
+  state.errors = errors;
+
+  return state;
+};
 
 describe("Reconciler", () => {
   let form: InvoiceStructure;
@@ -26,6 +36,53 @@ describe("Reconciler", () => {
     state = new StateGraph(form.index);
     value = new ValueStore<Invoice>(form.index, classifier, sampleInvoice(), sampleInvoice());
     reconciler = new Reconciler(form.index, state, value, classifier, new StateAssessor(classifier));
+  });
+
+  describe("what a write is allowed to change", () => {
+    const { Dirty, Touched, Invalid, Validating } = StateFlag;
+
+    it("leaves alone every flag a value cannot speak for", () => {
+      state.register(form.name, fieldState(Touched | Invalid | Validating));
+      value.register(form.name);
+      value.write(form.index.entry(form.name), "Grace Hopper", () => {});
+
+      reconciler.reconcile(form.index.entry(form.name));
+
+      const flags = state.field(form.name).state.flags;
+
+      expect(hasFlag(flags, Touched)).toBe(true);
+      expect(hasFlag(flags, Invalid)).toBe(true);
+      expect(hasFlag(flags, Validating)).toBe(true);
+      expect(hasFlag(flags, Dirty)).toBe(true);
+    });
+
+    it("never leaves a field holding errors it no longer calls itself invalid for", () => {
+      state.register(form.name, fieldState(Invalid, ["required"]));
+      value.register(form.name);
+      value.write(form.index.entry(form.name), "Grace Hopper", () => {});
+
+      reconciler.reconcile(form.index.entry(form.name));
+
+      const field = state.field(form.name).state;
+
+      expect(field.errors).toEqual(["required"]);
+      expect(field.isInvalid).toBe(true);
+    });
+
+    it("still takes dirty away when the value goes back to its default", () => {
+      state.register(form.name, fieldState(Touched));
+      value.register(form.name);
+      value.write(form.index.entry(form.name), "Grace Hopper", () => {});
+      reconciler.reconcile(form.index.entry(form.name));
+
+      value.write(form.index.entry(form.name), sampleInvoice().invoice.client.name, () => {});
+      reconciler.reconcile(form.index.entry(form.name));
+
+      const flags = state.field(form.name).state.flags;
+
+      expect(hasFlag(flags, Dirty)).toBe(false);
+      expect(hasFlag(flags, Touched)).toBe(true);
+    });
   });
 
   describe("a field", () => {

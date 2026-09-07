@@ -3,7 +3,7 @@
  * @link https://vaened.dev DevFolio
  */
 
-import { hasFlag, StateFlag } from "./StateFlag";
+import { hasFlag, StateFlag, setFlag } from "./StateFlag";
 import type { PathState } from "./types";
 
 /** Shared so that registering a form's worth of fields does not leave one empty array each. */
@@ -40,5 +40,25 @@ export class FieldState implements PathState {
 
   get isValidating(): boolean {
     return hasFlag(this.flags, StateFlag.Validating);
+  }
+
+  /** What comparing the value against its base implies, and nothing else. */
+  assessed(dirty: boolean): void {
+    this.flags = setFlag(this.flags, StateFlag.Dirty, dirty);
+  }
+
+  /**
+   * What a validation found. The verdict and what it was based on land
+   * together, so a field is never left holding errors it does not call itself
+   * invalid for, nor invalid with nothing to show for it.
+   */
+  validated(invalid: boolean, errors: readonly unknown[]): void {
+    this.flags = setFlag(this.flags, StateFlag.Invalid, invalid);
+    this.errors = errors;
+  }
+
+  /** The user has been here. Only a reset takes it back. */
+  touch(): void {
+    this.flags = setFlag(this.flags, StateFlag.Touched, true);
   }
 }

@@ -10,5 +10,5 @@ export { StateAggregate } from "./StateAggregate";
 export { StateAssessor } from "./StateAssessor";
 export { hasFlag, StateFlag, setFlag } from "./StateFlag";
 export { StateGraph } from "./StateGraph";
-export type { FieldStateInput, PathState, StateEntry, StateFieldEntry, StateNodeEntry } from "./types";
+export type { PathState, StateEntry, StateFieldEntry, StateNodeEntry } from "./types";
 export { StateKind } from "./types";

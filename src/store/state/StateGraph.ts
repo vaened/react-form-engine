@@ -8,7 +8,7 @@ import type { EntryId, EntryTree, ObservableStructure } from "../path/types";
 import { StateAggregateUnderflow, StateKindConflict } from "./errors";
 import { FieldState } from "./FieldState";
 import { StateAggregate } from "./StateAggregate";
-import { type FieldStateInput, type StateEntry, type StateFieldEntry, StateKind, type StateNodeEntry } from "./types";
+import { type StateEntry, type StateFieldEntry, StateKind, type StateNodeEntry } from "./types";
 
 /** Shared so that a keystroke that moves nothing does not allocate to say so. */
 const NOTHING_MOVED: readonly StateEntry[] = Object.freeze([]);
@@ -63,7 +63,7 @@ export class StateGraph {
    * Who is there is asked before joining, because joining counts a watcher and
    * refusing afterwards would count one that never arrived.
    */
-  register(id: EntryId, initial: FieldStateInput = {}): StateFieldEntry {
+  register(id: EntryId, initial: FieldState = new FieldState()): StateFieldEntry {
     const occupant = this.#chain.find(id);
 
     if (occupant) {
@@ -74,12 +74,7 @@ export class StateGraph {
       return field;
     }
 
-    const field: StateFieldEntry = {
-      id,
-      kind: StateKind.Field,
-      parent: null,
-      state: new FieldState(initial.flags, initial.errors),
-    };
+    const field: StateFieldEntry = { id, kind: StateKind.Field, parent: null, state: initial };
 
     this.#chain.join(field);
     this.#propagate(field.parent, 0, field.state.flags);
@@ -116,30 +111,52 @@ export class StateGraph {
    * The hot path. It takes the field rather than its id because the writer
    * already holds it.
    *
-   * Errors are only touched when the caller brings them, so typing allocates
-   * nothing; an empty collection is how they are cleared. Whether they moved is
-   * decided by reference, never by content: this has no way to know what a
-   * caller's error shape means, so it trusts the reference it was handed, the
-   * same way a value write trusts the reference it receives.
-   *
-   * Flags and errors landing on the same reference reach nobody above, which is
-   * what keeps typing into an already touched field from waking the root.
+   * A value can speak for one flag and no other, so this is the only one it
+   * moves: what the user did and what a validation found are not its to undo.
    */
-  update(field: StateFieldEntry, next: FieldStateInput): readonly StateEntry[] {
-    const previousFlags = field.state.flags;
-    const previousErrors = field.state.errors;
+  assessed(field: StateFieldEntry, dirty: boolean): readonly StateEntry[] {
+    const held = field.state.flags;
 
-    field.state.flags = next.flags ?? 0;
+    field.state.assessed(dirty);
 
-    if (next.errors !== undefined) {
-      field.state.errors = next.errors;
+    return this.#moved(field, held, field.state.errors);
+  }
+
+  /**
+   * Errors move by reference and never by content: this has no way to know
+   * what a caller's error shape means, so it trusts the reference it was
+   * handed, the same way a value write trusts the one it receives. An empty
+   * collection is how they are cleared.
+   */
+  validated(field: StateFieldEntry, invalid: boolean, errors: readonly unknown[]): readonly StateEntry[] {
+    const held = field.state.flags;
+    const shown = field.state.errors;
+
+    field.state.validated(invalid, errors);
+
+    return this.#moved(field, held, shown);
+  }
+
+  touch(field: StateFieldEntry): readonly StateEntry[] {
+    const held = field.state.flags;
+
+    field.state.touch();
+
+    return this.#moved(field, held, field.state.errors);
+  }
+
+  /**
+   * Everyone whose public state moved, which is the same as everyone who has
+   * to be told. Flags and errors landing on what they already were reach
+   * nobody above, which is what keeps typing into an already touched field
+   * from waking the root.
+   */
+  #moved(field: StateFieldEntry, heldFlags: number, shownErrors: readonly unknown[]): readonly StateEntry[] {
+    if (field.state.flags === heldFlags) {
+      return field.state.errors === shownErrors ? NOTHING_MOVED : [field];
     }
 
-    if (field.state.flags === previousFlags) {
-      return field.state.errors === previousErrors ? NOTHING_MOVED : [field];
-    }
-
-    return this.#propagate(field.parent, previousFlags, field.state.flags, [field]);
+    return this.#propagate(field.parent, heldFlags, field.state.flags, [field]);
   }
 
   /** For callers that do not hold the field, such as an imperative set. */

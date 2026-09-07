@@ -4,11 +4,6 @@
  */
 
 import type { PathValueClassifier } from "../value/PathValueClassifier";
-import { StateFlag } from "./StateFlag";
-import type { FieldStateInput } from "./types";
-
-/** Shared so that a form's worth of clean fields does not allocate one each. */
-const CLEAN: FieldStateInput = Object.freeze({});
 
 /**
  * What a field's state should be, given its value.
@@ -28,7 +23,7 @@ export class StateAssessor {
   }
 
   /** Dirty is the only thing a value on its own can ever imply. */
-  assess(value: unknown, defaultValue: unknown): FieldStateInput {
-    return this.#classifier.equals(value, defaultValue) ? CLEAN : { flags: StateFlag.Dirty };
+  assess(value: unknown, defaultValue: unknown): boolean {
+    return !this.#classifier.equals(value, defaultValue);
   }
 }

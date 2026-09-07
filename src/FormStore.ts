@@ -8,6 +8,7 @@ import { PathIndex } from "./store/path/PathIndex";
 import type { PathIndexChildEntry, PathIndexEntry, RegisterableKind } from "./store/path/types";
 import { PathKind } from "./store/path/types";
 import { Reconciler } from "./store/Reconciler";
+import { FieldState } from "./store/state/FieldState";
 import { type PathIdentifier, PathRegistry } from "./store/state/PathRegistry";
 import { StateAssessor } from "./store/state/StateAssessor";
 import { StateGraph } from "./store/state/StateGraph";
@@ -145,7 +146,9 @@ export class FormStore<TValues extends FormValues> {
 
   #join(entry: PathIndexEntry): void {
     if (entry.kind === PathKind.Field) {
-      const initial = this.#assessor.assess(this.#value.read(entry), this.#value.default(entry));
+      const initial = new FieldState();
+
+      initial.assessed(this.#assessor.assess(this.#value.read(entry), this.#value.default(entry)));
 
       this.#state.register(entry.id, initial);
       this.#value.register(entry.id);

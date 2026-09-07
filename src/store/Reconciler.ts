@@ -62,9 +62,9 @@ export class Reconciler<TValues extends FormValues = FormValues> {
       return;
     }
 
-    const next = this.#assessor.assess(this.#value.read(field), this.#value.default(field));
+    const dirty = this.#assessor.assess(this.#value.read(field), this.#value.default(field));
 
-    this.#state.update(this.#state.field(field.id), next);
+    this.#state.assessed(this.#state.field(field.id), dirty);
   }
 
   /** Every watcher a discarded location ever claimed has to let go, not just one. */

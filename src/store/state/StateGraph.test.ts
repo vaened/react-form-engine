@@ -10,6 +10,7 @@ import { RootObservationRequired, UnknownObservation } from "../observation/erro
 import { PathIndex } from "../path/PathIndex";
 import { PathKind } from "../path/types";
 import { StateKindConflict } from "./errors";
+import { FieldState } from "./FieldState";
 import { PathRegistry } from "./PathRegistry";
 import { StateAggregate } from "./StateAggregate";
 import { hasFlag, StateFlag } from "./StateFlag";
@@ -18,6 +19,15 @@ import type { StateEntry, StateFieldEntry, StateNodeEntry } from "./types";
 import { StateKind } from "./types";
 
 const { Dirty, Touched, Invalid } = StateFlag;
+
+const fieldState = (flags: number, errors: readonly unknown[] = []) => {
+  const state = new FieldState();
+
+  state.flags = flags;
+  state.errors = errors;
+
+  return state;
+};
 
 describe("StateGraph", () => {
   let form: InvoiceStructure;
@@ -59,7 +69,7 @@ describe("StateGraph", () => {
     });
 
     it("counts a field that is born carrying flags", () => {
-      graph.register(form.city0, { flags: Dirty });
+      graph.register(form.city0, fieldState(Dirty));
 
       expect(graph.root().state.dirty).toBe(1);
       expect(has(graph.root(), Dirty)).toBe(true);
@@ -68,7 +78,8 @@ describe("StateGraph", () => {
     it("keeps the state a field already had when it registers again", () => {
       const field = graph.register(form.city0);
 
-      graph.update(graph.field(form.city0), { flags: Touched, errors: ["obligatorio"] });
+      graph.touch(graph.field(form.city0));
+      graph.validated(graph.field(form.city0), false, ["obligatorio"]);
 
       const again = graph.register(form.city0);
 
@@ -85,7 +96,7 @@ describe("StateGraph", () => {
     });
 
     it("rejects updating something that was never registered", () => {
-      expect(() => graph.update(graph.field(form.city0), { flags: Dirty })).toThrow(UnknownObservation);
+      expect(() => graph.assessed(graph.field(form.city0), true)).toThrow(UnknownObservation);
     });
   });
 
@@ -95,22 +106,46 @@ describe("StateGraph", () => {
     });
 
     it("carries the flag up to the root", () => {
-      graph.update(graph.field(form.city0), { flags: Touched });
+      graph.touch(graph.field(form.city0));
 
       expect(has(graph.root(), Touched)).toBe(true);
       expect(graph.root().state.touched).toBe(1);
     });
 
     it("takes the flag away again when the field loses it", () => {
-      graph.update(graph.field(form.city0), { flags: Touched });
-      graph.update(graph.field(form.city0), { flags: 0 });
+      graph.assessed(graph.field(form.city0), true);
+      graph.assessed(graph.field(form.city0), false);
 
       expect(graph.root().state.flags).toBe(0);
-      expect(graph.root().state.touched).toBe(0);
+      expect(graph.root().state.dirty).toBe(0);
+    });
+
+    it("leaves every flag it does not answer for exactly as it found them", () => {
+      const field = graph.field(form.city0);
+
+      graph.touch(field);
+      graph.validated(field, true, ["requerido"]);
+      graph.assessed(field, true);
+      graph.assessed(field, false);
+
+      expect(field.state.isTouched).toBe(true);
+      expect(field.state.isInvalid).toBe(true);
+      expect(field.state.isDirty).toBe(false);
+      expect(field.state.errors).toEqual(["requerido"]);
+    });
+
+    it("has no way to take back what the user did", () => {
+      const field = graph.field(form.city0);
+
+      graph.touch(field);
+      graph.assessed(field, true);
+      graph.validated(field, false, []);
+
+      expect(field.state.isTouched).toBe(true);
     });
 
     it("keeps errors on the field and never on the node above", () => {
-      graph.update(graph.field(form.city0), { flags: Invalid, errors: ["requerido", "muy corto"] });
+      graph.validated(graph.field(form.city0), true, ["requerido", "muy corto"]);
 
       expect((graph.entry(form.city0) as StateFieldEntry).state.errors).toEqual(["requerido", "muy corto"]);
       expect(has(graph.root(), Invalid)).toBe(true);
@@ -118,8 +153,8 @@ describe("StateGraph", () => {
     });
 
     it("does nothing above when the flags land on the same value", () => {
-      graph.update(graph.field(form.city0), { flags: Touched });
-      graph.update(graph.field(form.city0), { flags: Touched });
+      graph.touch(graph.field(form.city0));
+      graph.touch(graph.field(form.city0));
 
       expect(graph.root().state.touched).toBe(1);
     });
@@ -135,35 +170,36 @@ describe("StateGraph", () => {
     });
 
     it("stops at the first ancestor whose public flags did not change", () => {
-      graph.update(graph.field(form.city0), { flags: Touched });
+      graph.touch(graph.field(form.city0));
 
       expect(address.state.touched).toBe(1);
       expect(graph.root().state.touched).toBe(1);
 
-      graph.update(graph.field(form.reference0), { flags: Touched });
+      graph.touch(graph.field(form.reference0));
 
       expect(address.state.touched).toBe(2);
       expect(graph.root().state.touched).toBe(1);
     });
 
     it("still keeps counting so the flag survives until the last child drops it", () => {
-      graph.update(graph.field(form.city0), { flags: Touched });
-      graph.update(graph.field(form.reference0), { flags: Touched });
-      graph.update(graph.field(form.city0), { flags: 0 });
+      graph.assessed(graph.field(form.city0), true);
+      graph.assessed(graph.field(form.reference0), true);
+      graph.assessed(graph.field(form.city0), false);
 
-      expect(address.state.touched).toBe(1);
-      expect(has(address, Touched)).toBe(true);
-      expect(has(graph.root(), Touched)).toBe(true);
+      expect(address.state.dirty).toBe(1);
+      expect(has(address, Dirty)).toBe(true);
+      expect(has(graph.root(), Dirty)).toBe(true);
 
-      graph.update(graph.field(form.reference0), { flags: 0 });
+      graph.assessed(graph.field(form.reference0), false);
 
-      expect(has(address, Touched)).toBe(false);
-      expect(has(graph.root(), Touched)).toBe(false);
+      expect(has(address, Dirty)).toBe(false);
+      expect(has(graph.root(), Dirty)).toBe(false);
     });
 
     it("reaches the root again when a different flag appears", () => {
-      graph.update(graph.field(form.city0), { flags: Touched });
-      graph.update(graph.field(form.reference0), { flags: Touched | Dirty });
+      graph.touch(graph.field(form.city0));
+      graph.touch(graph.field(form.reference0));
+      graph.assessed(graph.field(form.reference0), true);
 
       expect(graph.root().state.touched).toBe(1);
       expect(has(graph.root(), Dirty)).toBe(true);
@@ -174,24 +210,24 @@ describe("StateGraph", () => {
     it("says nothing moved when the flags land on the same value", () => {
       const field = graph.register(form.city0);
 
-      expect(graph.update(field, { flags: 0 })).toEqual([]);
+      expect(graph.assessed(field, false)).toEqual([]);
 
-      graph.update(field, { flags: Touched });
+      graph.touch(field);
 
-      expect(graph.update(field, { flags: Touched })).toEqual([]);
+      expect(graph.touch(field)).toEqual([]);
     });
 
     it("hands back the same empty collection every time, so saying nothing costs nothing", () => {
       const field = graph.register(form.city0);
 
-      expect(graph.update(field, { flags: 0 })).toBe(graph.update(field, { flags: 0 }));
+      expect(graph.assessed(field, false)).toBe(graph.assessed(field, false));
     });
 
     it("names the field and every ancestor that moved with it", () => {
       const field = graph.register(form.city0);
       const address = graph.materialize(form.address0);
 
-      expect(graph.update(field, { flags: Touched })).toEqual([field, address, graph.root()]);
+      expect(graph.touch(field)).toEqual([field, address, graph.root()]);
     });
 
     it("stops naming ancestors where the cut stops the walk", () => {
@@ -199,20 +235,20 @@ describe("StateGraph", () => {
       const second = graph.register(form.reference0);
       const address = graph.materialize(form.address0);
 
-      expect(graph.update(first, { flags: Touched })).toEqual([first, address, graph.root()]);
+      expect(graph.touch(first)).toEqual([first, address, graph.root()]);
 
       // The second one raises the count but not the flag, so the cut fires at
       // the very first ancestor and nobody above the field hears about it.
-      expect(graph.update(second, { flags: Touched })).toEqual([second]);
+      expect(graph.touch(second)).toEqual([second]);
       expect(address.state.touched).toBe(2);
       expect(graph.root().state.touched).toBe(1);
     });
 
     it("names only the field when nothing above it moved", () => {
-      const first = graph.register(form.city0, { flags: Touched });
+      const first = graph.register(form.city0, fieldState(Touched));
       const second = graph.register(form.reference0);
 
-      expect(graph.update(second, { flags: Touched })).toEqual([second]);
+      expect(graph.touch(second)).toEqual([second]);
       expect(first.state.flags).toBe(Touched);
     });
 
@@ -223,42 +259,42 @@ describe("StateGraph", () => {
      * reference it was given has to be trusted that nothing changed.
      */
     it("names the field when only its errors reference changed, flags untouched", () => {
-      const field = graph.register(form.city0, { flags: Invalid, errors: ["muy corto"] });
+      const field = graph.register(form.city0, fieldState(Invalid, ["muy corto"]));
 
-      expect(graph.update(field, { flags: Invalid, errors: ["formato invalido"] })).toEqual([field]);
+      expect(graph.validated(field, true, ["formato invalido"])).toEqual([field]);
       expect(field.state.errors).toEqual(["formato invalido"]);
     });
 
     it("does not climb to ancestors for an errors-only change, since they never derive from errors", () => {
-      const field = graph.register(form.city0, { flags: Invalid, errors: ["muy corto"] });
+      const field = graph.register(form.city0, fieldState(Invalid, ["muy corto"]));
       const address = graph.materialize(form.address0);
 
-      graph.update(field, { flags: Invalid, errors: ["formato invalido"] });
+      graph.validated(field, true, ["formato invalido"]);
 
       expect(address.state.invalid).toBe(1);
     });
 
     it("says nothing moved when the same errors reference is handed back", () => {
       const errors = ["muy corto"];
-      const field = graph.register(form.city0, { flags: Invalid, errors: errors });
+      const field = graph.register(form.city0, fieldState(Invalid, errors));
 
-      expect(graph.update(field, { flags: Invalid, errors })).toEqual([]);
+      expect(graph.validated(field, true, errors)).toEqual([]);
     });
 
     it("reports a move for two error lists with identical content but different references", () => {
-      const field = graph.register(form.city0, { flags: Invalid, errors: ["muy corto"] });
+      const field = graph.register(form.city0, fieldState(Invalid, ["muy corto"]));
 
       // Content-equal but not the same array: StateGraph cannot and does not
       // guess this — a caller that wants this treated as unchanged has to hand
       // back its own previous reference.
-      expect(graph.update(field, { flags: Invalid, errors: ["muy corto"] })).toEqual([field]);
+      expect(graph.validated(field, true, ["muy corto"])).toEqual([field]);
     });
   });
 
   describe("materializing", () => {
     it("takes over the weight its children used to carry upward", () => {
-      graph.register(form.city0, { flags: Touched });
-      graph.register(form.reference0, { flags: Touched });
+      graph.register(form.city0, fieldState(Touched));
+      graph.register(form.reference0, fieldState(Touched));
 
       const address = graph.materialize(form.address0);
 
@@ -281,14 +317,14 @@ describe("StateGraph", () => {
 
       const address = graph.materialize(form.address0);
 
-      graph.update(graph.field(form.city0), { flags: Dirty });
+      graph.assessed(graph.field(form.city0), true);
 
       expect(address.state.dirty).toBe(1);
       expect(graph.root().state.dirty).toBe(1);
     });
 
     it("stacks, so a node reports to the nearest materialized ancestor", () => {
-      graph.register(form.city0, { flags: Dirty });
+      graph.register(form.city0, fieldState(Dirty));
 
       const address = graph.materialize(form.address0);
       const client = graph.materialize(form.client);
@@ -298,7 +334,7 @@ describe("StateGraph", () => {
       expect(client.state.dirty).toBe(1);
       expect(graph.root().state.dirty).toBe(1);
 
-      graph.update(graph.field(form.city0), { flags: 0 });
+      graph.assessed(graph.field(form.city0), false);
 
       expect(has(address, Dirty)).toBe(false);
       expect(has(client, Dirty)).toBe(false);
@@ -306,7 +342,7 @@ describe("StateGraph", () => {
     });
 
     it("leaves alone the ones that report to a closer node", () => {
-      const field = graph.register(form.city0, { flags: Touched });
+      const field = graph.register(form.city0, fieldState(Touched));
       const address = graph.materialize(form.address0);
       const client = graph.materialize(form.client);
 
@@ -317,7 +353,7 @@ describe("StateGraph", () => {
     });
 
     it("never takes something outside its own branch", () => {
-      const email = graph.register(form.email, { flags: Dirty });
+      const email = graph.register(form.email, fieldState(Dirty));
 
       graph.materialize(form.address0);
 
@@ -326,7 +362,7 @@ describe("StateGraph", () => {
     });
 
     it("returns what is already there when a node is materialized twice", () => {
-      graph.register(form.city0, { flags: Touched });
+      graph.register(form.city0, fieldState(Touched));
 
       const first = graph.materialize(form.address0);
       const again = graph.materialize(form.address0);
@@ -346,8 +382,8 @@ describe("StateGraph", () => {
 
   describe("dematerializing", () => {
     it("gives the children back and keeps the totals right", () => {
-      const first = graph.register(form.city0, { flags: Touched });
-      const second = graph.register(form.reference0, { flags: Touched });
+      const first = graph.register(form.city0, fieldState(Touched));
+      const second = graph.register(form.reference0, fieldState(Touched));
 
       graph.materialize(form.address0);
 
@@ -363,7 +399,7 @@ describe("StateGraph", () => {
     });
 
     it("detaches the node, so a reference somebody kept is inert", () => {
-      graph.register(form.city0, { flags: Touched });
+      graph.register(form.city0, fieldState(Touched));
 
       const address = graph.materialize(form.address0);
 
@@ -378,13 +414,13 @@ describe("StateGraph", () => {
       graph.register(form.city0);
       graph.materialize(form.address0);
       graph.dematerialize(form.address0);
-      graph.update(graph.field(form.city0), { flags: Dirty });
+      graph.assessed(graph.field(form.city0), true);
 
       expect(graph.root().state.dirty).toBe(1);
     });
 
     it("clears the flag above once its last contributor is unregistered", () => {
-      graph.register(form.city0, { flags: Invalid });
+      graph.register(form.city0, fieldState(Invalid));
       graph.materialize(form.address0);
       graph.unregister(form.city0);
       graph.dematerialize(form.address0);
@@ -393,7 +429,7 @@ describe("StateGraph", () => {
     });
 
     it("hands back a child that carries flags instead of dropping what it holds", () => {
-      const field = graph.register(form.city0, { flags: Invalid });
+      const field = graph.register(form.city0, fieldState(Invalid));
 
       graph.materialize(form.address0);
       graph.dematerialize(form.address0);
@@ -406,8 +442,8 @@ describe("StateGraph", () => {
 
   describe("unregistering", () => {
     it("discounts the field from everyone above", () => {
-      graph.register(form.city0, { flags: Touched });
-      graph.register(form.reference0, { flags: Touched });
+      graph.register(form.city0, fieldState(Touched));
+      graph.register(form.reference0, fieldState(Touched));
 
       graph.unregister(form.city0);
 
@@ -421,7 +457,7 @@ describe("StateGraph", () => {
     });
 
     it("discounts through a materialized node", () => {
-      graph.register(form.city0, { flags: Dirty });
+      graph.register(form.city0, fieldState(Dirty));
 
       const address = graph.materialize(form.address0);
 
@@ -446,7 +482,7 @@ describe("StateGraph", () => {
     });
 
     it("counts a field that mounts underneath it afterwards", () => {
-      const field = graph.register(form.city0, { flags: Touched });
+      const field = graph.register(form.city0, fieldState(Touched));
 
       expect(field.parent).toBe(address);
       expect(address.state.touched).toBe(1);
@@ -456,7 +492,7 @@ describe("StateGraph", () => {
     /** What an array insert produces: the new item's fields mount afterwards. */
     it("hangs a field of another item off the ancestor they share", () => {
       const client = graph.materialize(form.client);
-      const other = graph.register(form.city1, { flags: Dirty });
+      const other = graph.register(form.city1, fieldState(Dirty));
 
       expect(other.parent).toBe(client);
       expect(client.state.dirty).toBe(1);
@@ -465,20 +501,20 @@ describe("StateGraph", () => {
 
     it("routes its later updates through the node", () => {
       graph.register(form.city0);
-      graph.update(graph.field(form.city0), { flags: Dirty });
+      graph.assessed(graph.field(form.city0), true);
 
       expect(address.state.dirty).toBe(1);
       expect(graph.root().state.dirty).toBe(1);
 
-      graph.update(graph.field(form.city0), { flags: 0 });
+      graph.assessed(graph.field(form.city0), false);
 
       expect(address.state.flags).toBe(0);
       expect(graph.root().state.flags).toBe(0);
     });
 
     it("discounts it from the node when it unregisters", () => {
-      graph.register(form.city0, { flags: Invalid });
-      graph.register(form.reference0, { flags: Invalid });
+      graph.register(form.city0, fieldState(Invalid));
+      graph.register(form.reference0, fieldState(Invalid));
 
       graph.unregister(form.city0);
 
@@ -501,12 +537,12 @@ describe("StateGraph", () => {
     });
 
     it("cuts at the middle node without disturbing the ones above", () => {
-      graph.update(graph.field(form.city0), { flags: Touched });
+      graph.touch(graph.field(form.city0));
 
       expect(client.state.touched).toBe(1);
       expect(graph.root().state.touched).toBe(1);
 
-      graph.update(graph.field(form.reference0), { flags: Touched });
+      graph.touch(graph.field(form.reference0));
 
       expect(address.state.touched).toBe(2);
       expect(client.state.touched).toBe(1);
@@ -514,20 +550,20 @@ describe("StateGraph", () => {
     });
 
     it("hands a node down to the grandparent when the one above it goes away", () => {
-      graph.update(graph.field(form.city0), { flags: Dirty });
+      graph.assessed(graph.field(form.city0), true);
       graph.dematerialize(form.client);
 
       expect(address.parent).toBe(graph.root());
       expect(graph.root().state.dirty).toBe(1);
 
-      graph.update(graph.field(form.reference0), { flags: Invalid });
+      graph.validated(graph.field(form.reference0), true, []);
 
       expect(has(address, Invalid)).toBe(true);
       expect(has(graph.root(), Invalid)).toBe(true);
     });
 
     it("finds every one of its children, so none can be left behind carrying flags", () => {
-      graph.update(graph.field(form.reference0), { flags: Touched });
+      graph.touch(graph.field(form.reference0));
       graph.dematerialize(form.address0);
 
       expect(field.parent).toBe(client);
@@ -537,7 +573,7 @@ describe("StateGraph", () => {
     });
 
     it("hands a middle node's children to the grandparent when it goes away", () => {
-      graph.update(graph.field(form.city0), { flags: Dirty });
+      graph.assessed(graph.field(form.city0), true);
       graph.dematerialize(form.address0);
 
       expect(field.parent).toBe(client);
@@ -545,7 +581,7 @@ describe("StateGraph", () => {
       expect(client.state.dirty).toBe(1);
       expect(has(graph.root(), Dirty)).toBe(true);
 
-      graph.update(graph.field(form.city0), { flags: 0 });
+      graph.assessed(graph.field(form.city0), false);
 
       expect(client.state.flags).toBe(0);
       expect(graph.root().state.flags).toBe(0);
@@ -554,15 +590,15 @@ describe("StateGraph", () => {
 
   describe("more than one watcher on the same location", () => {
     it("counts a field once however many times it is registered", () => {
-      const first = graph.register(form.city0, { flags: Dirty });
-      const again = graph.register(form.city0, { flags: Dirty });
+      const first = graph.register(form.city0, fieldState(Dirty));
+      const again = graph.register(form.city0, fieldState(Dirty));
 
       expect(again).toBe(first);
       expect(graph.root().state.dirty).toBe(1);
     });
 
     it("does not discount a field a second watcher still holds", () => {
-      graph.register(form.city0, { flags: Dirty });
+      graph.register(form.city0, fieldState(Dirty));
       graph.register(form.city0);
 
       expect(graph.unregister(form.city0)).toEqual([]);
@@ -572,7 +608,7 @@ describe("StateGraph", () => {
     });
 
     it("discounts it once the last watcher goes", () => {
-      graph.register(form.city0, { flags: Dirty });
+      graph.register(form.city0, fieldState(Dirty));
       graph.register(form.city0);
 
       graph.unregister(form.city0);
@@ -584,7 +620,7 @@ describe("StateGraph", () => {
     });
 
     it("counts a node once however many times it is materialized", () => {
-      graph.register(form.city0, { flags: Touched });
+      graph.register(form.city0, fieldState(Touched));
 
       const first = graph.materialize(form.address0);
       const again = graph.materialize(form.address0);
@@ -595,7 +631,7 @@ describe("StateGraph", () => {
     });
 
     it("keeps a node deriving while a second watcher still holds it", () => {
-      const field = graph.register(form.city0, { flags: Touched });
+      const field = graph.register(form.city0, fieldState(Touched));
       const address = graph.materialize(form.address0);
 
       graph.materialize(form.address0);
@@ -608,7 +644,7 @@ describe("StateGraph", () => {
     });
 
     it("hands the children back and keeps the totals once the last one goes", () => {
-      const field = graph.register(form.city0, { flags: Touched });
+      const field = graph.register(form.city0, fieldState(Touched));
 
       graph.materialize(form.address0);
       graph.materialize(form.address0);
@@ -629,7 +665,7 @@ describe("StateGraph", () => {
 
       graph.materialize(form.address0);
       graph.dematerialize(form.address0);
-      graph.update(graph.field(form.city0), { flags: Invalid });
+      graph.validated(graph.field(form.city0), true, []);
 
       expect(address.state.invalid).toBe(1);
       expect(has(graph.root(), Invalid)).toBe(true);
@@ -646,7 +682,7 @@ describe("StateGraph", () => {
     it("refuses to update a node as if it were a field", () => {
       graph.materialize(form.address0);
 
-      expect(() => graph.update(graph.field(form.address0), { flags: Dirty })).toThrow(StateKindConflict);
+      expect(() => graph.assessed(graph.field(form.address0), true)).toThrow(StateKindConflict);
       expect(() => graph.unregister(form.address0)).toThrow(StateKindConflict);
     });
 
@@ -680,20 +716,21 @@ describe("StateGraph", () => {
       expect(graph.has(form.address0)).toBe(false);
     });
 
-    it("leaves the errors alone when an update brings none, so typing does not touch them", () => {
+    it("leaves the errors alone when nothing about the validation moved", () => {
       const field = graph.register(form.city0);
 
-      graph.update(field, { flags: Invalid, errors: ["requerido"] });
-      graph.update(field, { flags: Invalid | Touched });
+      graph.validated(field, true, ["requerido"]);
+      graph.touch(field);
+      graph.assessed(field, true);
 
       expect(field.state.errors).toEqual(["requerido"]);
     });
 
-    it("clears the errors when an update brings an empty collection", () => {
+    it("clears the errors when a validation brings an empty collection", () => {
       const field = graph.register(form.city0);
 
-      graph.update(field, { flags: Invalid, errors: ["requerido"] });
-      graph.update(field, { flags: 0, errors: [] });
+      graph.validated(field, true, ["requerido"]);
+      graph.validated(field, false, []);
 
       expect(field.state.errors).toEqual([]);
       expect(graph.root().state.flags).toBe(0);
@@ -707,15 +744,15 @@ describe("StateGraph", () => {
     });
 
     it("makes an update through an unregistered field inert", () => {
-      const field = graph.register(form.city0, { flags: Touched });
+      const field = graph.register(form.city0, fieldState(Touched));
 
-      graph.register(form.reference0, { flags: Touched });
+      graph.register(form.reference0, fieldState(Touched));
       graph.unregister(form.city0);
 
       expect(graph.root().state.touched).toBe(1);
 
-      graph.update(field, { flags: 0 });
-      graph.update(field, { flags: Touched });
+      graph.assessed(field, false);
+      graph.touch(field);
 
       expect(graph.root().state.touched).toBe(1);
       expect(has(graph.root(), Touched)).toBe(true);
@@ -758,7 +795,7 @@ describe("StateGraph", () => {
     it("discounts what it contributed as a field before the promotion lands", () => {
       const { index, invoice, graph } = build();
 
-      graph.register(invoice.id, { flags: Touched });
+      graph.register(invoice.id, fieldState(Touched));
       expect(graph.root().state.touched).toBe(1);
 
       openInvoice(index);
@@ -773,7 +810,7 @@ describe("StateGraph", () => {
     it("starts the promoted node owning nothing the field had", () => {
       const { index, invoice, graph } = build();
 
-      graph.register(invoice.id, { flags: Touched | Invalid, errors: ["requerido"] });
+      graph.register(invoice.id, fieldState(Touched | Invalid, ["requerido"]));
 
       openInvoice(index);
 
@@ -788,12 +825,12 @@ describe("StateGraph", () => {
     it("keeps deriving correctly through the promoted node afterward", () => {
       const { index, invoice, graph } = build();
 
-      graph.register(invoice.id, { flags: Touched });
+      graph.register(invoice.id, fieldState(Touched));
       openInvoice(index);
 
       const name = index.register("invoice.client.name", PathKind.Field);
 
-      graph.register(name.id, { flags: Touched });
+      graph.register(name.id, fieldState(Touched));
 
       // The field's own touched was discarded, but the walk continues past the
       // freshly promoted node: root ends up touched again anyway, now because
@@ -808,12 +845,12 @@ describe("StateGraph", () => {
     it("names every entry that moved, including the node it just promoted", () => {
       const { index, invoice, graph } = build();
 
-      graph.register(invoice.id, { flags: Touched });
+      graph.register(invoice.id, fieldState(Touched));
       openInvoice(index);
 
       const name = index.register("invoice.client.name", PathKind.Field);
       const field = graph.register(name.id);
-      const moved = graph.update(field, { flags: Touched });
+      const moved = graph.touch(field);
 
       expect(moved.map((entry) => entry.id)).toEqual([name.id, invoice.id, graph.root().id]);
       expect(graph.root().state.touched).toBe(1);

@@ -54,9 +54,3 @@ export type StateNodeEntry = StateBase & {
 };
 
 export type StateEntry = StateFieldEntry | StateNodeEntry;
-
-/** What a field is given to start from, or to be told after a write. */
-export type FieldStateInput = {
-  readonly flags?: number;
-  readonly errors?: readonly unknown[];
-};
