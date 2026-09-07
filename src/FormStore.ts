@@ -58,7 +58,9 @@ export class FormStore<TValues extends FormValues> {
     this.#assessor = new StateAssessor(this.#classifier);
     this.#reconciler = new Reconciler(this.#index, this.#state, this.#value, this.#classifier, this.#assessor);
     this.#writer =
-      this.#mode === "patch" ? new PatchWrite(this.#index, this.#value, this.#classifier) : new FullWrite(this.#value);
+      this.#mode === "patch"
+        ? new PatchWrite(this.#index, this.#value, this.#classifier)
+        : new FullWrite(this.#value, this.#classifier);
   }
 
   get mode(): FormMode {

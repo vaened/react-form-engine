@@ -537,6 +537,50 @@ describe("FormStore", () => {
       expect(born.values.rows[1].city).toBe("Lima");
     });
 
+    it("keeps two places apart when a write hands one object to both", () => {
+      const born = new FormStore<Two>({ defaults: { billing: { city: "x" }, shipping: { city: "x" } } });
+
+      born.register("billing.city");
+      born.register("shipping.city");
+
+      const address = { city: "Lima" };
+
+      born.set("billing", address);
+      born.set("shipping", address);
+      born.set("billing.city", "Cusco");
+
+      expect(born.values.billing.city).toBe("Cusco");
+      expect(born.values.shipping.city).toBe("Lima");
+    });
+
+    it("keeps its own copy of what a write hands it", () => {
+      const born = new FormStore<Two>({ defaults: { billing: { city: "x" }, shipping: { city: "x" } } });
+      const address = { city: "Lima" };
+
+      born.register("billing.city");
+      born.set("billing", address);
+
+      expect(born.values.billing).not.toBe(address);
+      expect(born.values.billing.city).toBe("Lima");
+    });
+
+    it("refuses a write that points back at itself", () => {
+      const born = new FormStore<Two>({ defaults: { billing: { city: "x" }, shipping: { city: "x" } } });
+      const looping: Record<string, unknown> = { city: "Lima" };
+      looping.itself = looping;
+
+      expect(() => born.set("billing", looping as never)).toThrow(CircularValue);
+    });
+
+    it("leaves a field write alone, which is where the typing happens", () => {
+      const born = new FormStore<Two>({ defaults: { billing: { city: "x" }, shipping: { city: "x" } } });
+
+      born.register("billing.city");
+      born.set("billing.city", "Lima");
+
+      expect(born.values.billing.city).toBe("Lima");
+    });
+
     it("refuses a value that points back at itself", () => {
       const client: Record<string, unknown> = { name: "Ada" };
       client.itself = client;
