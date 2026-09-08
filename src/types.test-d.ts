@@ -3,8 +3,9 @@
  * @link https://vaened.dev DevFolio
  */
 
+import type { FormScalar } from "./path";
 import type { Equal, Expect } from "./path/__tests__/type-assertions";
-import type { DeepReadonly } from "./types";
+import type { DeepPartial, DeepReadonly } from "./types";
 
 type Coords = DeepReadonly<[number, number]>;
 type Range = DeepReadonly<[string, number]>;
@@ -47,3 +48,64 @@ range[0] = "other";
 
 void longer;
 void swapped;
+
+/** A value the engine is told never to take apart. */
+interface Money extends FormScalar {
+  readonly amount: number;
+}
+
+type Invoice = {
+  series: string;
+  createdAt: Date;
+  price: Money;
+  client: { name: string; addresses: { city: string; zip: string }[] };
+  span: [Date, Date];
+};
+
+/** Nothing is required, however deep it sits. */
+type NothingRequired = [
+  Expect<Equal<DeepPartial<Invoice>["series"], string | undefined>>,
+  Expect<Equal<NonNullable<DeepPartial<Invoice>["client"]>["name"], string | undefined>>,
+];
+
+/** A value the engine never takes apart is asked for whole or not at all. */
+type TerminalStaysWhole = [
+  Expect<Equal<DeepPartial<Invoice>["createdAt"], Date | undefined>>,
+  Expect<Equal<DeepPartial<Invoice>["price"], Money | undefined>>,
+  Expect<Equal<DeepPartial<Date>, Date>>,
+];
+
+/** A list keeps being a list; what its items hold is what may be missing. */
+type ListsStayLists = [
+  Expect<Equal<DeepPartial<{ city: string }[]>, { city?: string }[]>>,
+  Expect<Equal<DeepPartial<[Date, Date]>, [Date, Date]>>,
+];
+
+const accepts = (): void => {
+  const empty: DeepPartial<Invoice> = {};
+  const some: DeepPartial<Invoice> = { series: "F001" };
+  const deep: DeepPartial<Invoice> = { client: { addresses: [{ city: "Lima" }] } };
+  const whole: DeepPartial<Invoice> = {
+    series: "F001",
+    createdAt: new Date(),
+    price: { amount: 1 },
+    client: { name: "Ada", addresses: [{ city: "Lima", zip: "15001" }] },
+    span: [new Date(), new Date()],
+  };
+
+  void [empty, some, deep, whole];
+};
+
+const refuses = (): void => {
+  // @ts-expect-error a location still has to be what it is
+  const wrong: DeepPartial<Invoice> = { series: 1 };
+  // @ts-expect-error and so does one further in
+  const nested: DeepPartial<Invoice> = { client: { addresses: [{ city: 1 }] } };
+  // @ts-expect-error a terminal is not taken apart, so half of one is nothing
+  const half: DeepPartial<Invoice> = { createdAt: { getTime: 1 } };
+
+  void [wrong, nested, half];
+};
+
+export type All = [NothingRequired, TerminalStaysWhole, ListsStayLists];
+export { accepts, refuses };

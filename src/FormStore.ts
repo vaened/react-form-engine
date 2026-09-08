@@ -19,16 +19,22 @@ import { PatchWrite } from "./store/value/PatchWrite";
 import { PathValueClassifier } from "./store/value/PathValueClassifier";
 import { ValueStore } from "./store/value/ValueStore";
 import type { ValueWrite } from "./store/value/ValueWrite";
+import type { DeepPartial } from "./types";
 
 export type { FormValues } from "./path";
 
 export type FormMode = "full" | "patch";
 
 export type FormStoreOptions<TValues extends FormValues> = {
-  /** What the form is measured against, and what `reset` returns it to. */
-  defaults: TValues;
+  /**
+   * What the form is measured against, and what `reset` returns it to.
+   *
+   * Nothing in it is required: a form for creating a record is measured against
+   * almost nothing, and a location left out is one the form starts without.
+   */
+  defaults: DeepPartial<TValues>;
   /** Where the form starts, when that is not its base. */
-  values?: TValues;
+  values?: DeepPartial<TValues>;
   mode?: FormMode;
 };
 
@@ -52,8 +58,8 @@ export class FormStore<TValues extends FormValues> {
     this.#value = new ValueStore<TValues>(
       this.#index,
       this.#classifier,
-      isolate(options.values ?? options.defaults, this.#classifier),
-      isolate(options.defaults, this.#classifier),
+      this.#held(options.values ?? options.defaults),
+      this.#held(options.defaults),
     );
     this.#assessor = new StateAssessor(this.#classifier);
     this.#reconciler = new Reconciler(this.#index, this.#state, this.#value, this.#classifier, this.#assessor);
@@ -170,6 +176,19 @@ export class FormStore<TValues extends FormValues> {
         FormStore.#count(this.#value.default(entry)),
       );
     }
+  }
+
+  /**
+   * A copy of what the form was handed, as the shape it says it holds.
+   *
+   * The two describe the same shape and differ only in what is there, which is
+   * what a form is: everything it can hold, less whatever nobody has filled in
+   * yet. Reading a location that was left out answers absent, the same as one
+   * that was never registered — so the missing pieces cost the reader nothing
+   * and the compiler has no way to tell the two apart on its own.
+   */
+  #held(value: DeepPartial<TValues>): TValues {
+    return isolate(value, this.#classifier) as TValues;
   }
 
   static #count(value: unknown): number {
