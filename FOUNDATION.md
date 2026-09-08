@@ -16,7 +16,8 @@ For now, this document describes the architecture, responsibilities, and directi
 - The user does not access the `FormStore` directly.
 - `FormStore` is the real center of the form.
 - `FormStore` owns the real data source, the system's base state, and the internal logic needed to operate on them.
-- Internally, later on, `FormStore` will be composed of other classes or pieces, but that decomposition is not yet defined.
+- Internally, `FormStore` is composed of separate pieces: one owns the structural identity of every location, one owns the base state, and one owns the value.
+- None of those pieces knows the others. An operation that needs more than one of them cannot live inside any of them, and belongs to `FormStore` or to something it composes.
 
 For now, `FormStore` should be understood as the internal representation of a form.
 
@@ -88,6 +89,16 @@ Each `Field` calculates its own state from:
 
 `states` exists so that `FormStore` can answer the base state of any `Field` quickly, without fully recalculating it on every read.
 
+### Assignment
+
+Assigning a value never makes a location observed, and never stops one from being observed. Observation has its own explicit lifecycle.
+
+Assigning reaches a location; it does not declare what that location is. A value whose shape disagrees with what was already claimed there is not a conflict of assignment.
+
+`null` and `undefined` are values a caller may assign, and they are preserved as such.
+
+The absence of a property is therefore not expressed by assigning `undefined` to it. Whether a property is really there is a separate question from what its value is.
+
 ### Arrays
 
 Arrays are a real part of `FormStore`.
@@ -109,6 +120,16 @@ Because of that, an array has its own rules inside the system.
 `useFieldArray` always operates on the real array of the form.
 
 Its responsibility is to allow fine structural operations such as inserting, removing, moving, or swapping elements.
+
+#### Identity of its elements
+
+Each element of an array has an identity of its own, separate from the position it occupies.
+
+Structural operations preserve that identity while positions move around it. That is what allows an element to keep its state and its reactive links after the list is reordered.
+
+Assigning an array as a whole cannot preserve it. The same resulting list could come from an insertion, a reordering, or a full substitution, and nothing in the assigned value says which element corresponds to which one before it.
+
+For that reason, assigning a whole array discards the identities of its elements, along with everything keyed by them, and mints new ones.
 
 ## Control
 
@@ -212,6 +233,10 @@ Every `Field` and every `Node` exists on top of a `Path`.
 - `Field` is a terminal unit located on a route.
 - `Node` is a composite unit located on a route.
 
+What a location is settles when something claims it, and the value living there does not change it. Assigning an object to a `Field` does not turn that location into a `Node`.
+
+A location claimed as a `Field` because nothing was known to live inside it stops being terminal the moment something registers underneath it. It keeps its identity while doing so, so whatever was already keyed by that location survives the change.
+
 ## useForm
 
 `useForm` is the main entry point of the system.
@@ -253,8 +278,19 @@ It interprets it as a partial modification over an already existing base.
 
 For that reason, `usePatchForm` introduces different rules over:
 
+- assignment
 - validation activation
 - the way in which the form expresses its result
+
+##### Assignment under patch semantics
+
+Assigning a value to a `Node` does not replace it.
+
+Only the properties the assigned value carries are written. Everything the value does not name is left as it was: its own value, its state, and the identity of its elements.
+
+A property that is present is written as it came, `null` and `undefined` included. A property that is absent was never meant to be written, so nothing underneath it is visited at all.
+
+An array named by the assigned value is still assigned as a whole, with the consequences that has for the identity of its elements. An array the value does not name is not touched.
 
 ## useFormState
 
