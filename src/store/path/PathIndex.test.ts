@@ -341,6 +341,97 @@ describe("PathIndex", () => {
     });
   });
 
+  /**
+   * A path string alone can only guess what a location holding others is, and
+   * reads a digit as a position. A walk carries what was found there instead,
+   * and the guess is left for where nothing was.
+   */
+  describe("a walk over the path", () => {
+    type Keyed = { byYear: Record<string, { total: number }>; rows: string[] };
+
+    let keyed: PathIndex<Keyed>;
+
+    beforeEach(() => {
+      keyed = new PathIndex<Keyed>(new PathRegistry<Path<Keyed>>());
+    });
+
+    it("takes the location for what was found there, over what the next segment reads like", () => {
+      const total = keyed.ensure("byYear.2026.total", PathKind.Field, [
+        { segment: "byYear", observed: PathKind.Object },
+        { segment: "2026", observed: PathKind.Object },
+        { segment: "total", observed: PathKind.Field },
+      ]);
+
+      expect(total.parent.kind).toBe(PathKind.Object);
+      expect(total.parent.parent?.kind).toBe(PathKind.Object);
+      expect(keyed.describe(total.id)).toBe("byYear.2026.total");
+    });
+
+    it("holds a list to its positions once the value says it is one", () => {
+      expect(() =>
+        keyed.ensure("rows.total" as never, PathKind.Field, [
+          { segment: "rows", observed: PathKind.Array },
+          { segment: "total" },
+        ] as never),
+      ).toThrow(InvalidArrayIndex);
+    });
+
+    it("guesses where the walk found nothing, exactly as a bare path does", () => {
+      const guessed = keyed.ensure("byYear.2026.total", PathKind.Field, [
+        { segment: "byYear" },
+        { segment: "2026" },
+        { segment: "total" },
+      ]);
+
+      expect(guessed.parent.parent?.kind).toBe(PathKind.Array);
+      expect(keyed.ensure("rows.0" as never, PathKind.Field).parent.kind).toBe(PathKind.Array);
+    });
+
+    it("guesses where the walk found a value that holds nobody", () => {
+      const inside = keyed.ensure("byYear.2026.total", PathKind.Field, [
+        { segment: "byYear", observed: PathKind.Field },
+        { segment: "2026" },
+        { segment: "total" },
+      ]);
+
+      expect(inside.parent.parent?.kind).toBe(PathKind.Array);
+    });
+
+    it("reopens a field into what the value holds there, not into what sits inside it", () => {
+      const byYear = keyed.ensure("byYear", PathKind.Field);
+
+      keyed.ensure("byYear.2026.total", PathKind.Field, [
+        { segment: "byYear", observed: PathKind.Object },
+        { segment: "2026", observed: PathKind.Object },
+        { segment: "total", observed: PathKind.Field },
+      ]);
+
+      expect(byYear.kind).toBe(PathKind.Object);
+    });
+
+    it("reopens it into a list when that is what the value holds, whatever sits inside it", () => {
+      const nested = new PathIndex<{ rows: { city: string }[] }>(new PathRegistry());
+      const rows = nested.ensure("rows", PathKind.Field);
+
+      nested.ensure("rows.0.city", PathKind.Field, [
+        { segment: "rows", observed: PathKind.Array },
+        { segment: "0", observed: PathKind.Object },
+        { segment: "city", observed: PathKind.Field },
+      ]);
+
+      expect(rows.kind).toBe(PathKind.Array);
+    });
+
+    it("leaves the location the walk ends on to whoever asked for it", () => {
+      const leaf = keyed.ensure("byYear.2026", PathKind.Object, [
+        { segment: "byYear", observed: PathKind.Object },
+        { segment: "2026", observed: PathKind.Field },
+      ]);
+
+      expect(leaf.kind).toBe(PathKind.Object);
+    });
+  });
+
   describe("reconcile", () => {
     it("reports a field to onField, and never touches onArray", () => {
       const name = index.register("invoice.client.name", PathKind.Field);

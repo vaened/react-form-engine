@@ -5,7 +5,7 @@
 
 import type { FormValues, Path, PathValue } from "./path";
 import { PathIndex } from "./store/path/PathIndex";
-import type { PathIndexChildEntry, PathIndexEntry, RegisterableKind } from "./store/path/types";
+import type { PathIndexChildEntry, PathIndexEntry, RegisterableKind, WalkOf } from "./store/path/types";
 import { PathKind } from "./store/path/types";
 import { Reconciler } from "./store/Reconciler";
 import { FieldState } from "./store/state/FieldState";
@@ -104,9 +104,9 @@ export class FormStore<TValues extends FormValues> {
       return;
     }
 
-    const kind = this.#classifier.classify(this.#reach(path));
+    const walk = this.#walk(path);
 
-    this.#join(this.#index.register(path, kind));
+    this.#join(this.#index.ensure(path, walk[walk.length - 1].observed ?? PathKind.Field, walk));
   }
 
   unregister<TPath extends Path<TValues>>(path: TPath): void {
@@ -138,10 +138,13 @@ export class FormStore<TValues extends FormValues> {
   }
 
   /** Reaches a path in the index, having made sure the value lets it through. */
-  #claim(path: Path<TValues>, kind: RegisterableKind): PathIndexChildEntry {
-    this.#reach(path);
+  #claim<TPath extends Path<TValues>>(path: TPath, kind: RegisterableKind): PathIndexChildEntry {
+    return this.#index.ensure(path, kind, this.#walk(path));
+  }
 
-    return this.#index.ensure(path, kind);
+  /** Every segment of a path, alongside whatever the value holds at it. */
+  #walk<TPath extends Path<TValues>>(path: TPath): WalkOf<TPath> {
+    return this.#value.observe(this.#index.segmentsOf(path));
   }
 
   #join(entry: PathIndexEntry): void {
@@ -169,9 +172,5 @@ export class FormStore<TValues extends FormValues> {
 
   static #count(value: unknown): number {
     return Array.isArray(value) ? value.length : 0;
-  }
-
-  #reach(path: Path<TValues>): unknown {
-    return this.#value.reach(this.#index.segmentsOf(path));
   }
 }

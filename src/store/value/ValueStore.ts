@@ -5,7 +5,7 @@
 
 import type { FormValues } from "../../path";
 import { ObservationChain } from "../observation/ObservationChain";
-import { type EntryId, type EntryTree, type PathIndexEntry, PathKind } from "../path/types";
+import { type EntryId, type EntryTree, type PathIndexEntry, PathKind, type StepsOf } from "../path/types";
 import { FormValue } from "./FormValue";
 import type { PathValueClassifier } from "./PathValueClassifier";
 
@@ -53,6 +53,10 @@ export class ValueStore<TValues extends FormValues = FormValues> {
 
   reach(segments: readonly string[]): unknown {
     return this.#value.reach(segments);
+  }
+
+  observe<TSegments extends readonly string[]>(segments: TSegments): StepsOf<TSegments> {
+    return this.#value.observe(segments);
   }
 
   replace(values: TValues): void {

@@ -64,6 +64,37 @@ export type PathIndexEntry = PathIndexRootEntry | PathIndexChildEntry;
 /** Kind a caller may ask `register` for. Root is owned by the index. */
 export type RegisterableKind = PathKind.Object | PathKind.Array | PathKind.Field;
 
+/**
+ * A segment of a path, and what was found living at it.
+ *
+ * `observed` is absent where nothing lives yet, which is the only case left for
+ * the path string to decide on its own.
+ */
+export type PathStep<TSegment extends string = string> = {
+  readonly segment: TSegment;
+  readonly observed?: RegisterableKind;
+};
+
+/** A path taken apart, each segment kept as the literal it is. */
+export type Split<TPath extends string> = TPath extends `${infer THead}.${infer TRest}`
+  ? [THead, ...Split<TRest>]
+  : [TPath];
+
+export type StepsOf<TSegments extends readonly string[]> = {
+  readonly [TKey in keyof TSegments]: PathStep<TSegments[TKey] & string>;
+};
+
+/**
+ * A walk over a path: its segments in order, each with whatever the value
+ * holds there.
+ *
+ * The segments are the path's own, so a walk cannot describe one path while
+ * being handed in alongside another. That is checked rather than trusted,
+ * which is why the walk is typed against the path instead of being a list of
+ * strings that happens to look right.
+ */
+export type WalkOf<TPath extends string> = StepsOf<Split<TPath>>;
+
 /** Take `children[at]` of the current array entry. */
 export type PositionalStep = { readonly at: number };
 

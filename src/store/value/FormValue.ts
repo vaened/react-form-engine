@@ -5,7 +5,14 @@
 
 import type { FormValues } from "../../path";
 import { SingleEntryCache } from "../../SingleEntryCache";
-import { type EntryTree, type PathIndexEntry, type PathIndexStructuralEntry, PathKind } from "../path/types";
+import {
+  type EntryTree,
+  type PathIndexEntry,
+  type PathIndexStructuralEntry,
+  PathKind,
+  type PathStep,
+  type StepsOf,
+} from "../path/types";
 import { InvalidRootValue, PathInsideValue } from "./errors";
 import { PathValueClassifier } from "./PathValueClassifier";
 import type { ValueContainer } from "./types";
@@ -59,6 +66,53 @@ export class FormValue<TValues extends FormValues = FormValues> {
     }
 
     return current;
+  }
+
+  /**
+   * The same walk as `reach`, saying what it found at every step rather than
+   * only at the end.
+   *
+   * A step past where the value stops says nothing, which is what leaves the
+   * path string to decide. So does one holding nothing: an absent location is
+   * not a field, it is a location nobody has answered for yet.
+   */
+  observe<TSegments extends readonly string[]>(segments: TSegments): StepsOf<TSegments> {
+    const steps: PathStep[] = [];
+
+    let container: ValueContainer = this.#root;
+
+    for (let index = 0; index < segments.length; index++) {
+      const segment = segments[index];
+      const value = FormValue.#at(container, segment);
+
+      if (this.#classifier.isContainer(value)) {
+        steps.push({ segment, observed: Array.isArray(value) ? PathKind.Array : PathKind.Object });
+        container = value;
+        continue;
+      }
+
+      if (value === undefined || value === null) {
+        steps.push({ segment });
+        break;
+      }
+
+      steps.push({ segment, observed: PathKind.Field });
+
+      if (index < segments.length - 1 && PathValueClassifier.isComposite(value)) {
+        throw new PathInsideValue(segments.join("."), segments.slice(0, index + 1).join("."));
+      }
+
+      break;
+    }
+
+    while (steps.length < segments.length) {
+      steps.push({ segment: segments[steps.length] });
+    }
+
+    // A tuple cannot be built by pushing: neither a loop nor `map` keeps a
+    // position, so the one step per segment this makes is stated rather than
+    // shown.
+    return steps as StepsOf<TSegments>;
   }
 
   get value(): TValues {

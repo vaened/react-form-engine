@@ -29,10 +29,13 @@ import {
   type PathIndexRootEntry,
   type PathIndexStructuralEntry,
   PathKind,
+  type PathStep,
   type RegisterableKind,
   type Route,
   type RouteStep,
+  type Split,
   type StructureEvents,
+  type WalkOf,
 } from "./types";
 
 const INDEX_SEGMENT = /^\d+$/;
@@ -103,10 +106,18 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
   /**
    * Ensures the whole branch of `path` exists and remembers how to reach it.
    *
+   * `walk` is the same path with whatever the value holds at each of its
+   * segments, which is what keeps an intermediate from being guessed at. It is
+   * typed against `path`, so one describing a different one does not compile.
+   *
    * `kind` is what a location is created as, never what an existing one is held
    * against: reaching a location is not the same as claiming it.
    */
-  ensure(path: FormPath<TValues>, kind: RegisterableKind): PathIndexChildEntry {
+  ensure<TPath extends FormPath<TValues>>(
+    path: TPath,
+    kind: RegisterableKind,
+    walk?: WalkOf<TPath>,
+  ): PathIndexChildEntry {
     const pathId = this.#paths.register(path);
     const known = this.#routes.get(pathId);
     const reachable = known && this.#reachable(known);
@@ -119,24 +130,31 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
     // Either the path is new, or its route outlived the entries it used to
     // reach. Routes survive structural operations on purpose, so registering
     // again has to rebuild the branch instead of trusting the old one.
-    const segments = this.segmentsOf(path);
+    const walked: readonly PathStep[] = walk ?? PathIndex.#unobserved(this.segmentsOf(path));
     const steps: RouteStep[] = [];
 
     let current: PathIndexEntry = this.#root;
     let anchor: PathIndexEntry = this.#root;
     let leaf: PathIndexChildEntry | null = null;
 
-    for (let index = 0; index < segments.length; index++) {
-      const segment = segments[index];
-      const last = index === segments.length - 1;
-      const childKind = last ? kind : PathIndex.#infer(segments[index + 1]);
+    for (let index = 0; index < walked.length; index++) {
+      const { segment } = walked[index];
+      const last = index === walked.length - 1;
+      const childKind = last ? kind : PathIndex.#holder(walked[index], walked[index + 1].segment);
 
-      const holder = current.kind === PathKind.Field ? this.#open(current, segment) : current;
+      // Only reached below the root, which is never a field, so there is always
+      // a step before this one to say what the location it reopens has to be.
+      const holder =
+        current.kind === PathKind.Field ? this.#open(current, PathIndex.#holder(walked[index - 1], segment)) : current;
 
       let child: PathIndexChildEntry;
 
       if (holder.kind === PathKind.Array) {
-        const position = PathIndex.#toIndex(path, segment);
+        const position = PathIndex.#toIndex(segment);
+
+        if (position === undefined) {
+          throw new InvalidArrayIndex(path, segment);
+        }
 
         child = this.#ensureItem(holder, position, childKind);
         steps.push({ at: position });
@@ -174,8 +192,12 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
   }
 
   /**
-   * The same as `ensure`, one level and without a path string, for a caller
-   * that already holds the parent and is naming its child.
+   * One entry under a parent already in hand, for a caller descending a value
+   * rather than following a path.
+   *
+   * It is what `ensure` steps with, not a smaller version of it: no path is
+   * named here, so nothing is identified and no route is remembered. Reaching
+   * this location again by its path still has to go through `ensure`.
    */
   ensureChild(
     parent: PathIndexRootEntry | PathIndexObjectEntry,
@@ -515,10 +537,10 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
    * It is opened in place rather than replaced because routes hold it by
    * reference, which is why this is the one place that goes around the union.
    */
-  #open(field: PathIndexFieldEntry, inner: string): PathIndexStructuralEntry {
+  #open(field: PathIndexFieldEntry, kind: PathKind.Object | PathKind.Array): PathIndexStructuralEntry {
     const opened = field as unknown as OpenedEntry;
 
-    if (PathIndex.#infer(inner) === PathKind.Array) {
+    if (kind === PathKind.Array) {
       opened.kind = PathKind.Array;
       opened.children = [];
     } else {
@@ -666,42 +688,63 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
    * happened. Neither check needs to know what a segment lands on, so both are
    * answered here, before there is anything to undo.
    */
-  segmentsOf(path: string): string[] {
+  segmentsOf<TPath extends FormPath<TValues>>(path: TPath): Split<TPath> {
     const segments = path.split(".");
 
     for (const segment of segments) {
       PathIndex.#assertValidSegment(segment);
 
-      if (INDEX_SEGMENT.test(segment)) {
-        PathIndex.#toIndex(path, segment);
+      if (INDEX_SEGMENT.test(segment) && PathIndex.#toIndex(segment) === undefined) {
+        throw new InvalidArrayIndex(path, segment);
       }
     }
 
-    return segments;
+    // Splitting a string is where a path stops being one and becomes text, so
+    // the compiler cannot follow the segments back to the path they spell.
+    return segments as Split<TPath>;
   }
 
-  static #toIndex(path: string, segment: string): number {
+  /**
+   * The position a segment names, or nothing when it names none.
+   *
+   * Refusing is left to whoever asked, because only they know the path the
+   * segment came from and the error has to say it.
+   */
+  static #toIndex(segment: string): number | undefined {
     if (!INDEX_SEGMENT.test(segment)) {
-      throw new InvalidArrayIndex(path, segment);
+      return undefined;
     }
 
     const index = Number(segment);
 
     // Registering a position fills every position before it, so an index that
     // cannot be represented exactly would fill forever.
-    if (!Number.isSafeInteger(index)) {
-      throw new InvalidArrayIndex(path, segment);
-    }
-
-    return index;
+    return Number.isSafeInteger(index) ? index : undefined;
   }
 
   /**
-   * A path string is the only information available at registration time, so an
-   * intermediate segment is treated as an array when the segment that follows
-   * it is numeric. An object whose keys are digits would be misread here.
+   * What a location holding others has to be.
+   *
+   * A value that was found there says it outright. A field found there says
+   * nothing usable, since the path reaches inside it and a field holds nobody,
+   * so the reading falls back with the same answer as if nothing were there.
+   */
+  static #holder(step: PathStep, inner: string): PathKind.Array | PathKind.Object {
+    return step.observed === PathKind.Array || step.observed === PathKind.Object
+      ? step.observed
+      : PathIndex.#infer(inner);
+  }
+
+  /**
+   * A path string on its own can only guess, and treats an intermediate as an
+   * array when what follows it is numeric. An object whose keys are digits is
+   * misread here, which is why it is the last resort rather than the first.
    */
   static #infer(next: string): PathKind.Array | PathKind.Object {
     return INDEX_SEGMENT.test(next) ? PathKind.Array : PathKind.Object;
+  }
+
+  static #unobserved(segments: readonly string[]): PathStep[] {
+    return segments.map((segment) => ({ segment }));
   }
 }

@@ -496,6 +496,86 @@ describe("FormStore", () => {
     });
   });
 
+  /**
+   * A path string cannot tell a position from a key that reads like one, so
+   * where the value can answer it is asked instead, and the reading is only
+   * guessed at where nothing lives yet.
+   */
+  describe("what a location turns out to be", () => {
+    type Keyed = { byYear: Record<string, { total: number }>; rows: string[] };
+
+    const keyed = (values: Partial<Keyed>) => new FormStore<Keyed>({ defaults: values as Keyed });
+
+    it("reads a digit as a key when that is what holds it", () => {
+      const form = keyed({ byYear: { 2026: { total: 5 } }, rows: [] });
+
+      form.register("byYear.2026.total");
+
+      expect(form.values.byYear).toEqual({ 2026: { total: 5 } });
+      expect(Array.isArray(form.values.byYear)).toBe(false);
+    });
+
+    it("takes on one location for one key, rather than every position up to it", () => {
+      const form = keyed({ byYear: {}, rows: [] });
+
+      form.register("byYear.2026.total");
+      form.set("byYear.2026.total", 9);
+
+      expect(Object.keys(form.values.byYear)).toEqual(["2026"]);
+    });
+
+    it("refuses a key on something the value holds as a list", () => {
+      const form = keyed({ byYear: {}, rows: ["a", "b"] });
+
+      expect(() => form.register("rows.total" as never)).toThrow(InvalidArrayIndex);
+    });
+
+    it("refuses a position a list could never hold", () => {
+      const form = keyed({ byYear: {}, rows: ["a", "b"] });
+
+      expect(() => form.register("rows.-1" as never)).toThrow(InvalidArrayIndex);
+      expect(() => form.register("rows.1e3" as never)).toThrow(InvalidArrayIndex);
+    });
+
+    it("still reaches a position when the value does hold a list", () => {
+      const form = keyed({ byYear: {}, rows: ["a", "b"] });
+
+      form.register("rows.1");
+
+      expect(form.getState("rows.1")).toBeDefined();
+    });
+
+    it("falls back to the path string where nothing lives yet", () => {
+      const form = keyed({});
+
+      form.register("rows.1");
+      form.set("rows.1", "b");
+
+      expect(Array.isArray(form.values.rows)).toBe(true);
+    });
+
+    it("reopens a location as what the value holds there, not as what sits inside it", () => {
+      const form = new FormStore<{ addresses: { city: string }[] }>({ defaults: {} as never });
+
+      form.register("addresses" as never);
+      form.set("addresses", [{ city: "Lima" }]);
+      form.register("addresses.0.city");
+
+      expect(form.getState("addresses")?.kind).toBe(PathKind.Array);
+      expect(form.getState("addresses.0.city")).toBeDefined();
+      expect(form.values.addresses).toEqual([{ city: "Lima" }]);
+    });
+
+    it("keeps reading a key as a key once the value arrives to say so", () => {
+      const form = keyed({ byYear: { 2026: { total: 5 } }, rows: [] });
+
+      form.register("byYear.2026.total");
+      form.set("byYear.2026.total", 9);
+
+      expect(form.values.byYear).toEqual({ 2026: { total: 9 } });
+    });
+  });
+
   describe("an array that holds a different number of items than its base", () => {
     const addresses = (...cities: string[]) => cities.map((city) => ({ city, reference: "-" }));
     const dirty = (path: "invoice.client.addresses") =>
