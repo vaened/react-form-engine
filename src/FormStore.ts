@@ -19,7 +19,6 @@ import { PatchWrite } from "./store/value/PatchWrite";
 import { PathValueClassifier } from "./store/value/PathValueClassifier";
 import { ValueStore } from "./store/value/ValueStore";
 import type { ValueWrite } from "./store/value/ValueWrite";
-import type { DeepReadonly } from "./types";
 
 export type { FormValues } from "./path";
 
@@ -69,21 +68,24 @@ export class FormStore<TValues extends FormValues> {
   }
 
   /**
-   * The live value, handed over as something to read.
+   * The live value, handed over as it was declared.
    *
-   * Reaching in and changing it would leave the form believing whatever it
-   * believed before: nothing is reassessed and nobody is told. Changing a value
-   * is what `set` is for.
+   * Reaching in and changing it leaves the form believing whatever it believed
+   * before: nothing is reassessed and nobody is told. Changing a value is what
+   * `set` is for.
+   *
+   * It is not handed over as something read-only, because a form value exists
+   * to be given to whatever the form was filled in for, and a value narrowed
+   * that way stops being the type its owner declared. What that costs is a
+   * promise the type cannot keep, which it never could: the narrowing was a
+   * request, and a request is escaped with a cast.
    */
-  get values(): DeepReadonly<TValues> {
-    // Nothing is converted here: the same object is handed over with less that
-    // can be done to it. It has to be said out loud because a conditional type
-    // over a parameter that is still open cannot be checked against itself.
-    return this.#value.value as DeepReadonly<TValues>;
+  get values(): TValues {
+    return this.#value.value;
   }
 
-  get defaults(): DeepReadonly<TValues> {
-    return this.#value.defaults as DeepReadonly<TValues>;
+  get defaults(): TValues {
+    return this.#value.defaults;
   }
 
   get identifier(): PathIdentifier<Path<TValues>> {
