@@ -87,3 +87,43 @@ void invalidDateFieldPath;
 void invalidFileFieldPath;
 void invalidFileListFieldPath;
 void invalidFileListArrayPath;
+
+/**
+ * These shapes are said here rather than taken from the DOM, so that a form on
+ * a server or a phone can be typed. Types are compared by their members, so a
+ * shape said loosely enough would take a form's own records for one of these
+ * and stop every path that runs through them.
+ */
+type Attachment = { size: number; type: string; url: string };
+type Upload = { size: number; type: string; lastModified: number; name: string; owner: string };
+type Page = { length: number; item(index: number): { name: string } | null };
+
+type BusinessValues = {
+  invoice: {
+    series: string;
+    attachment: Attachment;
+    upload: Upload;
+    page: Page;
+  };
+};
+
+type OwnRecordsAreNotHostNative = [
+  Expect<Equal<Extends<Attachment, HostNativeObject>, false>>,
+  Expect<Equal<Extends<Upload, HostNativeObject>, false>>,
+  Expect<Equal<Extends<Page, HostNativeObject>, false>>,
+];
+
+type OwnRecordsKeepTheirPaths = [
+  Expect<Extends<"invoice.attachment.url", Path<BusinessValues>>>,
+  Expect<Extends<"invoice.upload.owner", Path<BusinessValues>>>,
+  Expect<Extends<"invoice.attachment.size", Path<BusinessValues>>>,
+];
+
+/** And what the host really gives is still one value, whole. */
+type HostStaysTerminal = [
+  Expect<Extends<Blob, HostNativeObject>>,
+  Expect<Extends<File, HostNativeObject>>,
+  Expect<Extends<FileList, HostNativeObject>>,
+];
+
+export type All = [OwnRecordsAreNotHostNative, OwnRecordsKeepTheirPaths, HostStaysTerminal];
