@@ -19,4 +19,3 @@ export type {
   StateNodeEntry,
   StateObjectEntry,
 } from "./types";
-export { StateKind } from "./types";

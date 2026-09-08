@@ -3,16 +3,10 @@
  * @link https://vaened.dev DevFolio
  */
 
-import type { EntryId } from "../path/types";
+import type { EntryId, PathKind } from "../path/types";
 import type { ArrayStateAggregate } from "./ArrayStateAggregate";
 import type { FieldState } from "./FieldState";
 import type { StateAggregate } from "./StateAggregate";
-
-export enum StateKind {
-  Field = 1,
-  Node = 2,
-  Array = 3,
-}
 
 /**
  * What can be asked of a location, whichever kind of state answers for it.
@@ -42,8 +36,14 @@ type StateBase = {
 
 /** A registered field owns its state outright. */
 export type StateFieldEntry = StateBase & {
-  readonly kind: StateKind.Field;
+  readonly kind: PathKind.Field;
   readonly state: FieldState;
+};
+
+/** Always materialized, so a form can always answer for itself as a whole. */
+export type StateRootEntry = StateBase & {
+  readonly kind: PathKind.Root;
+  readonly state: StateAggregate;
 };
 
 /**
@@ -51,16 +51,16 @@ export type StateFieldEntry = StateBase & {
  * counters of how many reactive children carry each one.
  */
 export type StateObjectEntry = StateBase & {
-  readonly kind: StateKind.Node;
+  readonly kind: PathKind.Object;
   readonly state: StateAggregate;
 };
 
 /** The one location that also answers for something no child of it can. */
 export type StateArrayEntry = StateBase & {
-  readonly kind: StateKind.Array;
+  readonly kind: PathKind.Array;
   readonly state: ArrayStateAggregate;
 };
 
-export type StateNodeEntry = StateObjectEntry | StateArrayEntry;
+export type StateNodeEntry = StateRootEntry | StateObjectEntry | StateArrayEntry;
 
 export type StateEntry = StateFieldEntry | StateNodeEntry;

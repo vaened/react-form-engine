@@ -6,9 +6,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { FormStore } from "./FormStore";
 import { InvalidArrayIndex, InvalidPathSegment } from "./store/path/errors";
+import { PathKind } from "./store/path/types";
 import { hasFlag, StateFlag } from "./store/state/StateFlag";
 import type { StateEntry, StateFieldEntry } from "./store/state/types";
-import { StateKind } from "./store/state/types";
 import { CircularPatchValue, CircularValue, PathInsideValue } from "./store/value/errors";
 
 /** Shape of docs/FormValue.example.json. */
@@ -58,7 +58,7 @@ describe("FormStore", () => {
       const state = store.getState("invoice.client.name");
 
       expect(state).toBeDefined();
-      expect(state?.kind).toBe(StateKind.Field);
+      expect(state?.kind).toBe(PathKind.Field);
     });
 
     it("registers a branch nobody set yet, since an absent value classifies as a field", () => {
@@ -66,7 +66,7 @@ describe("FormStore", () => {
 
       empty.register("invoice.client.name");
 
-      expect(empty.getState("invoice.client.name")?.kind).toBe(StateKind.Field);
+      expect(empty.getState("invoice.client.name")?.kind).toBe(PathKind.Field);
     });
 
     it("is idempotent: registering twice does not duplicate anything", () => {
@@ -139,7 +139,7 @@ describe("FormStore", () => {
     it("appears as a node, not a field", () => {
       store.register("invoice.client");
 
-      expect(store.getState("invoice.client")?.kind).toBe(StateKind.Node);
+      expect(store.getState("invoice.client")?.kind).toBe(PathKind.Object);
     });
 
     it("is idempotent: registering twice does not duplicate or reset it", () => {
@@ -185,11 +185,11 @@ describe("FormStore", () => {
 
       empty.register("invoice.client");
 
-      expect(empty.getState("invoice.client")?.kind).toBe(StateKind.Field);
+      expect(empty.getState("invoice.client")?.kind).toBe(PathKind.Field);
 
       empty.register("invoice.client.name");
 
-      expect(empty.getState("invoice.client")?.kind).toBe(StateKind.Node);
+      expect(empty.getState("invoice.client")?.kind).toBe(PathKind.Object);
     });
 
     it("stops being a field the moment a write reaches through it", () => {
@@ -197,11 +197,11 @@ describe("FormStore", () => {
 
       empty.register("invoice.client");
 
-      expect(empty.getState("invoice.client")?.kind).toBe(StateKind.Field);
+      expect(empty.getState("invoice.client")?.kind).toBe(PathKind.Field);
 
       empty.set("invoice.client.name", "Ada Lovelace");
 
-      expect(empty.getState("invoice.client")?.kind).toBe(StateKind.Node);
+      expect(empty.getState("invoice.client")?.kind).toBe(PathKind.Object);
     });
 
     it("can still be unregistered afterwards, from the kind it is now", () => {
@@ -405,7 +405,7 @@ describe("FormStore", () => {
 
       const field = store.getState("invoice.client.addresses.0.city") as StateFieldEntry;
 
-      expect(field.kind).toBe(StateKind.Field);
+      expect(field.kind).toBe(PathKind.Field);
       expect(hasFlag(field.state.flags, StateFlag.Dirty)).toBe(true);
     });
   });
@@ -980,7 +980,7 @@ describe("FormStore", () => {
 
       expect(() => empty.register("invoice.client.__proto__" as never)).toThrow(InvalidPathSegment);
 
-      expect(empty.getState("invoice.client")?.kind).toBe(StateKind.Field);
+      expect(empty.getState("invoice.client")?.kind).toBe(PathKind.Field);
     });
 
     it("leaves it alone on an index no array could ever hold", () => {
@@ -988,7 +988,7 @@ describe("FormStore", () => {
 
       expect(() => empty.register("invoice.client.99999999999999999999" as never)).toThrow(InvalidArrayIndex);
 
-      expect(empty.getState("invoice.client")?.kind).toBe(StateKind.Field);
+      expect(empty.getState("invoice.client")?.kind).toBe(PathKind.Field);
     });
 
     it("says nothing happened, not even to whoever watches the shape", () => {
@@ -996,7 +996,7 @@ describe("FormStore", () => {
 
       expect(() => empty.set("invoice.client.__proto__" as never, "x" as never)).toThrow(InvalidPathSegment);
 
-      expect(empty.getState("invoice.client")?.kind).toBe(StateKind.Field);
+      expect(empty.getState("invoice.client")?.kind).toBe(PathKind.Field);
     });
   });
 

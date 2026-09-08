@@ -16,7 +16,6 @@ import { StateAggregate } from "./StateAggregate";
 import { hasFlag, StateFlag } from "./StateFlag";
 import { StateGraph } from "./StateGraph";
 import type { StateEntry, StateFieldEntry, StateNodeEntry } from "./types";
-import { StateKind } from "./types";
 
 const { Dirty, Touched, Invalid } = StateFlag;
 
@@ -39,6 +38,35 @@ describe("StateGraph", () => {
   });
 
   const has = (entry: StateEntry, flag: StateFlag) => hasFlag(entry.state.flags, flag);
+
+  /**
+   * The two halves are keyed by the same identity and describe the same
+   * location, so a location that is one thing in the shape and another in the
+   * state is a form that cannot be read consistently.
+   */
+  describe("what a location is, said the same way here as in the shape", () => {
+    it("agrees with the shape for every kind a location can be", () => {
+      graph.register(form.city0);
+      graph.materialize(form.client);
+      graph.materialize(form.addresses);
+
+      for (const id of [form.city0, form.client, form.addresses, form.root]) {
+        expect(graph.entry(id).kind).toBe(form.index.entry(id).kind);
+      }
+    });
+
+    it("keeps agreeing once a field turns out to hold others", () => {
+      const index = new PathIndex<{ invoice: { client: { name: string } } }>(new PathRegistry());
+      const client = index.register("invoice.client" as Path<never>, PathKind.Field);
+      const promoting = new StateGraph(index);
+
+      promoting.register(client.id);
+      index.register("invoice.client.name" as Path<never>, PathKind.Field);
+
+      expect(promoting.entry(client.id).kind).toBe(index.entry(client.id).kind);
+      expect(promoting.entry(client.id).kind).toBe(PathKind.Object);
+    });
+  });
 
   describe("root", () => {
     it("exists from the start with nothing on it", () => {
@@ -789,7 +817,7 @@ describe("StateGraph", () => {
       const promoted = graph.register(name.id).parent;
 
       expect(promoted?.id).toBe(invoice.id);
-      expect(promoted?.kind).toBe(StateKind.Node);
+      expect(promoted?.kind).toBe(PathKind.Object);
     });
 
     it("discounts what it contributed as a field before the promotion lands", () => {

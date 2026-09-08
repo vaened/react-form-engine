@@ -9,7 +9,7 @@ import { ArrayStateAggregate } from "./ArrayStateAggregate";
 import { StateAggregateUnderflow, StateKindConflict } from "./errors";
 import { FieldState } from "./FieldState";
 import { StateAggregate } from "./StateAggregate";
-import { type StateArrayEntry, type StateEntry, type StateFieldEntry, StateKind, type StateNodeEntry } from "./types";
+import type { StateArrayEntry, StateEntry, StateFieldEntry, StateNodeEntry } from "./types";
 
 /** Shared so that a keystroke that moves nothing does not allocate to say so. */
 const NOTHING_MOVED: readonly StateEntry[] = Object.freeze([]);
@@ -35,7 +35,7 @@ export class StateGraph {
     this.#tree = tree;
     this.#chain = new ObservationChain<StateEntry, StateNodeEntry>(tree, {
       id: tree.root().id,
-      kind: StateKind.Node,
+      kind: PathKind.Root,
       parent: null,
       state: new StateAggregate(),
     });
@@ -78,7 +78,7 @@ export class StateGraph {
       return field;
     }
 
-    const field: StateFieldEntry = { id, kind: StateKind.Field, parent: null, state: initial };
+    const field: StateFieldEntry = { id, kind: PathKind.Field, parent: null, state: initial };
 
     this.#chain.join(field);
     this.#propagate(field.parent, 0, field.state.flags);
@@ -231,7 +231,7 @@ export class StateGraph {
   #reopened(id: EntryId): void {
     const entry = this.#chain.find(id);
 
-    if (!entry || entry.kind !== StateKind.Field) {
+    if (!entry || entry.kind !== PathKind.Field) {
       return;
     }
 
@@ -349,29 +349,29 @@ export class StateGraph {
   /** A location that holds others answers with whatever its kind can answer with. */
   #hold(id: EntryId): StateNodeEntry {
     return this.#tree.entry(id).kind === PathKind.Array
-      ? { id, kind: StateKind.Array, parent: null, state: new ArrayStateAggregate() }
-      : { id, kind: StateKind.Node, parent: null, state: new StateAggregate() };
+      ? { id, kind: PathKind.Array, parent: null, state: new ArrayStateAggregate() }
+      : { id, kind: PathKind.Object, parent: null, state: new StateAggregate() };
   }
 
   static #asField(entry: StateEntry): StateFieldEntry {
-    if (entry.kind !== StateKind.Field) {
-      throw new StateKindConflict(entry.id as number, entry.kind, StateKind.Field);
+    if (entry.kind !== PathKind.Field) {
+      throw new StateKindConflict(entry.id as number, entry.kind, PathKind.Field);
     }
 
     return entry;
   }
 
   static #asNode(entry: StateEntry): StateNodeEntry {
-    if (entry.kind === StateKind.Field) {
-      throw new StateKindConflict(entry.id as number, entry.kind, StateKind.Node);
+    if (entry.kind === PathKind.Field) {
+      throw new StateKindConflict(entry.id as number, entry.kind, PathKind.Object);
     }
 
     return entry;
   }
 
   static #asArray(entry: StateEntry): StateArrayEntry {
-    if (entry.kind !== StateKind.Array) {
-      throw new StateKindConflict(entry.id as number, entry.kind, StateKind.Array);
+    if (entry.kind !== PathKind.Array) {
+      throw new StateKindConflict(entry.id as number, entry.kind, PathKind.Array);
     }
 
     return entry;

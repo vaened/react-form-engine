@@ -3,10 +3,10 @@
  * @link https://vaened.dev DevFolio
  */
 
-import type { StateKind } from "./types";
+import type { PathKind } from "../path/types";
 
 export class StateKindConflict extends Error {
-  constructor(id: number, current: StateKind, expected: StateKind) {
+  constructor(id: number, current: PathKind, expected: PathKind) {
     super(`Entry "${id}" is materialized as "${current}", not "${expected}".`);
     this.name = "StateKindConflict";
   }
