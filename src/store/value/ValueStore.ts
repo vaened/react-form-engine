@@ -51,10 +51,6 @@ export class ValueStore<TValues extends FormValues = FormValues> {
     return this.#value.default(entry);
   }
 
-  reach(segments: readonly string[]): unknown {
-    return this.#value.reach(segments);
-  }
-
   observe<TSegments extends readonly string[]>(segments: TSegments): StepsOf<TSegments> {
     return this.#value.observe(segments);
   }

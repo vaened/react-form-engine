@@ -43,38 +43,16 @@ export class FormValue<TValues extends FormValues = FormValues> {
   }
 
   /**
-   * The value a run of names lands on, for a caller holding no entry yet.
-   *
-   * A branch that is not there is `undefined`, which is what registering ahead
-   * of a value looks like. A location the form holds as one value is the one
-   * thing it refuses to go into: its parts are not properties, so there is
-   * nothing underneath to reach.
-   */
-  reach(segments: readonly string[]): unknown {
-    let current: unknown = this.#root;
-
-    for (let index = 0; index < segments.length; index++) {
-      if (!this.#classifier.isContainer(current)) {
-        if (PathValueClassifier.isComposite(current)) {
-          throw new PathInsideValue(segments.join("."), segments.slice(0, index).join("."));
-        }
-
-        return undefined;
-      }
-
-      current = FormValue.#at(current, segments[index]);
-    }
-
-    return current;
-  }
-
-  /**
-   * The same walk as `reach`, saying what it found at every step rather than
-   * only at the end.
+   * What lives at every name of a run of them, for a caller holding no entry
+   * yet.
    *
    * A step past where the value stops says nothing, which is what leaves the
    * path string to decide. So does one holding nothing: an absent location is
    * not a field, it is a location nobody has answered for yet.
+   *
+   * A location the form holds as one value is the one thing it refuses to go
+   * into: its parts are not properties, so there is nothing underneath to
+   * reach.
    */
   observe<TSegments extends readonly string[]>(segments: TSegments): StepsOf<TSegments> {
     const steps: PathStep[] = [];
