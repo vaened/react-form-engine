@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { FormStore } from "./FormStore";
 import { InvalidArrayIndex, InvalidPathSegment } from "./store/path/errors";
 import { hasFlag, StateFlag } from "./store/state/StateFlag";
-import type { StateFieldEntry } from "./store/state/types";
+import type { StateEntry, StateFieldEntry } from "./store/state/types";
 import { StateKind } from "./store/state/types";
 import { CircularPatchValue, CircularValue, PathInsideValue } from "./store/value/errors";
 
@@ -390,12 +390,12 @@ describe("FormStore", () => {
       expect(hasFlag(field.state.flags, StateFlag.Dirty)).toBe(true);
     });
 
-    it("finds nothing for a stale path once its array item is destroyed and rebuilt", () => {
-      store.register("invoice.client.addresses.0.city");
+    it("finds nothing for a stale path once the array it sat in no longer reaches that position", () => {
+      store.register("invoice.client.addresses.1.city");
 
       store.set("invoice.client.addresses", [{ city: "Trujillo", reference: "cerca al mercado" }]);
 
-      expect(store.getState("invoice.client.addresses.0.city")).toBeUndefined();
+      expect(store.getState("invoice.client.addresses.1.city")).toBeUndefined();
     });
 
     it("compares a freshly replaced array item against whatever default still occupies that position", () => {
@@ -407,6 +407,92 @@ describe("FormStore", () => {
 
       expect(field.kind).toBe(StateKind.Field);
       expect(hasFlag(field.state.flags, StateFlag.Dirty)).toBe(true);
+    });
+  });
+
+  describe("writing a whole array", () => {
+    const addresses = (...cities: string[]) => cities.map((city) => ({ city, reference: "-" }));
+
+    it("keeps a field watching a position the new value still reaches", () => {
+      store.register("invoice.client.addresses.0.city");
+
+      store.set("invoice.client.addresses", addresses("Trujillo"));
+
+      expect(store.getState("invoice.client.addresses.0.city")).toBeDefined();
+    });
+
+    it("keeps it as the very same entry, so whoever holds it is still holding it", () => {
+      store.register("invoice.client.addresses.0.city");
+
+      const held = store.getState("invoice.client.addresses.0.city");
+
+      store.set("invoice.client.addresses", addresses("Trujillo"));
+
+      expect(store.getState("invoice.client.addresses.0.city")).toBe(held);
+    });
+
+    it("reassesses the fields inside, however deep, instead of leaving them behind", () => {
+      store.register("invoice.client.addresses.0.city");
+
+      store.set("invoice.client.addresses", addresses("Trujillo"));
+
+      const field = store.getState("invoice.client.addresses.0.city") as StateFieldEntry;
+
+      expect(hasFlag(field.state.flags, StateFlag.Dirty)).toBe(true);
+    });
+
+    it("answers for itself as a whole, rather than reporting clean with nobody left to ask", () => {
+      store.register("invoice.client.addresses");
+      store.register("invoice.client.addresses.0.city");
+
+      store.set("invoice.client.addresses", addresses("Trujillo"));
+
+      const node = store.getState("invoice.client.addresses");
+
+      expect(node).toBeDefined();
+      expect(hasFlag((node as StateEntry).state.flags, StateFlag.Dirty)).toBe(true);
+    });
+
+    it("comes back clean once the value it is given matches the default again", () => {
+      store.register("invoice.client.addresses");
+      store.register("invoice.client.addresses.0.city");
+
+      store.set("invoice.client.addresses", addresses("Trujillo"));
+      store.set("invoice.client.addresses", [{ city: "Lima", reference: "Frente al parque principal" }]);
+
+      const node = store.getState("invoice.client.addresses") as StateEntry;
+
+      expect(hasFlag(node.state.flags, StateFlag.Dirty)).toBe(false);
+    });
+
+    it("lets go of the positions a shorter value no longer reaches", () => {
+      store.register("invoice.client.addresses.0.city");
+      store.register("invoice.client.addresses.2.city");
+
+      store.set("invoice.client.addresses", addresses("Trujillo"));
+
+      expect(store.getState("invoice.client.addresses.0.city")).toBeDefined();
+      expect(store.getState("invoice.client.addresses.1.city")).toBeUndefined();
+      expect(store.getState("invoice.client.addresses.2.city")).toBeUndefined();
+    });
+
+    it("takes on the positions a longer value brings, without touching the ones already there", () => {
+      store.register("invoice.client.addresses.0.city");
+
+      const held = store.getState("invoice.client.addresses.0.city");
+
+      store.set("invoice.client.addresses", addresses("Trujillo", "Piura", "Cusco"));
+
+      expect(store.getState("invoice.client.addresses.0.city")).toBe(held);
+      expect(store.values.invoice.client.addresses).toHaveLength(3);
+    });
+
+    it("rebuilds a position whose item stopped being the kind of thing it was", () => {
+      store.register("invoice.client.phones.0");
+
+      store.set("invoice.client.phones", [{ nested: true }] as never);
+
+      expect(store.getState("invoice.client.phones.0")).toBeUndefined();
     });
   });
 
@@ -463,13 +549,16 @@ describe("FormStore", () => {
       expect(patch.values.invoice.client.addresses[0]?.city).toBe("Lima");
     });
 
-    it("replaces an array the value does name, discarding its items", () => {
+    it("replaces an array the value does name outright, rather than merging into it", () => {
       patch.register("invoice.client.addresses.0.city");
 
-      patch.set("invoice.client", { addresses: [{ city: "Trujillo", reference: "cerca al mercado" }] } as never);
+      patch.set("invoice.client", { addresses: [{ city: "Trujillo" }] } as never);
 
-      expect(patch.getState("invoice.client.addresses.0.city")).toBeUndefined();
-      expect(patch.values.invoice.client.addresses[0]?.city).toBe("Trujillo");
+      expect(patch.values.invoice.client.addresses).toEqual([{ city: "Trujillo" }]);
+
+      const field = patch.getState("invoice.client.addresses.0.city") as StateFieldEntry;
+
+      expect(hasFlag(field.state.flags, StateFlag.Dirty)).toBe(true);
     });
 
     it("still replaces outright when the value is not an object", () => {

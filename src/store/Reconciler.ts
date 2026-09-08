@@ -20,11 +20,14 @@ import type { ValueStore } from "./value/ValueStore";
 /**
  * Brings a location's observed state back in step with a value it just received.
  *
- * A field answers for itself. An object hands the question down to each of its
- * children, on the assumption that a key still names the same place it always
- * did. An array gets no such assumption — position was never identity here — so
- * its old items are discarded whole, with whatever they held, and its new ones
- * are born fresh, exactly as anything registering for the first time would be.
+ * A field answers for itself, and everything else hands the question down: a
+ * name reaches the location it always reached, so what was watching there is
+ * still watching there and only has to read again.
+ *
+ * An array is the one that has to be told first, because how many positions it
+ * has is the value's to decide. It gains the ones the value brought, loses the
+ * ones the value stopped reaching, and rebuilds any whose item is no longer the
+ * kind of thing it was.
  */
 export class Reconciler<TValues extends FormValues = FormValues> {
   readonly #index: PathIndex<TValues>;
@@ -79,10 +82,24 @@ export class Reconciler<TValues extends FormValues = FormValues> {
   }
 
   #array(array: PathIndexArrayEntry): void {
-    this.#index.clear(array.id);
+    const items = Reconciler.#itemsOf(this.#value.read(array));
 
-    for (const itemValue of Reconciler.#itemsOf(this.#value.read(array))) {
-      this.#index.append(array.id, this.#classifier.classify(itemValue));
+    this.#index.truncate(array.id, items.length);
+
+    const kept = array.children.length;
+
+    for (let position = 0; position < items.length; position++) {
+      const kind = this.#classifier.classify(items[position]);
+
+      if (position >= kept) {
+        this.#index.append(array.id, kind);
+        continue;
+      }
+
+      if (array.children[position].kind !== kind) {
+        this.#index.remove(array.id, position);
+        this.#index.insert(array.id, position, kind);
+      }
     }
   }
 

@@ -300,12 +300,13 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
   }
 
   /**
-   * Walks down from `id`, stopping the instant a field or an array answers for
-   * itself, and descending through anything else on the assumption that a key
-   * still names the same location it always did.
+   * Walks down from `id`, stopping the instant a field answers for itself and
+   * descending through anything else, on the assumption that a name still
+   * reaches the location it always reached.
    *
-   * An array never gets that assumption: position is not identity, so nothing
-   * below one can be reached this way. Only the array itself is reported.
+   * An array is told before the walk goes on, because how many positions it
+   * has is the value's to decide and the ones that outlive the value have to
+   * be gone before anything looks for them.
    */
   reconcile(
     id: EntryId,
@@ -321,7 +322,6 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
 
     if (entry.kind === PathKind.Array) {
       onArray(entry);
-      return;
     }
 
     for (const child of PathIndex.#children(entry)) {
@@ -393,28 +393,34 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
   }
 
   /**
-   * Empties an array in one operation.
+   * Drops every position from `length` onward in one operation.
    *
    * Taking the items out one at a time shifts the order on every step and says
-   * what went once per item; emptying is one thing that happens, so it walks
-   * what is inside once and says it once.
+   * what went once per item; losing a tail is one thing that happens, so it
+   * walks what is inside once and says it once.
    */
-  clear(arrayId: EntryId): void {
+  truncate(arrayId: EntryId, length: number): void {
     const array = this.#array(arrayId);
 
-    if (array.children.length === 0) {
+    if (length >= array.children.length) {
       return;
     }
 
+    PathIndex.#assertPosition(array, length, array.children.length);
+
     const gone: PathIndexEntry[] = [];
 
-    for (const item of array.children) {
-      this.#forget(item, gone);
+    for (let position = length; position < array.children.length; position++) {
+      this.#forget(array.children[position], gone);
     }
 
-    array.children.length = 0;
+    array.children.length = length;
 
     this.#events.emit("discarded", gone);
+  }
+
+  clear(arrayId: EntryId): void {
+    this.truncate(arrayId, 0);
   }
 
   move(arrayId: EntryId, from: number, to: number): void {

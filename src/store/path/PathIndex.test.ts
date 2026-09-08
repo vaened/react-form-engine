@@ -357,22 +357,20 @@ describe("PathIndex", () => {
       expect(arrays).toEqual([]);
     });
 
-    it("reports an array to onArray without descending into its items", () => {
-      const { addresses } = registerAddresses();
-      const fields: EntryId[] = [];
-      const arrays: EntryId[] = [];
+    it("tells an array how many positions it has before going on into them", () => {
+      const { addresses, lima, arequipa } = registerAddresses();
+      const seen: string[] = [];
 
       index.reconcile(
         addresses.id,
-        (field) => fields.push(field.id),
-        (array) => arrays.push(array.id),
+        (field) => seen.push(`field:${field.id}`),
+        (array) => seen.push(`array:${array.id}`),
       );
 
-      expect(arrays).toEqual([addresses.id]);
-      expect(fields).toEqual([]);
+      expect(seen).toEqual([`array:${addresses.id}`, `field:${lima.id}`, `field:${arequipa.id}`]);
     });
 
-    it("descends through objects at any depth, stopping only at a field or an array", () => {
+    it("reaches every field at any depth, telling each array it passes through", () => {
       const name = index.register("invoice.client.name", PathKind.Field);
       const { addresses, lima, arequipa } = registerAddresses();
       const client = index.register("invoice.client", PathKind.Object);
@@ -385,10 +383,8 @@ describe("PathIndex", () => {
         (array) => arrays.push(array.id),
       );
 
-      expect(fields).toEqual([name.id]);
+      expect(fields).toEqual([name.id, lima.id, arequipa.id]);
       expect(arrays).toEqual([addresses.id]);
-      expect(fields).not.toContain(lima.id);
-      expect(fields).not.toContain(arequipa.id);
     });
   });
 

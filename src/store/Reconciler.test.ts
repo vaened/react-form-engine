@@ -130,46 +130,51 @@ describe("Reconciler", () => {
   });
 
   describe("an array", () => {
-    it("discards every old item along with whatever state and value they held", () => {
+    it("keeps the positions the value still reaches, and lets go of the ones past its end", () => {
       state.register(form.city0);
       value.register(form.city0);
+      state.register(form.city1);
+      value.register(form.city1);
 
       value.write(form.index.entry(form.addresses), [{ city: "Trujillo", reference: "cerca al mercado" }], () => {});
       reconciler.reconcile(form.index.entry(form.addresses));
 
-      expect(state.has(form.city0)).toBe(false);
-      expect(value.has(form.city0)).toBe(false);
-      expect(form.index.find(form.city0)).toBeUndefined();
-      expect(form.index.find(form.address0)).toBeUndefined();
+      expect(form.index.find(form.address0)).toBeDefined();
+      expect(state.has(form.city0)).toBe(true);
+      expect(value.has(form.city0)).toBe(true);
+
+      expect(form.index.find(form.address1)).toBeUndefined();
+      expect(state.has(form.city1)).toBe(false);
+      expect(value.has(form.city1)).toBe(false);
     });
 
-    it("fully releases an old item even when more than one watcher joined the same field", () => {
+    it("fully releases a discarded item even when more than one watcher joined the same field", () => {
       state.register(form.city0);
       state.register(form.city0); // a second watcher on the exact same field
       value.register(form.city0);
       value.register(form.city0);
 
-      value.write(form.index.entry(form.addresses), [{ city: "Trujillo", reference: "cerca al mercado" }], () => {});
+      value.write(form.index.entry(form.addresses), [], () => {});
       reconciler.reconcile(form.index.entry(form.addresses));
 
       expect(state.has(form.city0)).toBe(false);
       expect(value.has(form.city0)).toBe(false);
     });
 
-    it("fully releases an old item even when more than one watcher joined the item node itself", () => {
+    it("fully releases a discarded item even when more than one watcher joined the item node itself", () => {
       state.materialize(form.address0);
       state.materialize(form.address0); // a second watcher on the whole item
       value.materialize(form.address0);
       value.materialize(form.address0);
 
-      value.write(form.index.entry(form.addresses), [{ city: "Trujillo", reference: "cerca al mercado" }], () => {});
+      value.write(form.index.entry(form.addresses), [], () => {});
       reconciler.reconcile(form.index.entry(form.addresses));
 
       expect(state.has(form.address0)).toBe(false);
       expect(value.has(form.address0)).toBe(false);
     });
 
-    it("mints a fresh object identity for every new object item", () => {
+    it("mints an identity only for the positions the value brought", () => {
       value.write(
         form.index.entry(form.addresses),
         [
@@ -186,8 +191,9 @@ describe("Reconciler", () => {
 
       expect(items).toHaveLength(3);
       expect(items.every((item) => item.kind === PathKind.Object)).toBe(true);
-      expect(items.map((item) => item.id)).not.toContain(form.address0);
-      expect(items.map((item) => item.id)).not.toContain(form.address1);
+      expect(items[0].id).toBe(form.address0);
+      expect(items[1].id).toBe(form.address1);
+      expect(items[2].id).not.toBe(form.address1);
     });
 
     it("mints a field identity for every new scalar item", () => {
