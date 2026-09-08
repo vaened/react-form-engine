@@ -3,9 +3,22 @@
  * @link https://vaened.dev DevFolio
  */
 
+/**
+ * What the host gives a form to carry, said here rather than taken from the
+ * DOM, so a form on a server or a phone is not asked for a browser it has not
+ * got.
+ *
+ * Said by what it can do, not only by what it holds. Nothing stops a form from
+ * describing an upload as its size and its media type, and a shape written
+ * that loosely would swallow it: types are compared by their members, so a
+ * record that happens to read alike would be one. Being able to hand over its
+ * bytes is what nothing but the real thing does.
+ */
 interface Blob {
   readonly size: number;
   readonly type: string;
+  arrayBuffer(): Promise<ArrayBuffer>;
+  slice(start?: number, end?: number, contentType?: string): Blob;
 }
 
 interface File extends Blob {
