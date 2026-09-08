@@ -264,13 +264,20 @@ type PathValueArray<T extends readonly unknown[], P extends string> = P extends 
       : never;
 
 /**
- * Every key as a path spells it, pointing back at the key the type holds it
- * under. A key declared as a number is reached by a segment that is text, and
- * the two are different types however alike they read.
+ * The key a segment names, as the type holds it.
+ *
+ * A key declared as a number is reached by a segment that is text, and the two
+ * are different types however alike they read. Only a segment that reads like a
+ * number can be one of those, so the plain lookup answers first and the rest of
+ * this is never reached for the keys a form is mostly made of.
  */
-type Named<T> = { [TKey in keyof T as `${TKey & (string | number)}`]-?: TKey };
-
-type KeyOf<T, S extends string> = S extends keyof Named<T> ? Named<T>[S] : never;
+type KeyOf<T, S extends string> = S extends keyof T
+  ? S
+  : S extends `${infer TNumber extends number}`
+    ? TNumber extends keyof T
+      ? TNumber
+      : never
+    : never;
 
 type PathValueAt<T, TKey, P extends string> = TKey extends keyof T
   ? undefined extends T[TKey]
