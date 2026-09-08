@@ -66,7 +66,40 @@ export interface FormScalar {
 // biome-ignore lint/suspicious/noExplicitAny: Interfaces require an open record constraint without losing their exact value types.
 export type FormValues = Record<string, any>;
 
-type StringKeyOf<T> = Extract<keyof T, string>;
+/**
+ * A key written as a number is still a key, and a path reaches it by the same
+ * name the value holds it under. Leaving it out would make a record keyed by
+ * year unreachable while the same record keyed by name is not.
+ */
+type StringKeyOf<T> = Extract<keyof T, string | number>;
+
+type Digit = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
+
+type AllDigits<S extends string> = S extends `${Digit}${infer TRest}`
+  ? TRest extends ""
+    ? true
+    : AllDigits<TRest>
+  : false;
+
+/**
+ * Whether a segment names a position: digits only, and no leading zero unless
+ * that is the whole of it.
+ *
+ * `${number}` is what a path is written with and is far wider than a position
+ * ever is — it spells signs, exponents and fractions, none of which the index
+ * accepts, and a leading zero it would silently read as another position. An
+ * index that is not known yet passes, because a path built around one says
+ * `${number}` and stands for every position rather than a wrong one.
+ */
+type IsIndex<S extends string> = string extends S
+  ? true
+  : `${number}` extends S
+    ? true
+    : S extends "0"
+      ? true
+      : S extends `0${string}`
+        ? false
+        : AllDigits<S>;
 
 type TupleKeys<T extends readonly unknown[]> = Extract<keyof T, `${number}`>;
 
@@ -152,7 +185,7 @@ type NodePathInternal<T, TSeen = T> = T extends readonly (infer TValue)[]
       }[StringKeyOf<T>]
     : never;
 
-type ArrayPathEntry<K extends string, V, TSeen> =
+type ArrayPathEntry<K extends string | number, V, TSeen> =
   IsTerminal<Present<V>> extends true
     ? never
     : Present<V> extends readonly (infer TValue)[]
@@ -215,7 +248,7 @@ type PathValueArray<T extends readonly unknown[], P extends string> = P extends 
     ? K extends TupleKeys<T>
       ? PathValueInternal<T[K], R>
       : never
-    : K extends `${number}`
+    : IsIndex<K> extends true
       ? T extends readonly (infer TValue)[]
         ? PathValueInternal<TValue, R>
         : never
@@ -224,20 +257,31 @@ type PathValueArray<T extends readonly unknown[], P extends string> = P extends 
     ? P extends TupleKeys<T>
       ? T[P]
       : never
-    : P extends `${number}`
+    : IsIndex<P> extends true
       ? T extends readonly (infer TValue)[]
         ? TValue
         : never
       : never;
 
+/**
+ * Every key as a path spells it, pointing back at the key the type holds it
+ * under. A key declared as a number is reached by a segment that is text, and
+ * the two are different types however alike they read.
+ */
+type Named<T> = { [TKey in keyof T as `${TKey & (string | number)}`]-?: TKey };
+
+type KeyOf<T, S extends string> = S extends keyof Named<T> ? Named<T>[S] : never;
+
+type PathValueAt<T, TKey, P extends string> = TKey extends keyof T
+  ? undefined extends T[TKey]
+    ? PathValueInternal<T[TKey], P> | undefined
+    : PathValueInternal<T[TKey], P>
+  : never;
+
 type PathValueObject<T extends object, P extends string> = P extends `${infer K}.${infer R}`
-  ? K extends keyof T
-    ? undefined extends T[K]
-      ? PathValueInternal<T[K], R> | undefined
-      : PathValueInternal<T[K], R>
-    : never
-  : P extends keyof T
-    ? T[P]
+  ? PathValueAt<T, KeyOf<T, K>, R>
+  : KeyOf<T, P> extends keyof T
+    ? T[KeyOf<T, P>]
     : never;
 
 type PathValueInternal<T, P extends string> = T extends unknown
