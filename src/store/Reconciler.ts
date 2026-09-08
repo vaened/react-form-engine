@@ -83,6 +83,7 @@ export class Reconciler<TValues extends FormValues = FormValues> {
 
   #array(array: PathIndexArrayEntry): void {
     const items = Reconciler.#itemsOf(this.#value.read(array));
+    const expected = Reconciler.#itemsOf(this.#value.default(array)).length;
 
     this.#index.truncate(array.id, items.length);
 
@@ -100,6 +101,10 @@ export class Reconciler<TValues extends FormValues = FormValues> {
         this.#index.remove(array.id, position);
         this.#index.insert(array.id, position, kind);
       }
+    }
+
+    if (this.#state.has(array.id)) {
+      this.#state.measured(array.id, items.length, expected);
     }
   }
 

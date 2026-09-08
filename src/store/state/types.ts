@@ -4,12 +4,14 @@
  */
 
 import type { EntryId } from "../path/types";
+import type { ArrayStateAggregate } from "./ArrayStateAggregate";
 import type { FieldState } from "./FieldState";
 import type { StateAggregate } from "./StateAggregate";
 
 export enum StateKind {
   Field = 1,
   Node = 2,
+  Array = 3,
 }
 
 /**
@@ -45,12 +47,20 @@ export type StateFieldEntry = StateBase & {
 };
 
 /**
- * A materialized node owns no state of its own: its flags are derived from
+ * A materialized object owns no state of its own: its flags are derived from
  * counters of how many reactive children carry each one.
  */
-export type StateNodeEntry = StateBase & {
+export type StateObjectEntry = StateBase & {
   readonly kind: StateKind.Node;
   readonly state: StateAggregate;
 };
+
+/** The one location that also answers for something no child of it can. */
+export type StateArrayEntry = StateBase & {
+  readonly kind: StateKind.Array;
+  readonly state: ArrayStateAggregate;
+};
+
+export type StateNodeEntry = StateObjectEntry | StateArrayEntry;
 
 export type StateEntry = StateFieldEntry | StateNodeEntry;

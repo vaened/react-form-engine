@@ -496,6 +496,97 @@ describe("FormStore", () => {
     });
   });
 
+  describe("an array that holds a different number of items than its base", () => {
+    const addresses = (...cities: string[]) => cities.map((city) => ({ city, reference: "-" }));
+    const dirty = (path: "invoice.client.addresses") =>
+      hasFlag((store.getState(path) as StateEntry).state.flags, StateFlag.Dirty);
+
+    beforeEach(() => {
+      store = new FormStore<Invoice>({
+        defaults: {
+          invoice: { ...sample().invoice, client: { ...sample().invoice.client, addresses: addresses("A", "B", "C") } },
+        },
+      });
+    });
+
+    it("says so when the value holds fewer, with every position it kept matching", () => {
+      store.register("invoice.client.addresses");
+
+      store.set("invoice.client.addresses", addresses("A"));
+
+      expect(dirty("invoice.client.addresses")).toBe(true);
+    });
+
+    it("says so when the value holds more, with every position it kept matching", () => {
+      store.register("invoice.client.addresses");
+
+      store.set("invoice.client.addresses", addresses("A", "B", "C", "D"));
+
+      expect(dirty("invoice.client.addresses")).toBe(true);
+    });
+
+    it("says so when what it was given holds no positions at all", () => {
+      store.register("invoice.client.addresses");
+
+      store.set("invoice.client.addresses", "not a list" as never);
+
+      expect(dirty("invoice.client.addresses")).toBe(true);
+    });
+
+    it("goes quiet again once it is given as many as its base holds", () => {
+      store.register("invoice.client.addresses");
+
+      store.set("invoice.client.addresses", addresses("A"));
+      store.set("invoice.client.addresses", addresses("A", "B", "C"));
+
+      expect(dirty("invoice.client.addresses")).toBe(false);
+    });
+
+    it("keeps saying so while a position that stayed also differs", () => {
+      store.register("invoice.client.addresses");
+      store.register("invoice.client.addresses.0.city");
+
+      store.set("invoice.client.addresses", addresses("Z"));
+
+      expect(dirty("invoice.client.addresses")).toBe(true);
+
+      store.set("invoice.client.addresses", addresses("Z", "B", "C"));
+
+      expect(dirty("invoice.client.addresses")).toBe(true);
+    });
+
+    it("is born knowing, rather than waiting for a write to find out", () => {
+      store.set("invoice.client.addresses", addresses("A"));
+
+      store.register("invoice.client.addresses");
+
+      expect(dirty("invoice.client.addresses")).toBe(true);
+    });
+
+    it("carries what it holds up to the form as a whole", () => {
+      store.register("invoice.client.addresses");
+
+      store.set("invoice.client.addresses", addresses("A"));
+
+      expect(hasFlag(store.getState("invoice")?.state.flags ?? 0, StateFlag.Dirty)).toBe(false);
+
+      store.register("invoice");
+
+      expect(hasFlag((store.getState("invoice") as StateEntry).state.flags, StateFlag.Dirty)).toBe(true);
+    });
+
+    it("says nothing when nobody is watching the array itself", () => {
+      store.register("invoice.client.addresses.0.city");
+
+      store.set("invoice.client.addresses", addresses("A"));
+
+      expect(store.getState("invoice.client.addresses")).toBeUndefined();
+      expect(
+        hasFlag((store.getState("invoice.client.addresses.0.city") as StateFieldEntry).state.flags, StateFlag.Dirty),
+      ).toBe(false);
+    });
+  });
+
   describe("set under patch semantics", () => {
     let patch: FormStore<Invoice>;
 

@@ -73,7 +73,7 @@ export class StateAggregate implements PathState {
     this.#invalid += StateAggregate.#delta(previous, current, StateFlag.Invalid);
     this.#validating += StateAggregate.#delta(previous, current, StateFlag.Validating);
 
-    this.#derive();
+    this.derive();
   }
 
   /** Counts one contributor in. Used when a node is materialized from scratch. */
@@ -83,7 +83,7 @@ export class StateAggregate implements PathState {
     this.#invalid += hasFlag(flags, StateFlag.Invalid) ? 1 : 0;
     this.#validating += hasFlag(flags, StateFlag.Validating) ? 1 : 0;
 
-    this.#derive();
+    this.derive();
   }
 
   /** True when a counter fell below zero, which means a delta was lost. */
@@ -91,14 +91,20 @@ export class StateAggregate implements PathState {
     return this.#dirty < 0 || this.#touched < 0 || this.#invalid < 0 || this.#validating < 0;
   }
 
-  /** A flag is set while any child carries it. */
-  #derive(): void {
+  /**
+   * A flag is set while any child carries it.
+   *
+   * It reads the questions rather than the counters so that a location with
+   * something of its own to say can answer one of them differently and still
+   * be folded into and reported through the chain like anything else.
+   */
+  protected derive(): void {
     let flags = 0;
 
-    flags = setFlag(flags, StateFlag.Dirty, this.#dirty > 0);
-    flags = setFlag(flags, StateFlag.Touched, this.#touched > 0);
-    flags = setFlag(flags, StateFlag.Invalid, this.#invalid > 0);
-    flags = setFlag(flags, StateFlag.Validating, this.#validating > 0);
+    flags = setFlag(flags, StateFlag.Dirty, this.isDirty);
+    flags = setFlag(flags, StateFlag.Touched, this.isTouched);
+    flags = setFlag(flags, StateFlag.Invalid, this.isInvalid);
+    flags = setFlag(flags, StateFlag.Validating, this.isValidating);
 
     this.#flags = flags;
   }

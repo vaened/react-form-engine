@@ -152,10 +152,23 @@ export class FormStore<TValues extends FormValues> {
 
       this.#state.register(entry.id, initial);
       this.#value.register(entry.id);
-    } else {
-      this.#state.materialize(entry.id);
-      this.#value.materialize(entry.id);
+      return;
     }
+
+    this.#state.materialize(entry.id);
+    this.#value.materialize(entry.id);
+
+    if (entry.kind === PathKind.Array) {
+      this.#state.measured(
+        entry.id,
+        FormStore.#count(this.#value.read(entry)),
+        FormStore.#count(this.#value.default(entry)),
+      );
+    }
+  }
+
+  static #count(value: unknown): number {
+    return Array.isArray(value) ? value.length : 0;
   }
 
   #reach(path: Path<TValues>): unknown {

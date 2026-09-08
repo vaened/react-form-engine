@@ -4,11 +4,12 @@
  */
 
 import { ObservationChain } from "../observation/ObservationChain";
-import type { EntryId, EntryTree, ObservableStructure } from "../path/types";
+import { type EntryId, type EntryTree, type ObservableStructure, PathKind } from "../path/types";
+import { ArrayStateAggregate } from "./ArrayStateAggregate";
 import { StateAggregateUnderflow, StateKindConflict } from "./errors";
 import { FieldState } from "./FieldState";
 import { StateAggregate } from "./StateAggregate";
-import { type StateEntry, type StateFieldEntry, StateKind, type StateNodeEntry } from "./types";
+import { type StateArrayEntry, type StateEntry, type StateFieldEntry, StateKind, type StateNodeEntry } from "./types";
 
 /** Shared so that a keystroke that moves nothing does not allocate to say so. */
 const NOTHING_MOVED: readonly StateEntry[] = Object.freeze([]);
@@ -27,8 +28,11 @@ const NOTHING_MOVED: readonly StateEntry[] = Object.freeze([]);
 export class StateGraph {
   /** A field never holds children, so only a node may be a parent. */
   readonly #chain: ObservationChain<StateEntry, StateNodeEntry>;
+  /** What a location is decides what can answer for it, and only the shape knows. */
+  readonly #tree: EntryTree;
 
   constructor(tree: EntryTree & ObservableStructure) {
+    this.#tree = tree;
     this.#chain = new ObservationChain<StateEntry, StateNodeEntry>(tree, {
       id: tree.root().id,
       kind: StateKind.Node,
@@ -146,6 +150,26 @@ export class StateGraph {
   }
 
   /**
+   * How many items an array holds against how many its base holds.
+   *
+   * Every position both sides have is answered for by the fields sitting in
+   * it, each against the same position of the base. The ones only one side has
+   * are answered for here, because there is no field in them to ask.
+   */
+  measured(id: EntryId, length: number, expected: number): readonly StateEntry[] {
+    const array = StateGraph.#asArray(this.entry(id));
+    const held = array.state.flags;
+
+    array.state.measured(length, expected);
+
+    if (array.state.flags === held) {
+      return NOTHING_MOVED;
+    }
+
+    return this.#propagate(array.parent, held, array.state.flags, [array]);
+  }
+
+  /**
    * Everyone whose public state moved, which is the same as everyone who has
    * to be told. Flags and errors landing on what they already were reach
    * nobody above, which is what keeps typing into an already touched field
@@ -182,7 +206,7 @@ export class StateGraph {
       return node;
     }
 
-    const node: StateNodeEntry = { id, kind: StateKind.Node, parent: null, state: new StateAggregate() };
+    const node = this.#hold(id);
 
     const parent = this.#chain.parentOf(id);
     const held = parent.state.flags;
@@ -207,7 +231,7 @@ export class StateGraph {
   #reopened(id: EntryId): void {
     const entry = this.#chain.find(id);
 
-    if (!entry || entry.kind === StateKind.Node) {
+    if (!entry || entry.kind !== StateKind.Field) {
       return;
     }
 
@@ -319,12 +343,14 @@ export class StateGraph {
       this.#settle(parent, held);
     }
 
-    return this.#chain.replace(field.id, {
-      id: field.id,
-      kind: StateKind.Node,
-      parent: null,
-      state: new StateAggregate(),
-    });
+    return this.#chain.replace(field.id, this.#hold(field.id));
+  }
+
+  /** A location that holds others answers with whatever its kind can answer with. */
+  #hold(id: EntryId): StateNodeEntry {
+    return this.#tree.entry(id).kind === PathKind.Array
+      ? { id, kind: StateKind.Array, parent: null, state: new ArrayStateAggregate() }
+      : { id, kind: StateKind.Node, parent: null, state: new StateAggregate() };
   }
 
   static #asField(entry: StateEntry): StateFieldEntry {
@@ -336,8 +362,16 @@ export class StateGraph {
   }
 
   static #asNode(entry: StateEntry): StateNodeEntry {
-    if (entry.kind !== StateKind.Node) {
+    if (entry.kind === StateKind.Field) {
       throw new StateKindConflict(entry.id as number, entry.kind, StateKind.Node);
+    }
+
+    return entry;
+  }
+
+  static #asArray(entry: StateEntry): StateArrayEntry {
+    if (entry.kind !== StateKind.Array) {
+      throw new StateKindConflict(entry.id as number, entry.kind, StateKind.Array);
     }
 
     return entry;
