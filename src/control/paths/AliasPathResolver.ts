@@ -6,7 +6,7 @@
 import type { FormValues, Path } from "../../path";
 import { SingleEntryCache } from "../../SingleEntryCache";
 import type { PathId, PathIdentifier } from "../../store/state/PathRegistry";
-import type { PathResolver } from "./PathResolver";
+import type { PathResolver, Reach } from "./PathResolver";
 
 export type ControlAliasMap<TLocalValues extends FormValues, TFormValues extends FormValues> = Partial<
   Record<Path<TLocalValues>, Path<TFormValues>>
@@ -18,6 +18,7 @@ export class AliasPathResolver<TLocalValues extends FormValues, TFormValues exte
   readonly #identifier: PathIdentifier<Path<TFormValues>>;
   readonly #aliases: ControlAliasMap<TLocalValues, TFormValues>;
   readonly #beneath: Path<TFormValues> | undefined;
+  readonly #grouped: ReadonlyMap<Path<TLocalValues>, readonly Path<TLocalValues>[]>;
   readonly #lastResolution: SingleEntryCache<Path<TLocalValues>, Path<TFormValues>>;
   readonly #cache = new Map<Path<TLocalValues>, PathId<Path<TFormValues>>>();
 
@@ -34,6 +35,7 @@ export class AliasPathResolver<TLocalValues extends FormValues, TFormValues exte
     this.#aliases = aliases;
     this.#beneath = beneath;
     this.#lastResolution = new SingleEntryCache();
+    this.#grouped = this.#gather();
   }
 
   get aliases(): Readonly<ControlAliasMap<TLocalValues, TFormValues>> {
@@ -63,6 +65,52 @@ export class AliasPathResolver<TLocalValues extends FormValues, TFormValues exte
     }
 
     return this.#remember(path, resolved, this.#identifier.register(resolved));
+  }
+
+  reach(path: Path<TLocalValues>): Reach<TLocalValues, TFormValues> {
+    const members = this.#grouped.get(path);
+
+    return members === undefined ? { kind: "alias", path: this.resolve(path) } : { kind: "group", members };
+  }
+
+  /**
+   * Which names hold others together, and which others each one holds.
+   *
+   * Read once, because the map never changes after this: asking it on every
+   * write would walk the whole map on the path a keystroke takes.
+   *
+   * A name that also answers for a place of the form is listed among its own
+   * members, so writing them still leaves the place to answer for whatever no
+   * member covers.
+   */
+  #gather(): ReadonlyMap<Path<TLocalValues>, readonly Path<TLocalValues>[]> {
+    const grouped = new Map<Path<TLocalValues>, Path<TLocalValues>[]>();
+
+    for (const local of Object.keys(this.#aliases) as Path<TLocalValues>[]) {
+      let name = local as string;
+
+      while (true) {
+        const lastDotIndex = name.lastIndexOf(".");
+
+        if (lastDotIndex === -1) {
+          break;
+        }
+
+        name = name.slice(0, lastDotIndex);
+
+        const holder = name as Path<TLocalValues>;
+        const members = grouped.get(holder);
+
+        if (members !== undefined) {
+          members.push(local);
+          continue;
+        }
+
+        grouped.set(holder, this.#lookup(holder) === undefined ? [local] : [holder, local]);
+      }
+    }
+
+    return grouped;
   }
 
   /**

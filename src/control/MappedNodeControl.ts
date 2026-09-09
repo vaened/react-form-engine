@@ -38,15 +38,66 @@ export class MappedNodeControl<TLocalValues extends FormValues, TFormValues exte
   }
 
   register<TPath extends Path<TLocalValues>>(path: TPath): void {
-    this.#store.register(this.#pathResolver.resolve(path));
+    this.#each(path, (real) => this.#store.register(real));
   }
 
   unregister<TPath extends Path<TLocalValues>>(path: TPath): void {
-    this.#store.unregister(this.#pathResolver.resolve(path));
+    this.#each(path, (real) => this.#store.unregister(real));
   }
 
   set<TPath extends Path<TLocalValues>>(path: TPath, value: PathValue<TLocalValues, TPath>): void {
-    this.#store.set(this.#pathResolver.resolve(path), value as PathValue<TFormValues, Path<TFormValues>>);
+    this.#write(path, value);
+  }
+
+  /**
+   * A name the projection only groups is written by writing the value it was
+   * given: the members it gathers may live in unrelated branches of the form,
+   * so there is no single place to hand the whole value to. Descending by the
+   * value rather than by the map is also what leaves untouched whatever the
+   * caller did not name.
+   */
+  #write(path: Path<TLocalValues>, value: unknown): void {
+    const reach = this.#pathResolver.reach(path);
+
+    if (reach.kind === "alias") {
+      this.#store.set(reach.path, value as PathValue<TFormValues, Path<TFormValues>>);
+      return;
+    }
+
+    if (!MappedNodeControl.#openable(value)) {
+      throw new Error(`Path \`${path}\` is outside this control aliases.`);
+    }
+
+    for (const key of Object.keys(value)) {
+      this.#write(MappedNodeControl.#under(path, key), value[key]);
+    }
+  }
+
+  /**
+   * Joining two names is where a path stops being one and becomes text, so the
+   * compiler cannot follow the pieces back to the path they spell. A name the
+   * map does not answer for is refused by `reach` a moment later.
+   */
+  static #under<TValues extends FormValues>(path: Path<TValues>, key: string): Path<TValues> {
+    return `${path}.${key}` as Path<TValues>;
+  }
+
+  /** Every real path a local name stands for, whether one or many. */
+  #each(path: Path<TLocalValues>, visit: (real: Path<TFormValues>) => void): void {
+    const reach = this.#pathResolver.reach(path);
+
+    if (reach.kind === "alias") {
+      visit(reach.path);
+      return;
+    }
+
+    for (const member of reach.members) {
+      visit(this.#pathResolver.resolve(member));
+    }
+  }
+
+  static #openable(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
   }
 
   lens<TPath extends NodePath<TLocalValues>>(selection: TPath): NodeControl<FocusedValue<TLocalValues, TPath>>;

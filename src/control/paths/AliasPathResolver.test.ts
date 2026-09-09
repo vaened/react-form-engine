@@ -185,3 +185,185 @@ describe("AliasPathResolver", () => {
     expect(() => mapper.resolve("serial.number")).toThrow("Path `serial.number` is outside this control aliases.");
   });
 });
+
+describe("AliasPathResolver repeated questions", () => {
+  /** Typing into one field asks for the same name over and over, so the last
+   * answer is kept whole rather than rebuilt from its identity. */
+  it("answers the same name again without going through the identifier", () => {
+    const identifier = createIdentifierMock();
+    const resolver = new AliasPathResolver<LocalValues, FormValues>(identifier, {
+      person: "invoice.client.person",
+    });
+
+    resolver.resolve("person.name");
+    identifier.describe.mockClear();
+
+    expect(resolver.resolve("person.name")).toBe("invoice.client.person.name");
+    expect(identifier.describe).not.toHaveBeenCalled();
+  });
+
+  it("goes back through the identifier once another name is asked in between", () => {
+    const identifier = createIdentifierMock();
+    const resolver = new AliasPathResolver<LocalValues, FormValues>(identifier, {
+      person: "invoice.client.person",
+    });
+
+    resolver.resolve("person.name");
+    resolver.resolve("person.documentNumber");
+    identifier.describe.mockClear();
+
+    resolver.resolve("person.name");
+
+    expect(identifier.describe).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("AliasPathResolver reach", () => {
+  const registry = () => new PathRegistry<Path<FormValues>>();
+
+  it("answers alias for a name nothing hangs from", () => {
+    const resolver = new AliasPathResolver<LocalValues, FormValues>(registry(), {
+      person: "invoice.client.person",
+    });
+
+    expect(resolver.reach("person")).toEqual({ kind: "alias", path: "invoice.client.person" });
+  });
+
+  it("answers alias for a name reached through a registered prefix", () => {
+    const resolver = new AliasPathResolver<LocalValues, FormValues>(registry(), {
+      person: "invoice.client.person",
+    });
+
+    expect(resolver.reach("person.name")).toEqual({ kind: "alias", path: "invoice.client.person.name" });
+  });
+
+  it("answers group for a name the map only holds others under", () => {
+    const resolver = new AliasPathResolver<LocalValues, FormValues>(registry(), {
+      "person.name": "invoice.client.person.name",
+      "person.documentNumber": "invoice.serial.number",
+    });
+
+    expect(resolver.reach("person")).toEqual({
+      kind: "group",
+      members: ["person.name", "person.documentNumber"],
+    });
+  });
+
+  /** A name that both answers for a place and holds others: writing its members
+   * still leaves the place to answer for what no member covers. */
+  it("lists the name itself first when it also answers for a place", () => {
+    const resolver = new AliasPathResolver<LocalValues, FormValues>(registry(), {
+      person: "invoice.client.person",
+      "person.name": "invoice.serial.series",
+    });
+
+    expect(resolver.reach("person")).toEqual({
+      kind: "group",
+      members: ["person", "person.name"],
+    });
+  });
+
+  it("holds names at every depth, not only the ones written right under", () => {
+    const resolver = new AliasPathResolver<LocalValues, FormValues>(registry(), {
+      "client.person.name": "invoice.client.person.name",
+      "client.contact.email": "invoice.client.contact.email",
+      "client.person.documentNumber": "invoice.serial.number",
+    } as ControlAliasMap<LocalValues, FormValues>);
+
+    expect(resolver.reach("client")).toEqual({
+      kind: "group",
+      members: ["client.person.name", "client.contact.email", "client.person.documentNumber"],
+    });
+    expect(resolver.reach("client.person")).toEqual({
+      kind: "group",
+      members: ["client.person.name", "client.person.documentNumber"],
+    });
+    expect(resolver.reach("client.contact")).toEqual({
+      kind: "group",
+      members: ["client.contact.email"],
+    });
+  });
+
+  it("refuses a name the map neither answers for nor holds others under", () => {
+    const resolver = new AliasPathResolver<LocalValues, FormValues>(registry(), {
+      person: "invoice.client.person",
+    });
+
+    expect(() => resolver.reach("serial")).toThrow("Path `serial` is outside this control aliases.");
+  });
+});
+
+describe("AliasPathResolver scope", () => {
+  const registry = () => new PathRegistry<Path<FormValues>>();
+
+  it("inherits the names hanging from the one it narrows to, without the prefix", () => {
+    const resolver = new AliasPathResolver<LocalValues, FormValues>(registry(), {
+      "person.name": "invoice.client.person.name",
+      "person.documentNumber": "invoice.serial.number",
+      "serial.series": "invoice.serial.series",
+    } as ControlAliasMap<LocalValues, FormValues>);
+
+    const narrowed = resolver.scope<LocalValues["person"]>("person");
+
+    expect(narrowed.resolve("name")).toBe("invoice.client.person.name");
+    expect(narrowed.resolve("documentNumber")).toBe("invoice.serial.number");
+  });
+
+  it("remembers the place it was narrowed beneath for whatever it did not inherit", () => {
+    const resolver = new AliasPathResolver<LocalValues, FormValues>(registry(), {
+      person: "invoice.client.person",
+      "person.name": "invoice.serial.series",
+    });
+
+    const narrowed = resolver.scope<LocalValues["person"]>("person");
+
+    expect(narrowed.resolve("name")).toBe("invoice.serial.series");
+    expect(narrowed.resolve("documentNumber")).toBe("invoice.client.person.documentNumber");
+  });
+
+  it("reads the map once, so a later change to it leaves the narrowed one alone", () => {
+    const aliases: ControlAliasMap<LocalValues, FormValues> = {
+      person: "invoice.client.person",
+      "person.name": "invoice.serial.series",
+    };
+    const narrowed = new AliasPathResolver<LocalValues, FormValues>(registry(), aliases).scope<LocalValues["person"]>(
+      "person",
+    );
+
+    aliases["person.name"] = "invoice.serial.number";
+
+    expect(narrowed.resolve("name")).toBe("invoice.serial.series");
+  });
+
+  it("narrows again from a name it inherited", () => {
+    const resolver = new AliasPathResolver<LocalValues, FormValues>(registry(), {
+      "client.person.name": "invoice.client.person.name",
+    } as ControlAliasMap<LocalValues, FormValues>);
+
+    const person = resolver.scope<LocalValues["client"]>("client").scope<LocalValues["person"]>("person");
+
+    expect(person.resolve("name")).toBe("invoice.client.person.name");
+  });
+
+  it("keeps answering group after narrowing", () => {
+    const resolver = new AliasPathResolver<LocalValues, FormValues>(registry(), {
+      "client.person.name": "invoice.client.person.name",
+      "client.person.documentNumber": "invoice.serial.number",
+    } as ControlAliasMap<LocalValues, FormValues>);
+
+    const client = resolver.scope<LocalValues["client"]>("client");
+
+    expect(client.reach("person")).toEqual({
+      kind: "group",
+      members: ["person.name", "person.documentNumber"],
+    });
+  });
+
+  it("refuses to narrow to a name the map does not cover", () => {
+    const resolver = new AliasPathResolver<LocalValues, FormValues>(registry(), {
+      person: "invoice.client.person",
+    });
+
+    expect(() => resolver.scope("serial")).toThrow("Path `serial` is outside this control aliases.");
+  });
+});

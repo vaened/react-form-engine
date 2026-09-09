@@ -325,6 +325,190 @@ describe("MappedNodeControl", () => {
     });
   });
 
+  describe("operating on a name the projection only groups", () => {
+    it("sets each member where its own alias points", () => {
+      const store = createStoreMock();
+      const control: Control<InvoiceValues> = MappedNodeControl.from(store);
+
+      const projected = control.lens({
+        card: { who: "invoice.client.person.name", serie: "invoice.serial.series" },
+      });
+
+      projected.set("card", { who: "Ada", serie: "F001" });
+
+      expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Ada");
+      expect(store.set).toHaveBeenCalledWith("invoice.serial.series", "F001");
+      expect(store.set).toHaveBeenCalledTimes(2);
+    });
+
+    it("leaves alone what the value never names", () => {
+      const store = createStoreMock();
+      const control: Control<InvoiceValues> = MappedNodeControl.from(store);
+
+      const projected = control.lens({
+        card: { who: "invoice.client.person.name", serie: "invoice.serial.series" },
+      });
+
+      projected.set("card", { who: "Ada" } as never);
+
+      expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Ada");
+      expect(store.set).toHaveBeenCalledTimes(1);
+    });
+
+    it("stops at an alias instead of opening the value under it", () => {
+      const store = createStoreMock();
+      const control: Control<InvoiceValues> = MappedNodeControl.from(store);
+      const person = { documentNumber: "12345678", name: "Ada" };
+
+      const projected = control.lens({ card: { whole: "invoice.client.person" } });
+
+      projected.set("card", { whole: person });
+
+      expect(store.set).toHaveBeenCalledWith("invoice.client.person", person);
+      expect(store.set).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps a descendant that points elsewhere instead of writing the node whole", () => {
+      const store = createStoreMock();
+      const aliases: ControlAliasMap<ProjectedValues, InvoiceValues> = {
+        person: "invoice.client.person",
+        "person.name": "invoice.serial.series",
+      };
+      const control: Control<ProjectedValues> = MappedNodeControl.from(store, aliases);
+
+      control.set("person", { documentNumber: "12345678", name: "Ada" });
+
+      expect(store.set).toHaveBeenCalledWith("invoice.client.person.documentNumber", "12345678");
+      expect(store.set).toHaveBeenCalledWith("invoice.serial.series", "Ada");
+      expect(store.set).not.toHaveBeenCalledWith("invoice.client.person", expect.anything());
+      expect(store.set).toHaveBeenCalledTimes(2);
+    });
+
+    it("registers and unregisters every member the name groups", () => {
+      const store = createStoreMock();
+      const control: Control<InvoiceValues> = MappedNodeControl.from(store);
+
+      const projected = control.lens({
+        card: { who: "invoice.client.person.name", serie: "invoice.serial.series" },
+      });
+
+      projected.register("card");
+      projected.unregister("card");
+
+      expect(store.register).toHaveBeenCalledWith("invoice.client.person.name");
+      expect(store.register).toHaveBeenCalledWith("invoice.serial.series");
+      expect(store.unregister).toHaveBeenCalledWith("invoice.client.person.name");
+      expect(store.unregister).toHaveBeenCalledWith("invoice.serial.series");
+      expect(store.register).toHaveBeenCalledTimes(2);
+    });
+
+    /** A name that both stands for a node and gathers a member pointing elsewhere:
+     * registering it has to reach the node too, or everything the member does not
+     * cover would be left unregistered. */
+    it("registers the node itself as well when the name also answers for one", () => {
+      const store = createStoreMock();
+      const aliases: ControlAliasMap<ProjectedValues, InvoiceValues> = {
+        person: "invoice.client.person",
+        "person.name": "invoice.serial.series",
+      };
+      const control: Control<ProjectedValues> = MappedNodeControl.from(store, aliases);
+
+      control.register("person");
+
+      expect(store.register).toHaveBeenCalledWith("invoice.client.person");
+      expect(store.register).toHaveBeenCalledWith("invoice.serial.series");
+      expect(store.register).toHaveBeenCalledTimes(2);
+    });
+
+    it("still writes a single path when the name is a plain alias", () => {
+      const store = createStoreMock();
+      const aliases: ControlAliasMap<ProjectedValues, InvoiceValues> = { person: "invoice.client.person" };
+      const control: Control<ProjectedValues> = MappedNodeControl.from(store, aliases);
+      const person = { documentNumber: "12345678", name: "Ada" };
+
+      control.set("person", person);
+      control.register("person");
+
+      expect(store.set).toHaveBeenCalledWith("invoice.client.person", person);
+      expect(store.set).toHaveBeenCalledTimes(1);
+      expect(store.register).toHaveBeenCalledWith("invoice.client.person");
+      expect(store.register).toHaveBeenCalledTimes(1);
+    });
+
+    /** The map is flat, so a name reaches every descendant of the projection and
+     * not only the members written right under it. */
+    it("reaches every leaf of a group nested three levels deep", () => {
+      const store = createStoreMock();
+      const control: Control<InvoiceValues> = MappedNodeControl.from(store);
+      const projected = control.lens({
+        a: { b: { c: "invoice.client.person.name", d: "invoice.serial.series" }, e: "invoice.serial.number" },
+      });
+
+      projected.set("a", { b: { c: "Ada", d: "F001" }, e: "000001" });
+      projected.register("a");
+
+      expect(store.set.mock.calls).toEqual([
+        ["invoice.client.person.name", "Ada"],
+        ["invoice.serial.series", "F001"],
+        ["invoice.serial.number", "000001"],
+      ]);
+      expect(store.register.mock.calls).toEqual([
+        ["invoice.client.person.name"],
+        ["invoice.serial.series"],
+        ["invoice.serial.number"],
+      ]);
+    });
+
+    it("reaches only its own leaves from a group in the middle", () => {
+      const store = createStoreMock();
+      const control: Control<InvoiceValues> = MappedNodeControl.from(store);
+      const projected = control.lens({
+        a: { b: { c: "invoice.client.person.name", d: "invoice.serial.series" }, e: "invoice.serial.number" },
+      });
+
+      projected.set("a.b", { c: "Ada", d: "F001" });
+      projected.register("a.b");
+
+      expect(store.set.mock.calls).toEqual([
+        ["invoice.client.person.name", "Ada"],
+        ["invoice.serial.series", "F001"],
+      ]);
+      expect(store.register.mock.calls).toEqual([["invoice.client.person.name"], ["invoice.serial.series"]]);
+    });
+
+    it("refuses to write a value that cannot be opened into the members", () => {
+      const store = createStoreMock();
+      const control: Control<InvoiceValues> = MappedNodeControl.from(store);
+      const projected = control.lens({ card: { who: "invoice.client.person.name" } });
+
+      expect(() => projected.set("card" as never, "Ada" as never)).toThrow(
+        "Path `card` is outside this control aliases.",
+      );
+      expect(store.set).not.toHaveBeenCalled();
+    });
+
+    /** A list has positions, not names, so nothing in it answers to a member. */
+    it("refuses a list where the members are expected", () => {
+      const store = createStoreMock();
+      const control: Control<InvoiceValues> = MappedNodeControl.from(store);
+      const projected = control.lens({ card: { who: "invoice.client.person.name" } });
+
+      expect(() => projected.set("card" as never, ["Ada"] as never)).toThrow(
+        "Path `card` is outside this control aliases.",
+      );
+      expect(store.set).not.toHaveBeenCalled();
+    });
+
+    it("refuses a name the map does not cover, however the value looks", () => {
+      const store = createStoreMock();
+      const control: Control<InvoiceValues> = MappedNodeControl.from(store);
+      const projected = control.lens({ card: { who: "invoice.client.person.name" } });
+
+      expect(() => projected.set("card" as never, { nope: 1 } as never)).toThrow();
+      expect(() => projected.register("nope" as never)).toThrow();
+    });
+  });
+
   it("throws when a projection path is outside the current control scope", () => {
     const store = createStoreMock();
     const control: Control<ProjectedValues> = MappedNodeControl.from(store, {
