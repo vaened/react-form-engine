@@ -34,7 +34,14 @@ export type FormStoreOptions<TValues extends FormValues> = {
    * almost nothing, and a location left out is one the form starts without.
    */
   defaults: DeepPartial<TValues>;
-  /** Where the form starts, when that is not its base. */
+  /**
+   * Where the form starts, when that is not its base.
+   *
+   * Left out, the form starts at its `defaults` and nothing is dirty. Given,
+   * the form starts here and is still measured against `defaults`, so a
+   * location that already differs is dirty before anyone types — which is what
+   * editing an existing record looks like.
+   */
   values?: DeepPartial<TValues>;
   /**
    * Shapes the form is to hold whole rather than take apart, each saying how it
@@ -50,6 +57,29 @@ export type FormStoreOptions<TValues extends FormValues> = {
    * `Date` as a day rather than an instant is a matter of passing one in.
    */
   scalars?: readonly Scalar[];
+  /**
+   * Whether writing a location replaces it or lands inside it. Defaults to
+   * `"full"`.
+   *
+   * In `"full"` the value takes the place of whatever the location held: what
+   * the incoming value does not carry is gone, and everything the form knew
+   * underneath is measured again against the base.
+   *
+   * In `"patch"` only what the value carries lands, and only where it carries
+   * it. A key the value does not mention is never visited, so what lives under
+   * it keeps its value, its state and the identity of its items. A key it does
+   * mention lands as it came, `null` and `undefined` included, because either
+   * may be what the caller meant.
+   *
+   * Both modes stop at a value the form holds whole: a location claimed by a
+   * `Scalar` is replaced rather than walked into, whichever mode is in use.
+   *
+   * @example
+   * store.set("invoice.client.addresses.0", { city: "Arequipa" });
+   *
+   * // "full":  { city: "Arequipa" }
+   * // "patch": { city: "Arequipa", reference: "Frente al parque principal" }
+   */
   mode?: FormMode;
 };
 

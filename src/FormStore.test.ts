@@ -1228,6 +1228,42 @@ describe("FormStore", () => {
     });
   });
 
+  describe("what a mode changes about one write", () => {
+    const written = { city: "Arequipa" } as never;
+
+    it("replaces the location outright under full semantics", () => {
+      const full = new FormStore<Invoice>({ defaults: sample() });
+
+      full.set("invoice.client.addresses.0", written);
+
+      expect(full.values.invoice.client.addresses[0]).toEqual({ city: "Arequipa" });
+    });
+
+    it("keeps what the value never named under patch semantics", () => {
+      const patch = new FormStore<Invoice>({ defaults: sample(), mode: "patch" });
+
+      patch.set("invoice.client.addresses.0", written);
+
+      expect(patch.values.invoice.client.addresses[0]).toEqual({
+        city: "Arequipa",
+        reference: "Frente al parque principal",
+      });
+    });
+
+    it("replaces outright even under patch when a scalar holds the location whole", () => {
+      const addressScalar: Scalar<{ city: string; reference: string }> = {
+        matches: (value): value is { city: string; reference: string } =>
+          typeof value === "object" && value !== null && "city" in value,
+        equals: (left, right) => left.city === right.city && left.reference === right.reference,
+      };
+      const patch = new FormStore<Invoice>({ defaults: sample(), mode: "patch", scalars: [addressScalar] });
+
+      patch.set("invoice.client.addresses.0", written);
+
+      expect(patch.values.invoice.client.addresses[0]).toEqual({ city: "Arequipa" });
+    });
+  });
+
   describe("guards", () => {
     it("finds nothing for a path that was never registered", () => {
       expect(store.getState("invoice.client.name")).toBeUndefined();
