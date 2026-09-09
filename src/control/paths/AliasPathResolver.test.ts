@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Path } from "../../path";
 import type { PathId, PathIdentifier } from "../../store/state/PathRegistry";
 import { PathRegistry } from "../../store/state/PathRegistry";
-import { OverlappingAlias } from "../errors";
+import { EmptyAliasMap, OverlappingAlias, PathOutsideControl } from "../errors";
 import type { ControlAliasMap } from "./AliasPathResolver";
 import { AliasPathResolver } from "./AliasPathResolver";
 
@@ -71,7 +71,7 @@ function createIdentifierMock(): PathIdentifier<Path<FormValues>> & {
 describe("AliasPathResolver", () => {
   it("rejects empty alias dictionaries", () => {
     expect(() => new AliasPathResolver<LocalValues, FormValues>(new PathRegistry<Path<FormValues>>(), {})).toThrow(
-      "Control aliases cannot be empty.",
+      EmptyAliasMap,
     );
   });
 
@@ -172,7 +172,7 @@ describe("AliasPathResolver", () => {
       person: "invoice.client.person",
     });
 
-    expect(() => mapper.resolve("serial.number")).toThrow("is outside this control aliases");
+    expect(() => mapper.resolve("serial.number")).toThrow(PathOutsideControl);
   });
 });
 
@@ -319,7 +319,7 @@ describe("AliasPathResolver reach", () => {
       person: "invoice.client.person",
     });
 
-    expect(() => resolver.reach("serial")).toThrow("is outside this control aliases");
+    expect(() => resolver.reach("serial")).toThrow(PathOutsideControl);
   });
 });
 
@@ -392,6 +392,6 @@ describe("AliasPathResolver scope", () => {
       person: "invoice.client.person",
     });
 
-    expect(() => resolver.scope("serial")).toThrow("is outside this control aliases");
+    expect(() => resolver.scope("serial")).toThrow(PathOutsideControl);
   });
 });

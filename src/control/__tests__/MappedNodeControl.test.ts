@@ -4,7 +4,7 @@ import type { FormStore } from "../../FormStore";
 import type { Path } from "../../path";
 import { PathRegistry } from "../../store/state/PathRegistry";
 import type { Control } from "../Control";
-import { OverlappingAlias } from "../errors";
+import { EmptyProjection, OverlappingAlias, PathOutsideControl } from "../errors";
 import { MappedNodeControl } from "../MappedNodeControl";
 import type { ControlAliasMap } from "../paths/AliasPathResolver";
 
@@ -453,7 +453,9 @@ describe("MappedNodeControl", () => {
       const control: Control<InvoiceValues> = MappedNodeControl.from(store);
       const projected = control.lens({ card: { who: "invoice.client.person.name" } });
 
-      expect(() => projected.set("card" as never, "Ada" as never)).toThrow("is outside this control aliases");
+      expect(() => projected.set("card" as never, "Ada" as never)).toThrow(PathOutsideControl);
+      // the group itself is refused, not some position the string was taken apart into
+      expect(() => projected.set("card" as never, "Ada" as never)).toThrow("`card` is outside");
       expect(store.set).not.toHaveBeenCalled();
     });
 
@@ -463,7 +465,8 @@ describe("MappedNodeControl", () => {
       const control: Control<InvoiceValues> = MappedNodeControl.from(store);
       const projected = control.lens({ card: { who: "invoice.client.person.name" } });
 
-      expect(() => projected.set("card" as never, ["Ada"] as never)).toThrow("is outside this control aliases");
+      expect(() => projected.set("card" as never, ["Ada"] as never)).toThrow(PathOutsideControl);
+      expect(() => projected.set("card" as never, ["Ada"] as never)).toThrow("`card` is outside");
       expect(store.set).not.toHaveBeenCalled();
     });
 
@@ -489,7 +492,7 @@ describe("MappedNodeControl", () => {
       control.lens({
         contact: "contact" as never,
       }),
-    ).toThrow("is outside this control aliases");
+    ).toThrow(PathOutsideControl);
   });
 
   it("throws when a lens node path is outside the current control scope", () => {
@@ -500,13 +503,13 @@ describe("MappedNodeControl", () => {
       serial: "invoice.serial",
     });
 
-    expect(() => control.lens("contact" as never)).toThrow("is outside this control aliases");
+    expect(() => control.lens("contact" as never)).toThrow(PathOutsideControl);
   });
 
   it("throws when the projection is empty", () => {
     const store = createStoreMock();
     const control: Control<InvoiceValues> = MappedNodeControl.from(store);
 
-    expect(() => control.lens({} as never)).toThrow("Control projection cannot be empty.");
+    expect(() => control.lens({} as never)).toThrow(EmptyProjection);
   });
 });

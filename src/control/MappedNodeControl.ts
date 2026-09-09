@@ -6,6 +6,7 @@
 import type { FormStore, FormValues as StoreFormValues } from "../FormStore";
 import type { FormValues, NodePath, Path, PathValue } from "../path";
 import type { NodeControl } from "./Control";
+import { EmptyProjection, PathOutsideControl } from "./errors";
 import { AliasPathResolver, type ControlAliasMap } from "./paths/AliasPathResolver";
 import { PassthroughPathResolver } from "./paths/PassthroughPathResolver";
 import type { PathResolver } from "./paths/PathResolver";
@@ -65,7 +66,7 @@ export class MappedNodeControl<TLocalValues extends FormValues, TFormValues exte
     }
 
     if (!MappedNodeControl.#openable(value)) {
-      throw new Error(`Path \`${path}\` is outside this control aliases.`);
+      throw new PathOutsideControl(path);
     }
 
     for (const key of Object.keys(value)) {
@@ -141,7 +142,7 @@ export class MappedNodeControl<TLocalValues extends FormValues, TFormValues exte
     visit(projection);
 
     if (Object.keys(aliases).length === 0) {
-      throw new Error("Control projection cannot be empty.");
+      throw new EmptyProjection();
     }
 
     return aliases as ControlAliasMap<ProjectionValue<TLocalValues, TProjection>, TFormValues>;

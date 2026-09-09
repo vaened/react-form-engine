@@ -6,7 +6,7 @@
 import type { FormValues, Path } from "../../path";
 import { SingleEntryCache } from "../../SingleEntryCache";
 import type { PathId, PathIdentifier } from "../../store/state/PathRegistry";
-import { OverlappingAlias } from "../errors";
+import { EmptyAliasMap, OverlappingAlias, PathOutsideControl } from "../errors";
 import type { PathResolver, Reach } from "./PathResolver";
 
 export type ControlAliasMap<TLocalValues extends FormValues, TFormValues extends FormValues> = Partial<
@@ -29,7 +29,7 @@ export class AliasPathResolver<TLocalValues extends FormValues, TFormValues exte
     beneath?: Path<TFormValues>,
   ) {
     if (Object.keys(aliases).length === 0 && beneath === undefined) {
-      throw new Error("Control aliases cannot be empty.");
+      throw new EmptyAliasMap();
     }
 
     this.#identifier = identifier;
@@ -62,7 +62,7 @@ export class AliasPathResolver<TLocalValues extends FormValues, TFormValues exte
     const resolved = this.#lookup(path);
 
     if (resolved === undefined) {
-      throw new Error(`Path \`${path}\` is outside this control aliases.`);
+      throw new PathOutsideControl(path);
     }
 
     return this.#remember(path, resolved, this.#identifier.register(resolved));
@@ -134,7 +134,7 @@ export class AliasPathResolver<TLocalValues extends FormValues, TFormValues exte
     const beneath = this.#lookup(path);
 
     if (members === undefined && beneath === undefined) {
-      throw new Error(`Path \`${path}\` is outside this control aliases.`);
+      throw new PathOutsideControl(path);
     }
 
     const inherited: Record<string, Path<TFormValues>> = {};
