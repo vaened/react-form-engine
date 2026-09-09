@@ -26,6 +26,11 @@ export type { FormValues } from "./path";
 
 export type FormMode = "full" | "patch";
 
+/** Locations of a form, each carrying the value its own path holds. */
+export type FormWrites<TValues extends FormValues> = {
+  [TPath in Path<TValues>]?: PathValue<TValues, TPath>;
+};
+
 export type FormStoreOptions<TValues extends FormValues> = {
   /**
    * What the form is measured against, and what `reset` returns it to.
@@ -183,6 +188,29 @@ export class FormStore<TValues extends FormValues> {
     const entry = this.#index.resolve(path) ?? this.#claim(path, this.#classifier.classify(value));
 
     this.#writer.write(entry, value, this.#reconcileWritten);
+  }
+
+  /**
+   * Writes several locations, each one as `set` would write it alone.
+   *
+   * A caller that means one change spread over places that have nothing to do
+   * with each other — a projection standing for a group, a reset, a form filled
+   * from a fetched record — says it here rather than as a run of writes, so
+   * whoever is listening hears the change once instead of hearing it take shape.
+   *
+   * Locations land in the order they were written down, and one left out is one
+   * nothing reaches: what it held stays as it was.
+   *
+   * @example
+   * store.assign({
+   *   "invoice.client.name": "Grace Hopper",
+   *   "invoice.series": "F002",
+   * });
+   */
+  assign(writes: FormWrites<TValues>): void {
+    for (const path of Object.keys(writes) as Path<TValues>[]) {
+      this.set(path, writes[path] as PathValue<TValues, Path<TValues>>);
+    }
   }
 
   getState<TPath extends Path<TValues>>(path: TPath): StateEntry | undefined {

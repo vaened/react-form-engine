@@ -1264,6 +1264,139 @@ describe("FormStore", () => {
     });
   });
 
+  describe("assigning several locations at once", () => {
+    it("writes every location the value names", () => {
+      const store = new FormStore<Invoice>({ defaults: sample() });
+
+      store.assign({
+        "invoice.client.name": "Grace Hopper",
+        "invoice.series": "F002",
+        "invoice.client.addresses.0.city": "Arequipa",
+      });
+
+      expect(store.values.invoice.client.name).toBe("Grace Hopper");
+      expect(store.values.invoice.series).toBe("F002");
+      expect(store.values.invoice.client.addresses[0].city).toBe("Arequipa");
+    });
+
+    it("leaves alone what it was not given", () => {
+      const store = new FormStore<Invoice>({ defaults: sample() });
+
+      store.assign({ "invoice.client.name": "Grace Hopper" });
+
+      expect(store.values.invoice.client.email).toBe("ada@example.com");
+      expect(store.values.invoice.series).toBe("F001");
+    });
+
+    it("writes in the order the locations were written down", () => {
+      const store = new FormStore<Invoice>({ defaults: sample() });
+      const seen: string[] = [];
+      const original = store.set.bind(store);
+      store.set = ((path: never, value: never) => {
+        seen.push(path);
+        original(path, value);
+      }) as typeof store.set;
+
+      store.assign({ "invoice.series": "F002", "invoice.client.name": "Grace Hopper" });
+
+      expect(seen).toEqual(["invoice.series", "invoice.client.name"]);
+    });
+
+    it("reaches a location nobody registered, the same as a single write", () => {
+      const empty = new FormStore<Invoice>({ defaults: {} as Invoice });
+
+      empty.assign({ "invoice.client.name": "Grace Hopper" });
+
+      expect(empty.values.invoice.client.name).toBe("Grace Hopper");
+    });
+
+    it("reassesses the state of what it wrote", () => {
+      const store = new FormStore<Invoice>({ values: sample(), defaults: sample() });
+      store.register("invoice.client.name");
+      store.register("invoice.client.email");
+
+      store.assign({ "invoice.client.name": "Grace Hopper" });
+
+      expect(hasFlag((store.getState("invoice.client.name") as StateFieldEntry).state.flags, StateFlag.Dirty)).toBe(
+        true,
+      );
+      expect(hasFlag((store.getState("invoice.client.email") as StateFieldEntry).state.flags, StateFlag.Dirty)).toBe(
+        false,
+      );
+    });
+
+    it("replaces a location that holds a node, the same as a single write", () => {
+      const store = new FormStore<Invoice>({ defaults: sample() });
+
+      store.assign({ "invoice.client.addresses.0": { city: "Arequipa", reference: "Cerca del mercado" } });
+
+      expect(store.values.invoice.client.addresses[0]).toEqual({
+        city: "Arequipa",
+        reference: "Cerca del mercado",
+      });
+    });
+
+    /** It groups writes, it does not invent a third way of writing: each entry
+     * lands under whatever the form was built with. */
+    it("lands each location under the mode the form was built with", () => {
+      const patch = new FormStore<Invoice>({ defaults: sample(), mode: "patch" });
+
+      patch.assign({ "invoice.client.addresses.0": { city: "Arequipa" } as never });
+
+      expect(patch.values.invoice.client.addresses[0]).toEqual({
+        city: "Arequipa",
+        reference: "Frente al parque principal",
+      });
+    });
+
+    it("writes null and undefined as the values they are", () => {
+      const store = new FormStore<Invoice>({ defaults: sample() });
+
+      store.assign({ "invoice.client.name": null as never, "invoice.series": undefined as never });
+
+      expect(store.values.invoice.client.name).toBeNull();
+      expect(Object.hasOwn(store.values.invoice, "series")).toBe(true);
+      expect(store.values.invoice.series).toBeUndefined();
+    });
+
+    it("reconciles an array it shortened, discarding the positions that are gone", () => {
+      const store = new FormStore<Invoice>({ defaults: sample() });
+      store.register("invoice.details.0.quantity");
+
+      store.assign({ "invoice.details": [] });
+
+      expect(store.getState("invoice.details.0.quantity")).toBeUndefined();
+    });
+
+    /** Nothing stops one location from sitting under another here: they are two
+     * writes, and the later one lands on top. */
+    it("lets a later location land on top of one written before it", () => {
+      const store = new FormStore<Invoice>({ defaults: sample() });
+
+      store.assign({
+        "invoice.client": { ...sample().invoice.client, name: "Grace Hopper", email: "grace@example.com" },
+        "invoice.client.name": "Ada Lovelace",
+      });
+
+      expect(store.values.invoice.client.name).toBe("Ada Lovelace");
+      expect(store.values.invoice.client.email).toBe("grace@example.com");
+    });
+
+    it("refuses a location whose path spells a segment no form can hold", () => {
+      const store = new FormStore<Invoice>({ defaults: sample() });
+
+      expect(() => store.assign({ "invoice.client.__proto__.polluted": "yes" } as never)).toThrow(InvalidPathSegment);
+      expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+    });
+
+    it("does nothing when it is given nothing", () => {
+      const store = new FormStore<Invoice>({ defaults: sample() });
+
+      expect(() => store.assign({})).not.toThrow();
+      expect(store.values.invoice.client.name).toBe("Ada Lovelace");
+    });
+  });
+
   describe("guards", () => {
     it("finds nothing for a path that was never registered", () => {
       expect(store.getState("invoice.client.name")).toBeUndefined();

@@ -44,23 +44,22 @@ type ProjectedValues = {
   };
 };
 
-function createStoreMock(): FormStore<InvoiceValues> & {
+type StoreMock = FormStore<InvoiceValues> & {
   identifier: PathRegistry<Path<InvoiceValues>>;
   register: ReturnType<typeof vi.fn>;
   unregister: ReturnType<typeof vi.fn>;
   set: ReturnType<typeof vi.fn>;
-} {
+  assign: ReturnType<typeof vi.fn>;
+};
+
+function createStoreMock(): StoreMock {
   return {
     identifier: new PathRegistry<Path<InvoiceValues>>(),
     register: vi.fn(),
     unregister: vi.fn(),
     set: vi.fn(),
-  } as FormStore<InvoiceValues> & {
-    identifier: PathRegistry<Path<InvoiceValues>>;
-    register: ReturnType<typeof vi.fn>;
-    unregister: ReturnType<typeof vi.fn>;
-    set: ReturnType<typeof vi.fn>;
-  };
+    assign: vi.fn(),
+  } as StoreMock;
 }
 
 describe("MappedNodeControl", () => {
@@ -330,9 +329,10 @@ describe("MappedNodeControl", () => {
 
       projected.set("card", { who: "Ada", serie: "F001" });
 
-      expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Ada");
-      expect(store.set).toHaveBeenCalledWith("invoice.serial.series", "F001");
-      expect(store.set).toHaveBeenCalledTimes(2);
+      expect(store.assign).toHaveBeenCalledWith({
+        "invoice.client.person.name": "Ada",
+        "invoice.serial.series": "F001",
+      });
     });
 
     it("leaves alone what the value never names", () => {
@@ -345,8 +345,7 @@ describe("MappedNodeControl", () => {
 
       projected.set("card", { who: "Ada" } as never);
 
-      expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Ada");
-      expect(store.set).toHaveBeenCalledTimes(1);
+      expect(store.assign).toHaveBeenCalledWith({ "invoice.client.person.name": "Ada" });
     });
 
     it("stops at an alias instead of opening the value under it", () => {
@@ -358,8 +357,7 @@ describe("MappedNodeControl", () => {
 
       projected.set("card", { whole: person });
 
-      expect(store.set).toHaveBeenCalledWith("invoice.client.person", person);
-      expect(store.set).toHaveBeenCalledTimes(1);
+      expect(store.assign).toHaveBeenCalledWith({ "invoice.client.person": person });
     });
 
     it("refuses the same map when it reaches the control through a projection", () => {
@@ -409,6 +407,38 @@ describe("MappedNodeControl", () => {
 
     /** The map is flat, so a name reaches every descendant of the projection and
      * not only the members written right under it. */
+    /** One change spread over places that have nothing to do with each other is
+     * one change, and the store is told so. */
+    it("hands a group to the store as a single assignment", () => {
+      const store = createStoreMock();
+      const control: Control<InvoiceValues> = MappedNodeControl.from(store);
+      const projected = control.lens({
+        card: { who: "invoice.client.person.name", serie: "invoice.serial.series" },
+      });
+
+      projected.set("card", { who: "Ada", serie: "F001" });
+
+      expect(store.assign).toHaveBeenCalledTimes(1);
+      expect(store.assign).toHaveBeenCalledWith({
+        "invoice.client.person.name": "Ada",
+        "invoice.serial.series": "F001",
+      });
+      expect(store.set).not.toHaveBeenCalled();
+    });
+
+    /** A name that stands for one place is one write, and asking the store to
+     * batch it would only build an object to take it apart again. */
+    it("writes a plain alias with a single set, not an assignment", () => {
+      const store = createStoreMock();
+      const aliases: ControlAliasMap<ProjectedValues, InvoiceValues> = { person: "invoice.client.person" };
+      const control: Control<ProjectedValues> = MappedNodeControl.from(store, aliases);
+
+      control.set("person.name", "Ada");
+
+      expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Ada");
+      expect(store.assign).not.toHaveBeenCalled();
+    });
+
     it("reaches every leaf of a group nested three levels deep", () => {
       const store = createStoreMock();
       const control: Control<InvoiceValues> = MappedNodeControl.from(store);
@@ -419,7 +449,7 @@ describe("MappedNodeControl", () => {
       projected.set("a", { b: { c: "Ada", d: "F001" }, e: "000001" });
       projected.register("a");
 
-      expect(store.set.mock.calls).toEqual([
+      expect(Object.entries(store.assign.mock.calls[0][0])).toEqual([
         ["invoice.client.person.name", "Ada"],
         ["invoice.serial.series", "F001"],
         ["invoice.serial.number", "000001"],
@@ -441,7 +471,7 @@ describe("MappedNodeControl", () => {
       projected.set("a.b", { c: "Ada", d: "F001" });
       projected.register("a.b");
 
-      expect(store.set.mock.calls).toEqual([
+      expect(Object.entries(store.assign.mock.calls[0][0])).toEqual([
         ["invoice.client.person.name", "Ada"],
         ["invoice.serial.series", "F001"],
       ]);

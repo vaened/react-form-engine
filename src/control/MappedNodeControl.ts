@@ -3,7 +3,7 @@
  * @link https://vaened.dev DevFolio
  */
 
-import type { FormStore, FormValues as StoreFormValues } from "../FormStore";
+import type { FormStore, FormWrites, FormValues as StoreFormValues } from "../FormStore";
 import type { FormValues, NodePath, Path, PathValue } from "../path";
 import type { NodeControl } from "./Control";
 import { EmptyProjection, PathOutsideControl } from "./errors";
@@ -56,6 +56,11 @@ export class MappedNodeControl<TLocalValues extends FormValues, TFormValues exte
    * so there is no single place to hand the whole value to. Descending by the
    * value rather than by the map is also what leaves untouched whatever the
    * caller did not name.
+   *
+   * The places it reaches are gathered before any of them is written, so what
+   * the caller meant as one change arrives as one, rather than as the run of
+   * writes it happens to take. A name that stands for one place skips that:
+   * building a map to take it apart again buys nothing.
    */
   #write(path: Path<TLocalValues>, value: unknown): void {
     const reach = this.#pathResolver.reach(path);
@@ -65,13 +70,33 @@ export class MappedNodeControl<TLocalValues extends FormValues, TFormValues exte
       return;
     }
 
-    if (!MappedNodeControl.#openable(value)) {
-      throw new PathOutsideControl(path);
-    }
+    this.#store.assign(this.#planned(path, value));
+  }
 
-    for (const key of Object.keys(value)) {
-      this.#write(MappedNodeControl.#under(path, key), value[key]);
-    }
+  /** Where every part of a value lands, without writing any of it yet. */
+  #planned(path: Path<TLocalValues>, value: unknown): FormWrites<TFormValues> {
+    const writes: FormWrites<TFormValues> = {};
+
+    const visit = (at: Path<TLocalValues>, current: unknown): void => {
+      const reach = this.#pathResolver.reach(at);
+
+      if (reach.kind === "alias") {
+        writes[reach.path] = current as FormWrites<TFormValues>[Path<TFormValues>];
+        return;
+      }
+
+      if (!MappedNodeControl.#openable(current)) {
+        throw new PathOutsideControl(at);
+      }
+
+      for (const key of Object.keys(current)) {
+        visit(MappedNodeControl.#under(at, key), current[key]);
+      }
+    };
+
+    visit(path, value);
+
+    return writes;
   }
 
   /**
