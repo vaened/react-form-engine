@@ -49,3 +49,6 @@ coverage/
 .pnpm-debug.log*
 yarn.lock
 .contextual-work-tracker/
+
+# Benchmarks
+bench/
