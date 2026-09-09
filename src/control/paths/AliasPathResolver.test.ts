@@ -359,6 +359,22 @@ describe("AliasPathResolver scope", () => {
     });
   });
 
+  /** The narrowed name has no name of its own inside the domain it opens, so it
+   * is the one thing the inherited map must not carry. */
+  it("inherits nothing for the name it narrowed to", () => {
+    const resolver = new AliasPathResolver<LocalValues, FormValues>(registry(), {
+      person: "invoice.client.person",
+      "person.name": "invoice.serial.series",
+    });
+
+    const narrowed = resolver.scope<LocalValues["person"]>("person") as AliasPathResolver<
+      LocalValues["person"],
+      FormValues
+    >;
+
+    expect(narrowed.aliases).toEqual({ name: "invoice.serial.series" });
+  });
+
   it("refuses to narrow to a name the map does not cover", () => {
     const resolver = new AliasPathResolver<LocalValues, FormValues>(registry(), {
       person: "invoice.client.person",

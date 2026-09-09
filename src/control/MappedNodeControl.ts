@@ -132,9 +132,9 @@ export class MappedNodeControl<TLocalValues extends FormValues, TFormValues exte
         return;
       }
 
-      for (const [key, child] of Object.entries(value)) {
+      for (const key of Object.keys(value)) {
         const localPath = localPathPrefix ? `${localPathPrefix}.${key}` : key;
-        visit(child as ControlProjection<TLocalValues> | Path<TLocalValues>, localPath);
+        visit(value[key], localPath);
       }
     };
 

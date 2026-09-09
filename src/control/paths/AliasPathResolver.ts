@@ -122,29 +122,28 @@ export class AliasPathResolver<TLocalValues extends FormValues, TFormValues exte
    * the same afterwards however the map it came from is handled.
    */
   scope<TScoped extends FormValues>(path: Path<TLocalValues>): PathResolver<TScoped, TFormValues> {
-    const under = `${path}.`;
-    const inherited: Record<string, Path<TFormValues>> = {};
-
-    for (const [local, real] of Object.entries(this.#aliases) as [string, Path<TFormValues>][]) {
-      if (local.startsWith(under)) {
-        inherited[local.slice(under.length)] = real;
-      }
-    }
-
+    const members = this.#grouped.get(path);
     const beneath = this.#lookup(path);
 
-    if (beneath === undefined && Object.keys(inherited).length === 0) {
+    if (members === undefined && beneath === undefined) {
       throw new Error(`Path \`${path}\` is outside this control aliases.`);
+    }
+
+    const inherited: Record<string, Path<TFormValues>> = {};
+    const cut = path.length + 1;
+
+    for (const member of members ?? []) {
+      const real = this.#aliases[member];
+
+      if (member !== path && real !== undefined) {
+        inherited[member.slice(cut)] = real;
+      }
     }
 
     // Cutting a prefix off a local path is where it stops being one and
     // becomes text, so the compiler cannot follow the remainder back to the
     // path it spells inside the narrowed domain.
-    return new AliasPathResolver<TScoped, TFormValues>(
-      this.#identifier,
-      inherited as ControlAliasMap<TScoped, TFormValues>,
-      beneath,
-    );
+    return new AliasPathResolver(this.#identifier, inherited, beneath);
   }
 
   /** The real path a local one names, by its own entry, by the nearest entry it
@@ -170,7 +169,7 @@ export class AliasPathResolver<TLocalValues extends FormValues, TFormValues exte
       const formPrefix = this.#aliases[prefix as Path<TLocalValues>];
 
       if (formPrefix) {
-        return `${formPrefix}${(path as string).slice(prefix.length)}` as Path<TFormValues>;
+        return `${formPrefix}${path.slice(prefix.length)}` as Path<TFormValues>;
       }
     }
 
