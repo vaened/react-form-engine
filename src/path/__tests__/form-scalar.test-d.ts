@@ -136,3 +136,65 @@ const invalidScalarItemArrayPath: ArrayPath<ScalarValues> = "details.0.unitPrice
 
 void invalidScalarArrayPath;
 void invalidScalarItemArrayPath;
+
+/** A class carries the mark as an intersection where the form declares its
+ * shape, so the class itself is left as its author wrote it. */
+declare class Price {
+  readonly amount: number;
+  readonly currency: string;
+}
+
+type IntersectedValues = {
+  invoice: { details: { description: string; unitPrice: Price & FormScalar }[] };
+};
+
+type IntersectedExpectedPath =
+  | "invoice"
+  | "invoice.details"
+  | `invoice.details.${number}`
+  | `invoice.details.${number}.description`
+  | `invoice.details.${number}.unitPrice`;
+
+type IntersectedPathExpectation = Expect<Equal<Path<IntersectedValues>, IntersectedExpectedPath>>;
+type IntersectedFieldPathExpectation = Expect<
+  Equal<FieldPath<IntersectedValues>, `invoice.details.${number}.description` | `invoice.details.${number}.unitPrice`>
+>;
+type IntersectedNodePathExpectation = Expect<
+  Equal<NodePath<IntersectedValues>, "invoice" | "invoice.details" | `invoice.details.${number}`>
+>;
+type IntersectedControlExpectation = Expect<Extends<ControlType<Price & FormScalar>, FieldControl<Price & FormScalar>>>;
+
+// @ts-expect-error the mark stops a path at the value, whichever way it was carried
+const invalidIntersectedPath: Path<IntersectedValues> = "invoice.details.0.unitPrice.amount";
+
+void invalidIntersectedPath;
+
+/** The same class without the mark is taken apart, which is what the mark exists
+ * to prevent. */
+type UnmarkedValues = {
+  invoice: { details: { description: string; unitPrice: Price }[] };
+};
+
+const unmarkedInsidePath: Path<UnmarkedValues> = "invoice.details.0.unitPrice.amount";
+type UnmarkedPriceControlExpectation = Expect<Extends<ControlType<Price>, NodeControl<Price>>>;
+
+void unmarkedInsidePath;
+
+/** Nothing is asked of the value itself: an instance fits where the marked type
+ * is expected. */
+declare const price: Price;
+const marked: Price & FormScalar = price;
+
+void marked;
+
+declare const intersectedPathExpectation: IntersectedPathExpectation;
+declare const intersectedFieldPathExpectation: IntersectedFieldPathExpectation;
+declare const intersectedNodePathExpectation: IntersectedNodePathExpectation;
+declare const intersectedControlExpectation: IntersectedControlExpectation;
+declare const unmarkedPriceControlExpectation: UnmarkedPriceControlExpectation;
+
+void intersectedPathExpectation;
+void intersectedFieldPathExpectation;
+void intersectedNodePathExpectation;
+void intersectedControlExpectation;
+void unmarkedPriceControlExpectation;

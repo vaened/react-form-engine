@@ -51,22 +51,36 @@ declare const FORM_SCALAR: unique symbol;
  * at it, `NodePath` skips it, and `Control` resolves to a `FieldControl` rather
  * than a `NodeControl`.
  *
- * Mark a type by merging this interface into it. Only an `interface` or a
- * `class` can be marked, because a `type` alias cannot be reopened.
+ * An interface carries the mark by extending this one, at its declaration or
+ * from anywhere else.
  *
  * @example
- * // Where the type is declared:
+ * export interface Money extends FormScalar {
+ *   readonly amount: number;
+ *   readonly currency: string;
+ * }
+ *
+ * @example
+ * // For an interface you do not own:
+ * declare module "./domain" {
+ *   interface Money extends FormScalar {}
+ * }
+ *
+ * A class, or a `type` alias, carries it as an intersection where the form
+ * declares its shape. The alias cannot be reopened at all, and merging an
+ * interface onto a class is what `no-unsafe-declaration-merging` reports —
+ * a rule enabled by default in Biome and in the recommended config of
+ * typescript-eslint. It fires on the two declarations sharing a name, not on
+ * the mark, so intersecting sidesteps it by leaving the class untouched.
+ *
+ * @example
  * export class Money {
  *   constructor(readonly amount: number, readonly currency: string) {}
  * }
  *
- * export interface Money extends FormScalar {}
- *
- * @example
- * // From anywhere else, including for a type you do not own:
- * declare module "./domain" {
- *   interface Money extends FormScalar {}
- * }
+ * type Invoice = {
+ *   invoice: { details: { unitPrice: Money & FormScalar }[] };
+ * };
  *
  * The declaration is erased at compile time and has no effect at runtime. The
  * engine still has to be given a `Scalar` that knows how to recognise the type
