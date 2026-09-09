@@ -17,6 +17,7 @@ import { FullWrite } from "./store/value/FullWrite";
 import { isolate } from "./store/value/isolate";
 import { PatchWrite } from "./store/value/PatchWrite";
 import { PathValueClassifier } from "./store/value/PathValueClassifier";
+import type { Scalar } from "./store/value/Scalar";
 import { ValueStore } from "./store/value/ValueStore";
 import type { ValueWrite } from "./store/value/ValueWrite";
 import type { DeepPartial } from "./types";
@@ -35,6 +36,20 @@ export type FormStoreOptions<TValues extends FormValues> = {
   defaults: DeepPartial<TValues>;
   /** Where the form starts, when that is not its base. */
   values?: DeepPartial<TValues>;
+  /**
+   * Shapes the form is to hold whole rather than take apart, each saying how it
+   * is recognised and how two of them are told apart.
+   *
+   * A location whose value nothing claims is read by its shape, which only ever
+   * takes a plain record and a list apart. What that leaves out is the shape
+   * that reads like a record and is not one — an amount and its currency are
+   * one price, and two of them are the same price by what they say, never by
+   * being the same object.
+   *
+   * These are offered a value before the ones the engine brings, so holding a
+   * `Date` as a day rather than an instant is a matter of passing one in.
+   */
+  scalars?: readonly Scalar[];
   mode?: FormMode;
 };
 
@@ -44,7 +59,7 @@ export class FormStore<TValues extends FormValues> {
   readonly #index: PathIndex<TValues>;
   readonly #state: StateGraph;
   readonly #value: ValueStore<TValues>;
-  readonly #classifier = new PathValueClassifier();
+  readonly #classifier: PathValueClassifier;
   readonly #assessor: StateAssessor;
   readonly #reconciler: Reconciler<TValues>;
   readonly #writer: ValueWrite;
@@ -52,6 +67,7 @@ export class FormStore<TValues extends FormValues> {
 
   constructor(options: FormStoreOptions<TValues>) {
     this.#mode = options.mode ?? "full";
+    this.#classifier = new PathValueClassifier(options.scalars);
     this.#paths = new PathRegistry<Path<TValues>>();
     this.#index = new PathIndex<TValues>(this.#paths);
     this.#state = new StateGraph(this.#index);

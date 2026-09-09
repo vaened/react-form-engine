@@ -17,3 +17,4 @@ export type {
   PathValue,
   Primitive,
 } from "./path";
+export type { Scalar } from "./store/value/Scalar";

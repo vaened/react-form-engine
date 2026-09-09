@@ -5,11 +5,13 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 import { FormStore } from "./FormStore";
+import type { FormScalar } from "./path";
 import { InvalidArrayIndex, InvalidPathSegment } from "./store/path/errors";
 import { PathKind } from "./store/path/types";
 import { hasFlag, StateFlag } from "./store/state/StateFlag";
 import type { StateEntry, StateFieldEntry } from "./store/state/types";
 import { CircularPatchValue, CircularValue, PathInsideValue } from "./store/value/errors";
+import type { Scalar } from "./store/value/Scalar";
 
 /** Shape of docs/FormValue.example.json. */
 type Invoice = {
@@ -1108,6 +1110,121 @@ describe("FormStore", () => {
       store.set("invoice.client", hostile as never);
 
       expect(({} as Record<string, unknown>).pollutedWhole).toBeUndefined();
+    });
+  });
+
+  describe("shapes the form is told to hold whole", () => {
+    class Money {
+      constructor(
+        public amount: number,
+        readonly currency: string,
+      ) {}
+    }
+
+    interface Address extends FormScalar {
+      city: string;
+      reference: string;
+    }
+
+    type Priced = {
+      invoice: {
+        createdAt: Date;
+        client: { addresses: Address[] };
+        details: { description: string; unitPrice: Money }[];
+      };
+    };
+
+    const moneyScalar: Scalar<Money> = {
+      matches: (value): value is Money => value instanceof Money,
+      equals: (left, right) => left.amount === right.amount && left.currency === right.currency,
+      isolate: (value) => new Money(value.amount, value.currency),
+    };
+
+    const addressScalar: Scalar<Address> = {
+      matches: (value): value is Address =>
+        typeof value === "object" && value !== null && "city" in value && "reference" in value,
+      equals: (left, right) => left.city === right.city && left.reference === right.reference,
+    };
+
+    const dayScalar: Scalar<Date> = {
+      matches: (value): value is Date => value instanceof Date,
+      equals: (left, right) => left.toDateString() === right.toDateString(),
+    };
+
+    const priced = (unitPrice = new Money(120, "PEN")): Priced => ({
+      invoice: {
+        createdAt: new Date("2026-08-28T12:00:00.000Z"),
+        client: { addresses: [{ city: "Lima", reference: "Frente al parque principal" }] },
+        details: [{ description: "Consulting service", unitPrice }],
+      },
+    });
+
+    const dirty = (form: FormStore<Priced>, path: Parameters<FormStore<Priced>["getState"]>[0]) =>
+      hasFlag((form.getState(path) as StateFieldEntry).state.flags, StateFlag.Dirty);
+
+    it("stops at a record a scalar claims, instead of taking it apart", () => {
+      const form = new FormStore<Priced>({ defaults: priced(), scalars: [addressScalar] });
+
+      form.register("invoice.client.addresses.0");
+
+      expect(form.getState("invoice.client.addresses.0")?.kind).toBe(PathKind.Field);
+    });
+
+    it("takes the same record apart when nothing claims it", () => {
+      const form = new FormStore<Priced>({ defaults: priced() });
+
+      form.register("invoice.client.addresses.0");
+
+      expect(form.getState("invoice.client.addresses.0")?.kind).toBe(PathKind.Object);
+    });
+
+    it("compares two of them by what they say", () => {
+      const form = new FormStore<Priced>({ defaults: priced(), scalars: [moneyScalar] });
+
+      form.register("invoice.details.0.unitPrice");
+      form.set("invoice.details.0.unitPrice", new Money(120, "PEN"));
+
+      expect(dirty(form, "invoice.details.0.unitPrice")).toBe(false);
+    });
+
+    it("compares them by being the same one when nothing claims them", () => {
+      const form = new FormStore<Priced>({ defaults: priced() });
+
+      form.register("invoice.details.0.unitPrice");
+      form.set("invoice.details.0.unitPrice", new Money(120, "PEN"));
+
+      expect(dirty(form, "invoice.details.0.unitPrice")).toBe(true);
+    });
+
+    it("keeps the base out of reach of a value that can be changed in place", () => {
+      const shared = new Money(120, "PEN");
+      const form = new FormStore<Priced>({
+        values: priced(shared),
+        defaults: priced(shared),
+        scalars: [moneyScalar],
+      });
+
+      form.values.invoice.details[0].unitPrice.amount = 999;
+
+      expect(form.defaults.invoice.details[0].unitPrice.amount).toBe(120);
+    });
+
+    it("offers a value to the given scalars before the ones it brings", () => {
+      const form = new FormStore<Priced>({ defaults: priced(), scalars: [dayScalar] });
+
+      form.register("invoice.createdAt");
+      form.set("invoice.createdAt", new Date("2026-08-28T23:30:00.000Z"));
+
+      expect(dirty(form, "invoice.createdAt")).toBe(false);
+    });
+
+    it("still brings its own when none is given", () => {
+      const form = new FormStore<Priced>({ defaults: priced() });
+
+      form.register("invoice.createdAt");
+      form.set("invoice.createdAt", new Date("2026-08-28T23:30:00.000Z"));
+
+      expect(dirty(form, "invoice.createdAt")).toBe(true);
     });
   });
 
