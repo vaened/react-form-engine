@@ -9,7 +9,6 @@ import type { NodeControl } from "./Control";
 import { AliasPathResolver, type ControlAliasMap } from "./paths/AliasPathResolver";
 import { PassthroughPathResolver } from "./paths/PassthroughPathResolver";
 import type { PathResolver } from "./paths/PathResolver";
-import { PrefixedPathResolver } from "./paths/PrefixedPathResolver";
 import type { ControlProjection, FocusedValue, LensSelection, ProjectionValue } from "./types";
 
 export class MappedNodeControl<TLocalValues extends FormValues, TFormValues extends StoreFormValues = StoreFormValues>
@@ -59,10 +58,10 @@ export class MappedNodeControl<TLocalValues extends FormValues, TFormValues exte
   }
 
   #focus<TPath extends NodePath<TLocalValues>>(path: TPath): NodeControl<FocusedValue<TLocalValues, TPath>> {
-    const realPrefix = this.#pathResolver.resolve(path as Path<TLocalValues>);
-    const pathResolver = new PrefixedPathResolver<FocusedValue<TLocalValues, TPath>, TFormValues>(realPrefix);
-
-    return new MappedNodeControl(this.#store, pathResolver);
+    return new MappedNodeControl(
+      this.#store,
+      this.#pathResolver.scope<FocusedValue<TLocalValues, TPath>>(path as Path<TLocalValues>),
+    );
   }
 
   #project<TProjection extends ControlProjection<TLocalValues>>(

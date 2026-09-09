@@ -257,6 +257,74 @@ describe("MappedNodeControl", () => {
     expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Grace");
   });
 
+  describe("a projection that renames, rather than a window onto one prefix", () => {
+    /** The recursive half of a projection: a local group whose members come
+     * from unrelated places in the form. */
+    it("builds a dotted local path for every level the projection nests", () => {
+      const store = createStoreMock();
+      const control: Control<InvoiceValues> = MappedNodeControl.from(store);
+
+      const projected = control.lens({
+        person: { name: "invoice.client.person.name", code: "invoice.serial.series" },
+      });
+
+      projected.set("person.name", "Ada");
+      projected.set("person.code", "F001");
+
+      expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Ada");
+      expect(store.set).toHaveBeenCalledWith("invoice.serial.series", "F001");
+    });
+
+    it("focuses a group the projection invented, whose members have no shared real prefix", () => {
+      const store = createStoreMock();
+      const control: Control<InvoiceValues> = MappedNodeControl.from(store);
+
+      const projected = control.lens({
+        person: { name: "invoice.client.person.name", code: "invoice.serial.series" },
+      });
+
+      const person = projected.lens("person");
+
+      person.set("name", "Ada");
+      person.set("code", "F001");
+
+      expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Ada");
+      expect(store.set).toHaveBeenCalledWith("invoice.serial.series", "F001");
+    });
+
+    it("keeps a descendant that points elsewhere when the parent alias is focused", () => {
+      const store = createStoreMock();
+      const aliases: ControlAliasMap<ProjectedValues, InvoiceValues> = {
+        person: "invoice.client.person",
+        "person.name": "invoice.serial.series",
+      };
+      const control: Control<ProjectedValues> = MappedNodeControl.from(store, aliases);
+
+      const person = control.lens("person");
+
+      person.set("name", "Ada");
+      person.set("documentNumber", "12345678");
+
+      expect(store.set).toHaveBeenCalledWith("invoice.serial.series", "Ada");
+      expect(store.set).toHaveBeenCalledWith("invoice.client.person.documentNumber", "12345678");
+    });
+
+    it("nests a group inside a group", () => {
+      const store = createStoreMock();
+      const control: Control<InvoiceValues> = MappedNodeControl.from(store);
+
+      const projected = control.lens({
+        client: { person: { name: "invoice.client.person.name" }, mail: "invoice.client.contact.email" },
+      });
+
+      projected.lens("client").lens("person").set("name", "Ada");
+      projected.lens("client").set("mail", "ada@example.com");
+
+      expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Ada");
+      expect(store.set).toHaveBeenCalledWith("invoice.client.contact.email", "ada@example.com");
+    });
+  });
+
   it("throws when a projection path is outside the current control scope", () => {
     const store = createStoreMock();
     const control: Control<ProjectedValues> = MappedNodeControl.from(store, {

@@ -18,4 +18,8 @@ export class PrefixedPathResolver<TLocalValues extends FormValues, TFormValues e
   resolve<TPath extends Path<TLocalValues> | NodePath<TLocalValues>>(path: TPath): Path<TFormValues> {
     return `${this.#realPrefix}.${path}` as Path<TFormValues>;
   }
+
+  scope<TScoped extends FormValues>(path: Path<TLocalValues>): PathResolver<TScoped, TFormValues> {
+    return new PrefixedPathResolver<TScoped, TFormValues>(this.resolve(path));
+  }
 }
