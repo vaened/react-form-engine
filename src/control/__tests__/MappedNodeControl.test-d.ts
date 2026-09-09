@@ -254,3 +254,19 @@ form.set("Grace");
 
 // @ts-expect-error a projection path must exist in the current control scope
 form.lens({ missing: "invoice.missing" });
+
+/** A projection where one name both stands for a place and holds others is
+ * refused by the compiler, not only at construction. */
+declare const overriding: NodeControl<InvoiceValues>;
+
+overriding.lens({
+  person: { name: "invoice.serial.series", documentNumber: "invoice.client.person.documentNumber" },
+});
+
+overriding.lens({ person: "invoice.client.person", serial: "invoice.serial" });
+
+// @ts-expect-error `person.name` hangs from `person`
+overriding.lens({ person: "invoice.client.person", "person.name": "invoice.serial.series" });
+
+// @ts-expect-error `a.b.c` hangs from `a.b`
+overriding.lens({ "a.b": "invoice.client.person", "a.b.c": "invoice.serial.series" });

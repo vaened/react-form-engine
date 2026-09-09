@@ -9,7 +9,7 @@ import type { NodeControl } from "./Control";
 import { AliasPathResolver, type ControlAliasMap } from "./paths/AliasPathResolver";
 import { PassthroughPathResolver } from "./paths/PassthroughPathResolver";
 import type { PathResolver } from "./paths/PathResolver";
-import type { ControlProjection, FocusedValue, LensSelection, ProjectionValue } from "./types";
+import type { ControlProjection, FocusedValue, LensSelection, ProjectionValue, WithoutOverrides } from "./types";
 
 export class MappedNodeControl<TLocalValues extends FormValues, TFormValues extends StoreFormValues = StoreFormValues>
   implements NodeControl<TLocalValues>
@@ -101,8 +101,8 @@ export class MappedNodeControl<TLocalValues extends FormValues, TFormValues exte
   }
 
   lens<TPath extends NodePath<TLocalValues>>(selection: TPath): NodeControl<FocusedValue<TLocalValues, TPath>>;
-  lens<TProjection extends ControlProjection<TLocalValues>>(
-    selection: TProjection,
+  lens<const TProjection extends ControlProjection<TLocalValues>>(
+    selection: TProjection & WithoutOverrides<TLocalValues, TProjection>,
   ): NodeControl<ProjectionValue<TLocalValues, TProjection>>;
   lens(selection: LensSelection<TLocalValues>) {
     return typeof selection === "string" ? this.#focus(selection) : this.#project(selection);

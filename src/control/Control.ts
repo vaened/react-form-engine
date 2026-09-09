@@ -6,7 +6,7 @@
 import type { FormStore, FormValues as StoreFormValues } from "../FormStore";
 import type { FormValues, IsTerminal, NodePath, Path, PathValue } from "../path";
 import { MappedNodeControl } from "./MappedNodeControl";
-import type { ControlProjection, FocusedValue, ProjectionValue } from "./types";
+import type { ControlProjection, FocusedValue, ProjectionValue, WithoutOverrides } from "./types";
 
 /**
  * A control over a scoped domain of form values.
@@ -81,8 +81,8 @@ export interface NodeControl<TValues extends FormValues> {
    */
   lens: {
     <TPath extends NodePath<TValues>>(selection: TPath): NodeControl<FocusedValue<TValues, TPath>>;
-    <TProjection extends ControlProjection<TValues>>(
-      selection: TProjection,
+    <const TProjection extends ControlProjection<TValues>>(
+      selection: TProjection & WithoutOverrides<TValues, TProjection>,
     ): NodeControl<ProjectionValue<TValues, TProjection>>;
   };
 }

@@ -4,6 +4,7 @@ import type { FormStore } from "../../FormStore";
 import type { Path } from "../../path";
 import { PathRegistry } from "../../store/state/PathRegistry";
 import type { Control } from "../Control";
+import { OverlappingAlias } from "../errors";
 import { MappedNodeControl } from "../MappedNodeControl";
 import type { ControlAliasMap } from "../paths/AliasPathResolver";
 
@@ -292,21 +293,14 @@ describe("MappedNodeControl", () => {
       expect(store.set).toHaveBeenCalledWith("invoice.serial.series", "F001");
     });
 
-    it("keeps a descendant that points elsewhere when the parent alias is focused", () => {
+    it("refuses a map where a name both stands for a place and holds others", () => {
       const store = createStoreMock();
       const aliases: ControlAliasMap<ProjectedValues, InvoiceValues> = {
         person: "invoice.client.person",
         "person.name": "invoice.serial.series",
       };
-      const control: Control<ProjectedValues> = MappedNodeControl.from(store, aliases);
 
-      const person = control.lens("person");
-
-      person.set("name", "Ada");
-      person.set("documentNumber", "12345678");
-
-      expect(store.set).toHaveBeenCalledWith("invoice.serial.series", "Ada");
-      expect(store.set).toHaveBeenCalledWith("invoice.client.person.documentNumber", "12345678");
+      expect(() => MappedNodeControl.from(store, aliases)).toThrow(OverlappingAlias);
     });
 
     it("nests a group inside a group", () => {
@@ -368,20 +362,16 @@ describe("MappedNodeControl", () => {
       expect(store.set).toHaveBeenCalledTimes(1);
     });
 
-    it("keeps a descendant that points elsewhere instead of writing the node whole", () => {
+    it("refuses the same map when it reaches the control through a projection", () => {
       const store = createStoreMock();
-      const aliases: ControlAliasMap<ProjectedValues, InvoiceValues> = {
-        person: "invoice.client.person",
-        "person.name": "invoice.serial.series",
-      };
-      const control: Control<ProjectedValues> = MappedNodeControl.from(store, aliases);
+      const control: Control<InvoiceValues> = MappedNodeControl.from(store);
 
-      control.set("person", { documentNumber: "12345678", name: "Ada" });
-
-      expect(store.set).toHaveBeenCalledWith("invoice.client.person.documentNumber", "12345678");
-      expect(store.set).toHaveBeenCalledWith("invoice.serial.series", "Ada");
-      expect(store.set).not.toHaveBeenCalledWith("invoice.client.person", expect.anything());
-      expect(store.set).toHaveBeenCalledTimes(2);
+      expect(() =>
+        control.lens({
+          person: "invoice.client.person",
+          "person.name": "invoice.serial.series",
+        } as never),
+      ).toThrow(OverlappingAlias);
     });
 
     it("registers and unregisters every member the name groups", () => {
@@ -399,24 +389,6 @@ describe("MappedNodeControl", () => {
       expect(store.register).toHaveBeenCalledWith("invoice.serial.series");
       expect(store.unregister).toHaveBeenCalledWith("invoice.client.person.name");
       expect(store.unregister).toHaveBeenCalledWith("invoice.serial.series");
-      expect(store.register).toHaveBeenCalledTimes(2);
-    });
-
-    /** A name that both stands for a node and gathers a member pointing elsewhere:
-     * registering it has to reach the node too, or everything the member does not
-     * cover would be left unregistered. */
-    it("registers the node itself as well when the name also answers for one", () => {
-      const store = createStoreMock();
-      const aliases: ControlAliasMap<ProjectedValues, InvoiceValues> = {
-        person: "invoice.client.person",
-        "person.name": "invoice.serial.series",
-      };
-      const control: Control<ProjectedValues> = MappedNodeControl.from(store, aliases);
-
-      control.register("person");
-
-      expect(store.register).toHaveBeenCalledWith("invoice.client.person");
-      expect(store.register).toHaveBeenCalledWith("invoice.serial.series");
       expect(store.register).toHaveBeenCalledTimes(2);
     });
 
@@ -481,9 +453,7 @@ describe("MappedNodeControl", () => {
       const control: Control<InvoiceValues> = MappedNodeControl.from(store);
       const projected = control.lens({ card: { who: "invoice.client.person.name" } });
 
-      expect(() => projected.set("card" as never, "Ada" as never)).toThrow(
-        "Path `card` is outside this control aliases.",
-      );
+      expect(() => projected.set("card" as never, "Ada" as never)).toThrow("is outside this control aliases");
       expect(store.set).not.toHaveBeenCalled();
     });
 
@@ -493,9 +463,7 @@ describe("MappedNodeControl", () => {
       const control: Control<InvoiceValues> = MappedNodeControl.from(store);
       const projected = control.lens({ card: { who: "invoice.client.person.name" } });
 
-      expect(() => projected.set("card" as never, ["Ada"] as never)).toThrow(
-        "Path `card` is outside this control aliases.",
-      );
+      expect(() => projected.set("card" as never, ["Ada"] as never)).toThrow("is outside this control aliases");
       expect(store.set).not.toHaveBeenCalled();
     });
 
@@ -521,7 +489,7 @@ describe("MappedNodeControl", () => {
       control.lens({
         contact: "contact" as never,
       }),
-    ).toThrow("Path `contact` is outside this control aliases.");
+    ).toThrow("is outside this control aliases");
   });
 
   it("throws when a lens node path is outside the current control scope", () => {
@@ -532,7 +500,7 @@ describe("MappedNodeControl", () => {
       serial: "invoice.serial",
     });
 
-    expect(() => control.lens("contact" as never)).toThrow("Path `contact` is outside this control aliases.");
+    expect(() => control.lens("contact" as never)).toThrow("is outside this control aliases");
   });
 
   it("throws when the projection is empty", () => {

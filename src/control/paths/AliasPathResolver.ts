@@ -6,6 +6,7 @@
 import type { FormValues, Path } from "../../path";
 import { SingleEntryCache } from "../../SingleEntryCache";
 import type { PathId, PathIdentifier } from "../../store/state/PathRegistry";
+import { OverlappingAlias } from "../errors";
 import type { PathResolver, Reach } from "./PathResolver";
 
 export type ControlAliasMap<TLocalValues extends FormValues, TFormValues extends FormValues> = Partial<
@@ -79,9 +80,11 @@ export class AliasPathResolver<TLocalValues extends FormValues, TFormValues exte
    * Read once, because the map never changes after this: asking it on every
    * write would walk the whole map on the path a keystroke takes.
    *
-   * A name that also answers for a place of the form is listed among its own
-   * members, so writing them still leaves the place to answer for whatever no
-   * member covers.
+   * A name that both answers for a place and holds others is refused here. Such
+   * a name would have to be watched as the place it names, which reports
+   * whatever changes beneath it, including the very locations it was told to
+   * replace. Spelling the members out costs a line and leaves each of them
+   * standing for exactly one place.
    */
   #gather(): ReadonlyMap<Path<TLocalValues>, readonly Path<TLocalValues>[]> {
     const grouped = new Map<Path<TLocalValues>, Path<TLocalValues>[]>();
@@ -99,6 +102,11 @@ export class AliasPathResolver<TLocalValues extends FormValues, TFormValues exte
         name = name.slice(0, lastDotIndex);
 
         const holder = name as Path<TLocalValues>;
+
+        if (this.#aliases[holder] !== undefined) {
+          throw new OverlappingAlias(local, holder);
+        }
+
         const members = grouped.get(holder);
 
         if (members !== undefined) {
@@ -106,7 +114,7 @@ export class AliasPathResolver<TLocalValues extends FormValues, TFormValues exte
           continue;
         }
 
-        grouped.set(holder, this.#lookup(holder) === undefined ? [local] : [holder, local]);
+        grouped.set(holder, [local]);
       }
     }
 
