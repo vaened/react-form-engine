@@ -159,8 +159,12 @@ export type StructureEvents = {
   /**
    * A location is composed of other entries than the ones it answered for: one
    * appeared, one left, or the order they sit in is another.
+   *
+   * What it is composed of now travels with it, and it is the very thing
+   * `composedOf` gives back, so nobody ends up holding two answers to the same
+   * question with no way to tell them apart.
    */
-  recomposed: EntryId;
+  recomposed: { readonly id: EntryId; readonly composition: readonly EntryId[] };
   /** A location that answered for itself now holds others that answer for it. */
   reopened: EntryId;
   /**

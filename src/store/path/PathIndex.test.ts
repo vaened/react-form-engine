@@ -93,7 +93,7 @@ describe("PathIndex", () => {
       const { addresses } = registerAddresses();
       const heard: EntryId[] = [];
 
-      index.on("recomposed", (id) => heard.push(id));
+      index.on("recomposed", ({ id }) => heard.push(id));
       index.replace(addresses.id, 0, PathKind.Field);
 
       expect(heard).toEqual([addresses.id]);
@@ -168,13 +168,61 @@ describe("PathIndex", () => {
     });
   });
 
+  describe("what a recomposition says", () => {
+    it("carries the composition it left behind, not only where it happened", () => {
+      const { addresses } = registerAddresses();
+      const heard: { id: EntryId; composition: readonly EntryId[] }[] = [];
+
+      index.on("recomposed", (event) => heard.push(event));
+      index.move(addresses.id, 0, 1);
+
+      expect(heard).toHaveLength(1);
+      expect(heard[0].id).toBe(addresses.id);
+      expect(heard[0].composition).toEqual(index.composedOf(addresses.id));
+    });
+
+    /** One composition, told once and asked for later, or there would be two
+     * answers to the same question and nothing to tell them apart. */
+    it("carries the very composition that asking for it would give back", () => {
+      const { addresses } = registerAddresses();
+      const heard: (readonly EntryId[])[] = [];
+
+      index.on("recomposed", ({ composition }) => heard.push(composition));
+      index.swap(addresses.id, 0, 1);
+
+      expect(heard[0]).toBe(index.composedOf(addresses.id));
+    });
+
+    it("says it for every kind of location, not only for arrays", () => {
+      const heard: (readonly EntryId[])[] = [];
+
+      index.on("recomposed", ({ composition }) => heard.push(composition));
+
+      const name = index.register("invoice.client.name", PathKind.Field);
+      const client = index.entry(name.id).parent?.id ?? name.id;
+
+      expect(heard.at(-1)).toBe(index.composedOf(client));
+    });
+
+    it("carries what is left after items were dropped", () => {
+      const { addresses } = registerAddresses();
+      const heard: (readonly EntryId[])[] = [];
+
+      index.on("recomposed", ({ composition }) => heard.push(composition));
+      index.truncate(addresses.id, 1);
+
+      expect(heard.at(-1)).toHaveLength(1);
+      expect(heard.at(-1)).toBe(index.composedOf(addresses.id));
+    });
+  });
+
   describe("a composition that changed", () => {
     const restructures = (what: string, act: () => EntryId) => {
       it(`answers again after ${what}`, () => {
         const before = index.composedOf(act());
         const heard: EntryId[] = [];
 
-        index.on("recomposed", (id) => heard.push(id));
+        index.on("recomposed", ({ id }) => heard.push(id));
 
         const id = act();
 
@@ -187,7 +235,7 @@ describe("PathIndex", () => {
       const { addresses } = registerAddresses();
       const before = index.composedOf(addresses.id);
       const heard: EntryId[] = [];
-      index.on("recomposed", (id) => heard.push(id));
+      index.on("recomposed", ({ id }) => heard.push(id));
 
       index.append(addresses.id, PathKind.Object);
 
@@ -253,7 +301,7 @@ describe("PathIndex", () => {
       const client = index.entry(name.id).parent?.id ?? name.id;
       const before = index.composedOf(client);
       const heard: EntryId[] = [];
-      index.on("recomposed", (id) => heard.push(id));
+      index.on("recomposed", ({ id }) => heard.push(id));
 
       index.register("invoice.client.email", PathKind.Field);
 
@@ -269,7 +317,7 @@ describe("PathIndex", () => {
       expect(index.composedOf(client.id)).toBeUndefined();
 
       const heard: EntryId[] = [];
-      index.on("recomposed", (id) => heard.push(id));
+      index.on("recomposed", ({ id }) => heard.push(id));
 
       const name = index.register("invoice.client.name", PathKind.Field);
 
@@ -283,7 +331,7 @@ describe("PathIndex", () => {
       const before = index.composedOf(addresses.id);
       const heard: EntryId[] = [];
 
-      index.on("recomposed", (id) => heard.push(id));
+      index.on("recomposed", ({ id }) => heard.push(id));
       index.register(CITY_0, PathKind.Field);
 
       expect(index.composedOf(addresses.id)).toBe(before);

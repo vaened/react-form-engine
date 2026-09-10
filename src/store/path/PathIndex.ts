@@ -409,8 +409,9 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
    * same whether an item was inserted, renamed or wholly replaced. Only the
    * operation carries the intent, which is what lets the shifted items keep
    * their identity.
+   *
+   * The one position past the end is where an insert appends.
    */
-  /** The one position past the end is where an insert appends. */
   insert(arrayId: EntryId, index: number, kind: RegisterableKind): PathIndexChildEntry {
     const array = this.#array(arrayId);
 
@@ -678,16 +679,16 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
   }
 
   /**
-   * `children` is the order, so it goes from a position to an entry directly
-   * and the other way only by looking. What was found last is kept, and trusted
-   * again only while that position still holds that same entry, so no array
-   * operation has to remember to discard it.
+   * A location is composed of other entries than the ones it answered for.
+   *
+   * What it is composed of now is worked out here rather than left for whoever
+   * asks, because whoever operates on a location is the same one waiting to
+   * hear how it ended up, and would ask for it the moment this returns.
    */
-  /** A location is composed of other entries than the ones it answered for. */
   #recomposed(entry: PathIndexStructuralEntry): void {
-    entry.composition = undefined;
+    entry.composition = PathIndex.#idsOf(entry);
 
-    this.#events.emit("recomposed", entry.id);
+    this.#events.emit("recomposed", { id: entry.id, composition: entry.composition });
   }
 
   static #idsOf(entry: PathIndexStructuralEntry): readonly EntryId[] {
@@ -700,6 +701,12 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
     return ids;
   }
 
+  /**
+   * `children` is the order, so it goes from a position to an entry directly
+   * and the other way only by looking. What was found last is kept, and trusted
+   * again only while that position still holds that same entry, so no array
+   * operation has to remember to discard it.
+   */
   static #positionIn(array: PathIndexArrayEntry, entry: PathIndexEntry): number {
     const remembered = array.positions?.get(entry.id);
 
