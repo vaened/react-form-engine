@@ -34,12 +34,14 @@ export type PathIndexRootEntry = EntryBase & {
   readonly kind: PathKind.Root;
   readonly parent: null;
   readonly children: Map<string, PathIndexChildEntry>;
+  composition?: readonly EntryId[] | undefined;
 };
 
 export type PathIndexObjectEntry = EntryBase & {
   readonly kind: PathKind.Object;
   readonly parent: PathIndexStructuralEntry;
   readonly children: Map<string, PathIndexChildEntry>;
+  composition?: readonly EntryId[] | undefined;
 };
 
 /** `children` is the order. Position lives here and nowhere else. */
@@ -48,6 +50,7 @@ export type PathIndexArrayEntry = EntryBase & {
   readonly parent: PathIndexStructuralEntry;
   readonly children: PathIndexChildEntry[];
   positions?: Map<EntryId, number>;
+  composition?: readonly EntryId[] | undefined;
 };
 
 export type PathIndexFieldEntry = EntryBase & {
@@ -153,6 +156,11 @@ export interface EntryTree {
  * own, and so is deciding whether anything of it still applies.
  */
 export type StructureEvents = {
+  /**
+   * A location is composed of other entries than the ones it answered for: one
+   * appeared, one left, or the order they sit in is another.
+   */
+  recomposed: EntryId;
   /** A location that answered for itself now holds others that answer for it. */
   reopened: EntryId;
   /**

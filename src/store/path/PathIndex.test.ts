@@ -64,6 +64,174 @@ describe("PathIndex", () => {
     return { addresses, lima, arequipa };
   };
 
+  describe("composition", () => {
+    it("answers the entries an array is made of, in their order", () => {
+      const { addresses, lima, arequipa } = registerAddresses();
+
+      expect(index.composedOf(addresses.id)).toEqual([
+        arrayEntry(addresses.id).children[0].id,
+        arrayEntry(addresses.id).children[1].id,
+      ]);
+
+      void lima;
+      void arequipa;
+    });
+
+    it("answers the entries an object is made of", () => {
+      const name = index.register("invoice.client.name", PathKind.Field);
+      const email = index.register("invoice.client.email", PathKind.Field);
+
+      expect(index.composedOf(index.entry(name.id).parent?.id ?? name.id)).toEqual([name.id, email.id]);
+    });
+
+    /** The same question has the same answer while nothing about it changed. */
+    it("gives back the very same answer while it goes on being composed of the same", () => {
+      const { addresses } = registerAddresses();
+
+      expect(index.composedOf(addresses.id)).toBe(index.composedOf(addresses.id));
+    });
+
+    it("answers nothing for an entry that does not exist", () => {
+      expect(index.composedOf(9999 as EntryId)).toBeUndefined();
+    });
+
+    it("answers nothing twice over, rather than a fresh emptiness each time", () => {
+      expect(index.composedOf(9999 as EntryId)).toBe(index.composedOf(9999 as EntryId));
+    });
+
+    it("tells an array with no items apart from one that was never registered", () => {
+      const addresses = index.register(ADDRESSES, PathKind.Array);
+
+      expect(index.composedOf(addresses.id)).toEqual([]);
+      expect(index.composedOf(9999 as EntryId)).toBeUndefined();
+    });
+  });
+
+  describe("a composition that changed", () => {
+    const restructures = (what: string, act: () => EntryId) => {
+      it(`answers again after ${what}`, () => {
+        const before = index.composedOf(act());
+        const heard: EntryId[] = [];
+
+        index.on("recomposed", (id) => heard.push(id));
+
+        const id = act();
+
+        expect(index.composedOf(id)).not.toBe(before);
+        expect(heard).toContain(id);
+      });
+    };
+
+    it("answers again after append", () => {
+      const { addresses } = registerAddresses();
+      const before = index.composedOf(addresses.id);
+      const heard: EntryId[] = [];
+      index.on("recomposed", (id) => heard.push(id));
+
+      index.append(addresses.id, PathKind.Object);
+
+      expect(index.composedOf(addresses.id)).not.toBe(before);
+      expect(heard).toEqual([addresses.id]);
+    });
+
+    it("answers again after insert", () => {
+      const { addresses } = registerAddresses();
+      const before = index.composedOf(addresses.id);
+
+      index.insert(addresses.id, 0, PathKind.Object);
+
+      expect(index.composedOf(addresses.id)).not.toBe(before);
+    });
+
+    it("answers again after remove", () => {
+      const { addresses } = registerAddresses();
+      const before = index.composedOf(addresses.id);
+
+      index.remove(addresses.id, 0);
+
+      expect(index.composedOf(addresses.id)).not.toBe(before);
+    });
+
+    it("answers again after truncate", () => {
+      const { addresses } = registerAddresses();
+      const before = index.composedOf(addresses.id);
+
+      index.truncate(addresses.id, 1);
+
+      expect(index.composedOf(addresses.id)).not.toBe(before);
+    });
+
+    /** move and swap keep every identity and change only where each one sits,
+     * which is precisely what a fresh answer has to show. */
+    it("answers again after move, with the same identities in another order", () => {
+      const { addresses } = registerAddresses();
+      const before = index.composedOf(addresses.id);
+
+      index.move(addresses.id, 0, 1);
+
+      const after = index.composedOf(addresses.id);
+
+      expect(after).not.toBe(before);
+      expect(after).toEqual([...(before ?? [])].reverse());
+    });
+
+    it("answers again after swap", () => {
+      const { addresses } = registerAddresses();
+      const before = index.composedOf(addresses.id);
+
+      index.swap(addresses.id, 0, 1);
+
+      const after = index.composedOf(addresses.id);
+
+      expect(after).not.toBe(before);
+      expect(after).toEqual([...(before ?? [])].reverse());
+    });
+
+    it("answers again after a child is registered under it", () => {
+      const name = index.register("invoice.client.name", PathKind.Field);
+      const client = index.entry(name.id).parent?.id ?? name.id;
+      const before = index.composedOf(client);
+      const heard: EntryId[] = [];
+      index.on("recomposed", (id) => heard.push(id));
+
+      index.register("invoice.client.email", PathKind.Field);
+
+      expect(index.composedOf(client)).not.toBe(before);
+      expect(heard).toContain(client);
+    });
+
+    /** A field answers for no structure at all, so reopening it is where one
+     * starts existing rather than where one changes. */
+    it("starts answering once a field of it reopened into a node", () => {
+      const client = index.register("invoice.client", PathKind.Field);
+
+      expect(index.composedOf(client.id)).toBeUndefined();
+
+      const heard: EntryId[] = [];
+      index.on("recomposed", (id) => heard.push(id));
+
+      const name = index.register("invoice.client.name", PathKind.Field);
+
+      expect(index.composedOf(client.id)).toEqual([name.id]);
+      expect(heard).toContain(client.id);
+    });
+
+    /** Nothing about the shape changed, so nobody has anything to hear. */
+    it("keeps its answer when a path that already exists is registered again", () => {
+      const { addresses } = registerAddresses();
+      const before = index.composedOf(addresses.id);
+      const heard: EntryId[] = [];
+
+      index.on("recomposed", (id) => heard.push(id));
+      index.register(CITY_0, PathKind.Field);
+
+      expect(index.composedOf(addresses.id)).toBe(before);
+      expect(heard).toEqual([]);
+    });
+
+    void restructures;
+  });
+
   describe("registration", () => {
     it("builds the whole branch and returns the leaf", () => {
       const name = index.register("invoice.client.name", PathKind.Field);

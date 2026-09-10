@@ -215,6 +215,7 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
     const child = this.#create(parent, segment, kind);
 
     parent.children.set(segment, child);
+    this.#recomposed(parent);
 
     return child;
   }
@@ -285,6 +286,31 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
     }
 
     return PathIndex.#positionIn(array, entry);
+  }
+
+  /**
+   * The entries a location is composed of, in the order it holds them.
+   *
+   * Identities travel, never the entries: what a caller keeps cannot be
+   * something the index is still writing into.
+   *
+   * The same question has the same answer while the location goes on being
+   * composed of the same entries, so what comes back is the very thing that
+   * came back before rather than something equal to it.
+   *
+   * A location that does not exist is composed of nothing, which is not the
+   * same as one that exists and holds none.
+   */
+  composedOf(id: EntryId): readonly EntryId[] | undefined {
+    const entry = this.#entries.get(id);
+
+    if (!entry || entry.kind === PathKind.Field) {
+      return undefined;
+    }
+
+    entry.composition ??= PathIndex.#idsOf(entry);
+
+    return entry.composition;
   }
 
   ancestorsOf(id: EntryId): PathIndexStructuralEntry[] {
@@ -393,6 +419,7 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
     const item = this.#create(array, null, kind);
 
     array.children.splice(index, 0, item);
+    this.#recomposed(array);
 
     return item;
   }
@@ -410,6 +437,7 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
     const gone: PathIndexEntry[] = [];
 
     this.#forget(removed, gone);
+    this.#recomposed(array);
 
     this.#events.emit("discarded", gone);
   }
@@ -437,6 +465,7 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
     }
 
     array.children.length = length;
+    this.#recomposed(array);
 
     this.#events.emit("discarded", gone);
   }
@@ -454,6 +483,7 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
     const [item] = array.children.splice(from, 1);
 
     array.children.splice(to, 0, item);
+    this.#recomposed(array);
   }
 
   swap(arrayId: EntryId, left: number, right: number): void {
@@ -465,6 +495,7 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
     const { children } = array;
 
     [children[left], children[right]] = [children[right], children[left]];
+    this.#recomposed(array);
   }
 
   /**
@@ -567,6 +598,7 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
 
     while (children.length <= index) {
       children.push(this.#create(array, null, kind));
+      this.#recomposed(array);
     }
 
     return children[index];
@@ -626,6 +658,23 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
    * again only while that position still holds that same entry, so no array
    * operation has to remember to discard it.
    */
+  /** A location is composed of other entries than the ones it answered for. */
+  #recomposed(entry: PathIndexStructuralEntry): void {
+    entry.composition = undefined;
+
+    this.#events.emit("recomposed", entry.id);
+  }
+
+  static #idsOf(entry: PathIndexStructuralEntry): readonly EntryId[] {
+    const ids: EntryId[] = [];
+
+    for (const child of PathIndex.#children(entry)) {
+      ids.push(child.id);
+    }
+
+    return ids;
+  }
+
   static #positionIn(array: PathIndexArrayEntry, entry: PathIndexEntry): number {
     const remembered = array.positions?.get(entry.id);
 
