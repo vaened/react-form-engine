@@ -98,8 +98,7 @@ export class Reconciler<TValues extends FormValues = FormValues> {
       }
 
       if (array.children[position].kind !== kind) {
-        this.#index.remove(array.id, position);
-        this.#index.insert(array.id, position, kind);
+        this.#index.replace(array.id, position, kind);
       }
     }
 

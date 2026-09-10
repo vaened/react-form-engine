@@ -64,6 +64,67 @@ describe("PathIndex", () => {
     return { addresses, lima, arequipa };
   };
 
+  describe("replacing one position", () => {
+    it("puts another item where one was, without moving what is around it", () => {
+      const { addresses, lima, arequipa } = registerAddresses();
+      const before = index.composedOf(addresses.id) ?? [];
+
+      const replaced = index.replace(addresses.id, 0, PathKind.Field);
+
+      const after = index.composedOf(addresses.id) ?? [];
+
+      expect(after).toHaveLength(2);
+      expect(after[0]).toBe(replaced.id);
+      expect(after[1]).toBe(before[1]);
+      expect(index.contains(arequipa.id)).toBe(true);
+      expect(index.contains(lima.id)).toBe(false);
+    });
+
+    it("keeps the positions of everything that stayed", () => {
+      const { addresses, arequipa } = registerAddresses();
+
+      index.replace(addresses.id, 0, PathKind.Field);
+
+      expect(index.positionOf(index.entry(arequipa.id).parent?.id ?? arequipa.id)).toBe(1);
+    });
+
+    /** One thing happened, so it is said once. */
+    it("says it recomposed once, not once per step", () => {
+      const { addresses } = registerAddresses();
+      const heard: EntryId[] = [];
+
+      index.on("recomposed", (id) => heard.push(id));
+      index.replace(addresses.id, 0, PathKind.Field);
+
+      expect(heard).toEqual([addresses.id]);
+    });
+
+    it("hands over what left, in one go", () => {
+      const { addresses } = registerAddresses();
+      const rounds: number[] = [];
+
+      index.on("discarded", (entries) => rounds.push(entries.length));
+      index.replace(addresses.id, 0, PathKind.Field);
+
+      expect(rounds).toHaveLength(1);
+    });
+
+    it("answers a fresh composition afterwards", () => {
+      const { addresses } = registerAddresses();
+      const before = index.composedOf(addresses.id);
+
+      index.replace(addresses.id, 0, PathKind.Field);
+
+      expect(index.composedOf(addresses.id)).not.toBe(before);
+    });
+
+    it("refuses a position the array does not hold", () => {
+      const { addresses } = registerAddresses();
+
+      expect(() => index.replace(addresses.id, 5, PathKind.Field)).toThrow(MissingArrayPosition);
+    });
+  });
+
   describe("composition", () => {
     it("answers the entries an array is made of, in their order", () => {
       const { addresses, lima, arequipa } = registerAddresses();

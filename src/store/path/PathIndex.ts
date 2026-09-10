@@ -428,6 +428,31 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
     return this.insert(arrayId, this.#array(arrayId).children.length, kind);
   }
 
+  /**
+   * Another item takes the place of the one at this position.
+   *
+   * Taking it out and putting one back shifts every position after it twice and
+   * says two things happened; one item becoming another is one thing, and the
+   * order around it never moved.
+   */
+  replace(arrayId: EntryId, index: number, kind: RegisterableKind): PathIndexChildEntry {
+    const array = this.#array(arrayId);
+
+    PathIndex.#assertPosition(array, index);
+
+    const item = this.#create(array, null, kind);
+    const gone: PathIndexEntry[] = [];
+
+    this.#forget(array.children[index], gone);
+
+    array.children[index] = item;
+
+    this.#recomposed(array);
+    this.#events.emit("discarded", gone);
+
+    return item;
+  }
+
   remove(arrayId: EntryId, index: number): void {
     const array = this.#array(arrayId);
 
