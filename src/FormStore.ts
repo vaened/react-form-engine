@@ -98,7 +98,6 @@ export class FormStore<TValues extends FormValues> {
   readonly #assessor: StateAssessor;
   readonly #reconciler: Reconciler<TValues>;
   readonly #writer: ValueWrite;
-  readonly #reconcileWritten = (written: PathIndexEntry): void => this.#reconciler.reconcile(written);
 
   constructor(options: FormStoreOptions<TValues>) {
     this.#mode = options.mode ?? "full";
@@ -187,7 +186,9 @@ export class FormStore<TValues extends FormValues> {
   set<TPath extends Path<TValues>>(path: TPath, value: PathValue<TValues, TPath>): void {
     const entry = this.#index.resolve(path) ?? this.#claim(path, this.#classifier.classify(value));
 
-    this.#writer.write(entry, value, this.#reconcileWritten);
+    for (const written of this.#writer.write(entry, value)) {
+      this.#reconciler.reconcile(written);
+    }
   }
 
   /**

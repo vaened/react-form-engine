@@ -30,8 +30,12 @@ export class PatchWrite<TValues extends FormValues = FormValues> implements Valu
     this.#classifier = classifier;
   }
 
-  write(entry: PathIndexEntry, value: unknown, visit: (written: PathIndexEntry) => void): void {
-    this.#descend(entry, value, visit, undefined);
+  write(entry: PathIndexEntry, value: unknown): readonly PathIndexEntry[] {
+    const written: PathIndexEntry[] = [];
+
+    this.#descend(entry, value, written, undefined);
+
+    return written;
   }
 
   /**
@@ -42,7 +46,7 @@ export class PatchWrite<TValues extends FormValues = FormValues> implements Valu
   #descend(
     at: PathIndexEntry,
     incoming: unknown,
-    visit: (written: PathIndexEntry) => void,
+    written: PathIndexEntry[],
     descending: Set<object> | undefined,
   ): void {
     if (
@@ -51,7 +55,7 @@ export class PatchWrite<TValues extends FormValues = FormValues> implements Valu
       this.#classifier.classify(incoming) !== PathKind.Object
     ) {
       this.#value.write(at, incoming, () => {});
-      visit(at);
+      written.push(at);
 
       return;
     }
@@ -69,7 +73,7 @@ export class PatchWrite<TValues extends FormValues = FormValues> implements Valu
     for (const key of Object.keys(incoming)) {
       const child = this.#index.ensureChild(at, key, this.#classifier.classify(incoming[key]));
 
-      this.#descend(child, incoming[key], visit, inside);
+      this.#descend(child, incoming[key], written, inside);
     }
 
     inside.delete(incoming);

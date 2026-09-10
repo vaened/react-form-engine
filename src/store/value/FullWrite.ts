@@ -26,11 +26,11 @@ export class FullWrite<TValues extends FormValues = FormValues> implements Value
    * and what was handed over may already sit somewhere in the form, so a copy
    * goes in instead — two places holding one object would be one slot.
    */
-  write(entry: PathIndexEntry, value: unknown, visit: (written: PathIndexEntry) => void): void {
+  write(entry: PathIndexEntry, value: unknown): readonly PathIndexEntry[] {
     const held = entry.kind === PathKind.Field ? value : isolate(value, this.#classifier);
 
     this.#value.write(entry, held, () => {});
 
-    visit(entry);
+    return [entry];
   }
 }
