@@ -277,6 +277,53 @@ describe("FormStore", () => {
     });
   });
 
+  describe("waiting to hear about a location", () => {
+    it("brings a path nobody had named onto the chain", () => {
+      store.watch("invoice.client.name", () => {});
+
+      expect(store.getState("invoice.client.name")).toBeDefined();
+    });
+
+    it("materializes a node the same way registering it does", () => {
+      store.feel("invoice.client", () => {});
+
+      expect(store.getState("invoice.client")).toBeDefined();
+    });
+
+    /** Materializing answers for the path, so the other domain is reached too. */
+    it("waiting on the value leaves the state materialized as well", () => {
+      store.watch("invoice.client.addresses", () => {});
+
+      expect(store.getState("invoice.client.addresses")).toBeDefined();
+    });
+
+    it("takes back what it claimed, leaving nothing behind on the chain", () => {
+      const leave = store.watch("invoice.client.name", () => {});
+
+      leave();
+
+      expect(store.getState("invoice.client.name")).toBeUndefined();
+    });
+
+    it("leaves the location alone while somebody else is still waiting", () => {
+      const first = store.watch("invoice.client.name", () => {});
+      store.feel("invoice.client.name", () => {});
+
+      first();
+
+      expect(store.getState("invoice.client.name")).toBeDefined();
+    });
+
+    it("leaves alone what somebody else registered", () => {
+      store.register("invoice.client.name");
+      const leave = store.watch("invoice.client.name", () => {});
+
+      leave();
+
+      expect(store.getState("invoice.client.name")).toBeDefined();
+    });
+  });
+
   describe("set", () => {
     it("writes the value at the path", () => {
       store.set("invoice.client.name", "Grace Hopper");

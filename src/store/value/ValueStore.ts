@@ -3,6 +3,7 @@
  * @link https://vaened.dev DevFolio
  */
 
+import type { Unsubscribe } from "../../EventEmitter";
 import type { FormValues } from "../../path";
 import { ObservationChain } from "../observation/ObservationChain";
 import { type EntryId, type EntryTree, type PathIndexEntry, PathKind, type StepsOf } from "../path/types";
@@ -82,6 +83,10 @@ export class ValueStore<TValues extends FormValues = FormValues> {
   /** A field joins whether or not anybody watches it, so a write starts at it. */
   register(id: EntryId): ValueEntry {
     return this.#chain.join({ id, parent: null, snapshot: STALE });
+  }
+
+  subscribe(entry: ValueEntry, listener: () => void): Unsubscribe {
+    return this.#chain.subscribe(entry, listener);
   }
 
   unregister(id: EntryId): void {

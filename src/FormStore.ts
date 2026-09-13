@@ -3,6 +3,7 @@
  * @link https://vaened.dev DevFolio
  */
 
+import type { Unsubscribe } from "./EventEmitter";
 import type { FormValues, Path, PathValue } from "./path";
 import { PathIndex } from "./store/path/PathIndex";
 import type { PathIndexChildEntry, PathIndexEntry, RegisterableKind, WalkOf } from "./store/path/types";
@@ -18,13 +19,19 @@ import { isolate } from "./store/value/isolate";
 import { PatchWrite } from "./store/value/PatchWrite";
 import { PathValueClassifier } from "./store/value/PathValueClassifier";
 import type { Scalar } from "./store/value/Scalar";
-import { ValueStore } from "./store/value/ValueStore";
+import { type ValueEntry, ValueStore } from "./store/value/ValueStore";
 import type { ValueWrite } from "./store/value/ValueWrite";
 import type { DeepPartial } from "./types";
 
 export type { FormValues } from "./path";
 
 export type FormMode = "full" | "patch";
+
+/** The one location, as each domain knows it. */
+type Admitted = {
+  readonly value: ValueEntry;
+  readonly state: StateEntry;
+};
 
 /** Locations of a form, each carrying the value its own path holds. */
 export type FormWrites<TValues extends FormValues> = {
@@ -148,23 +155,34 @@ export class FormStore<TValues extends FormValues> {
     return this.#paths;
   }
 
-  /**
-   * A path already in the index keeps whatever kind it was claimed with.
-   * A new one is classified from the value living there right now, so an
-   * absent branch registers as a field and opens into a node the moment
-   * something registers underneath it.
-   */
   register<TPath extends Path<TValues>>(path: TPath): void {
-    const existing = this.#index.resolve(path);
+    this.#admit(path);
+  }
 
-    if (existing) {
-      this.#join(existing);
-      return;
-    }
+  /**
+   * Takes somebody waiting to hear that a location's value moved.
+   *
+   * Waiting on a location brings it onto the chain the same way registering it
+   * does, so a caller never has to have named it first. What that costs is one
+   * watcher, which is what the returned call gives back.
+   */
+  watch<TPath extends Path<TValues>>(path: TPath, listener: () => void): Unsubscribe {
+    const leave = this.#value.subscribe(this.#admit(path).value, listener);
 
-    const walk = this.#walk(path);
+    return () => {
+      leave();
+      this.unregister(path);
+    };
+  }
 
-    this.#join(this.#index.ensure(path, walk[walk.length - 1].observed ?? PathKind.Field, walk));
+  /** The same as `watch`, for how a location stands rather than what it holds. */
+  feel<TPath extends Path<TValues>>(path: TPath, listener: () => void): Unsubscribe {
+    const leave = this.#state.subscribe(this.#admit(path).state, listener);
+
+    return () => {
+      leave();
+      this.unregister(path);
+    };
   }
 
   unregister<TPath extends Path<TValues>>(path: TPath): void {
@@ -230,19 +248,35 @@ export class FormStore<TValues extends FormValues> {
     return this.#value.observe(this.#index.segmentsOf(path));
   }
 
-  #join(entry: PathIndexEntry): void {
+  /**
+   * A path already in the index keeps whatever kind it was claimed with.
+   * A new one is classified from the value living there right now, so an
+   * absent branch registers as a field and opens into a node the moment
+   * something registers underneath it.
+   */
+  #admit<TPath extends Path<TValues>>(path: TPath): Admitted {
+    const existing = this.#index.resolve(path);
+
+    if (existing) {
+      return this.#join(existing);
+    }
+
+    const walk = this.#walk(path);
+
+    return this.#join(this.#index.ensure(path, walk[walk.length - 1].observed ?? PathKind.Field, walk));
+  }
+
+  #join(entry: PathIndexEntry): Admitted {
     if (entry.kind === PathKind.Field) {
       const initial = new FieldState();
 
       initial.assessed(this.#assessor.assess(this.#value.read(entry), this.#value.default(entry)));
 
-      this.#state.register(entry.id, initial);
-      this.#value.register(entry.id);
-      return;
+      return { state: this.#state.register(entry.id, initial), value: this.#value.register(entry.id) };
     }
 
-    this.#state.materialize(entry.id);
-    this.#value.materialize(entry.id);
+    const state = this.#state.materialize(entry.id);
+    const value = this.#value.materialize(entry.id);
 
     if (entry.kind === PathKind.Array) {
       this.#state.measured(
@@ -251,6 +285,8 @@ export class FormStore<TValues extends FormValues> {
         FormStore.#count(this.#value.default(entry)),
       );
     }
+
+    return { state, value };
   }
 
   /**

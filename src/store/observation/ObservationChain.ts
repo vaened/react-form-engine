@@ -3,6 +3,7 @@
  * @link https://vaened.dev DevFolio
  */
 
+import type { Unsubscribe } from "../../EventEmitter";
 import type { EntryId, EntryTree } from "../path/types";
 import { RootHasNoParent, RootObservationRequired, UnknownObservation } from "./errors";
 
@@ -19,6 +20,15 @@ const NOTHING_CLAIMED: readonly never[] = Object.freeze([]);
 export type ChainNode<TParent> = {
   readonly id: EntryId;
   parent: TParent | null;
+  /**
+   * Who is waiting to hear about this node.
+   *
+   * It sits here rather than in a registry of its own because a climb already
+   * holds the node it is standing on, and looking it up again by id would be
+   * undoing work that was just done. Absent while nobody waits, so a node
+   * nobody listens to costs nothing.
+   */
+  listeners?: Set<() => void>;
 };
 
 export type ChainInsertion<TNode> = {
@@ -132,6 +142,42 @@ export class ObservationChain<TNode extends ChainNode<TParent>, TParent extends 
     }
 
     return descendants;
+  }
+
+  /**
+   * Takes somebody waiting to hear about a node.
+   *
+   * It takes the node rather than its id so that waiting on one that is not on
+   * the chain cannot be spelled: the only way to hold one is to have put it
+   * there. Keeping it there is not this one's business either — whoever joined
+   * it claimed it, and claims are given up the same way they were taken.
+   *
+   * When they are woken is not decided here: the work that moves a node reports
+   * once it has finished, never while it is under way.
+   */
+  subscribe(node: TNode, listener: () => void): Unsubscribe {
+    const listeners = node.listeners ?? new Set<() => void>();
+
+    node.listeners = listeners;
+    listeners.add(listener);
+
+    return () => {
+      listeners.delete(listener);
+    };
+  }
+
+  /**
+   * The set is walked as it stands: one that leaves while this runs may still
+   * be reached, and one that arrives will be.
+   */
+  wake(node: TNode): void {
+    if (!node.listeners) {
+      return;
+    }
+
+    for (const listener of node.listeners) {
+      listener();
+    }
   }
 
   /**

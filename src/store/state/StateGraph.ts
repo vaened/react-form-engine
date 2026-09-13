@@ -3,6 +3,7 @@
  * @link https://vaened.dev DevFolio
  */
 
+import type { Unsubscribe } from "../../EventEmitter";
 import { ObservationChain } from "../observation/ObservationChain";
 import { type EntryId, type EntryTree, type ObservableStructure, PathKind } from "../path/types";
 import { ArrayStateAggregate } from "./ArrayStateAggregate";
@@ -84,6 +85,10 @@ export class StateGraph {
     this.#propagate(field.parent, 0, field.state.flags);
 
     return field;
+  }
+
+  subscribe(entry: StateEntry, listener: () => void): Unsubscribe {
+    return this.#chain.subscribe(entry, listener);
   }
 
   /**
