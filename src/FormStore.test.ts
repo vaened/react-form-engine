@@ -1460,8 +1460,30 @@ describe("FormStore", () => {
       expect(store.snapshot("invoice.details")).toBe(details);
     });
 
-    it("answers absent for a location nobody named", () => {
-      expect(store.snapshot("invoice.client.name")).toBeUndefined();
+    /**
+     * The value is there from the moment the form is born, so reading one is
+     * never a question about whether anybody named it. That is what `state`
+     * answers, and the two are not the same question.
+     */
+    it("answers with the value even when nobody named the location", () => {
+      expect(store.snapshot("invoice.client.name")).toBe("Ada Lovelace");
+      expect(store.state("invoice.client.name")).toBeUndefined();
+    });
+
+    it("answers with the value a node write left behind, named or not", () => {
+      store.set("invoice.client", { ...sample().invoice.client, name: "Grace Hopper" });
+
+      expect(store.snapshot("invoice.client.name")).toBe("Grace Hopper");
+    });
+
+    it("answers a node nobody named with what it holds", () => {
+      expect(store.snapshot("invoice.client")).toEqual(sample().invoice.client);
+    });
+
+    it("answers absent for a location the value stops before", () => {
+      const empty = new FormStore<Invoice>({ defaults: {} as Invoice });
+
+      expect(empty.snapshot("invoice.client.name")).toBeUndefined();
     });
   });
 

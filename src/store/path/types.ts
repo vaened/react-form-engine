@@ -151,6 +151,10 @@ export interface EntryTree {
   ancestorsOf(id: EntryId): PathIndexStructuralEntry[];
   /** Every level down, flattened and split by kind. */
   descendantsOf(id: EntryId): PathDescendants;
+  /** The entry a name reaches, for a name somebody asked about before. */
+  resolve(path: string): PathIndexEntry | undefined;
+  /** A name taken apart, each step checked as it comes off. */
+  segmentsOf(path: string): readonly string[];
 }
 
 /**

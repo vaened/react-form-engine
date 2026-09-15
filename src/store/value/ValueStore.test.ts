@@ -4,7 +4,8 @@
  */
 
 import { beforeEach, describe, expect, it } from "vitest";
-import { InvoiceStructure, sampleInvoice } from "../observation/__fixtures__/invoice";
+import type { Path } from "../../path";
+import { type Invoice, InvoiceStructure, sampleInvoice } from "../observation/__fixtures__/invoice";
 import { RootObservationRequired, UnknownObservation } from "../observation/errors";
 import { type EntryId, PathKind } from "../path/types";
 import { PathValueClassifier } from "./PathValueClassifier";
@@ -14,7 +15,10 @@ const classifier = new PathValueClassifier();
 
 describe("ValueStore", () => {
   let form: InvoiceStructure;
-  let store: ValueStore;
+  let store: ValueStore<Invoice>;
+
+  /** The public name of a location, so a read goes through the door a caller would use. */
+  const at = (id: EntryId) => form.index.describe(id) as Path<Invoice>;
 
   beforeEach(() => {
     form = new InvoiceStructure();
@@ -275,24 +279,24 @@ describe("ValueStore", () => {
    */
   describe("snapshots", () => {
     it("reads a field straight from the live value, uncached", () => {
-      expect(store.snapshot(form.city0)).toBe("Lima");
+      expect(store.snapshot(at(form.city0))).toBe("Lima");
 
       store.write(form.index.entry(form.city0), "Chorrillos");
 
-      expect(store.snapshot(form.city0)).toBe("Chorrillos");
+      expect(store.snapshot(at(form.city0))).toBe("Chorrillos");
     });
 
     it("stays the same reference across reads while nothing below it changed", () => {
       store.materialize(form.client);
 
-      expect(store.snapshot(form.client)).toBe(store.snapshot(form.client));
+      expect(store.snapshot(at(form.client))).toBe(store.snapshot(at(form.client)));
     });
 
     it("carries correct data for everything below it without cloning it", () => {
       store.materialize(form.client);
       store.write(form.index.entry(form.city0), "Chorrillos");
 
-      const client = store.snapshot(form.client) as { addresses: { city: string }[] };
+      const client = store.snapshot(at(form.client)) as { addresses: { city: string }[] };
 
       expect(client.addresses[0]?.city).toBe("Chorrillos");
     });
@@ -301,11 +305,11 @@ describe("ValueStore", () => {
       store.materialize(form.client);
       store.materialize(form.details);
 
-      const untouched = store.snapshot(form.details);
+      const untouched = store.snapshot(at(form.details));
 
       store.write(form.index.entry(form.city0), "Chorrillos");
 
-      expect(store.snapshot(form.details)).toBe(untouched);
+      expect(store.snapshot(at(form.details))).toBe(untouched);
     });
 
     it("collapses two writes to the same node into a single rebuild", () => {
@@ -314,47 +318,47 @@ describe("ValueStore", () => {
       store.write(form.index.entry(form.city0), "Chorrillos");
       store.write(form.index.entry(form.name), "Grace Hopper");
 
-      const client = store.snapshot(form.client) as { name: string; addresses: { city: string }[] };
+      const client = store.snapshot(at(form.client)) as { name: string; addresses: { city: string }[] };
 
       expect(client.name).toBe("Grace Hopper");
       expect(client.addresses[0]?.city).toBe("Chorrillos");
-      expect(store.snapshot(form.client)).toBe(client);
+      expect(store.snapshot(at(form.client))).toBe(client);
     });
 
     it("returns an array for an array node, not an object with numeric keys", () => {
       store.materialize(form.addresses);
 
-      expect(Array.isArray(store.snapshot(form.addresses))).toBe(true);
+      expect(Array.isArray(store.snapshot(at(form.addresses)))).toBe(true);
     });
 
     it("builds correctly the first time a node is materialized, before any write", () => {
       store.materialize(form.client);
 
-      expect(store.snapshot(form.client)).toEqual(sampleInvoice().invoice.client);
+      expect(store.snapshot(at(form.client))).toEqual(sampleInvoice().invoice.client);
     });
 
     it("does not throw when an array node has no value yet", () => {
-      const empty = new ValueStore(form.index, classifier, {} as never, {} as never);
+      const empty = new ValueStore<Invoice>(form.index, classifier, {} as never, {} as never);
 
       empty.materialize(form.addresses);
 
-      expect(empty.snapshot(form.addresses)).toEqual([]);
+      expect(empty.snapshot(at(form.addresses))).toEqual([]);
     });
 
     it("does not throw when an object node has no value yet", () => {
-      const empty = new ValueStore(form.index, classifier, {} as never, {} as never);
+      const empty = new ValueStore<Invoice>(form.index, classifier, {} as never, {} as never);
 
       empty.materialize(form.client);
 
-      expect(empty.snapshot(form.client)).toEqual({});
+      expect(empty.snapshot(at(form.client))).toEqual({});
     });
 
     it("throws for a node that was never materialized", () => {
-      expect(() => store.snapshot(form.client)).toThrow(UnknownObservation);
+      expect(() => store.snapshot(at(form.client))).toThrow(UnknownObservation);
     });
 
     it("reads a field that was never registered, same as any other read", () => {
-      expect(store.snapshot(form.email)).toBe("ada@example.com");
+      expect(store.snapshot(at(form.email))).toBe("ada@example.com");
     });
 
     it("returns a field's own value by identity, never a copy", () => {
@@ -362,25 +366,25 @@ describe("ValueStore", () => {
 
       store.write(form.index.entry(form.email), attachment);
 
-      expect(store.snapshot(form.email)).toBe(attachment);
+      expect(store.snapshot(at(form.email))).toBe(attachment);
     });
 
     describe("the root", () => {
       it("builds and stays stable while nothing changed", () => {
         store.materialize(form.root);
 
-        expect(store.snapshot(form.root)).toBe(store.snapshot(form.root));
+        expect(store.snapshot()).toBe(store.snapshot());
       });
     });
 
     it("resets to a fresh snapshot after a node leaves and is materialized again", () => {
       store.materialize(form.client);
-      store.snapshot(form.client);
+      store.snapshot(at(form.client));
 
       store.dematerialize(form.client);
       store.materialize(form.client);
 
-      expect(store.snapshot(form.client)).toEqual(sampleInvoice().invoice.client);
+      expect(store.snapshot(at(form.client))).toEqual(sampleInvoice().invoice.client);
     });
   });
 

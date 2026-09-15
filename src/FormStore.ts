@@ -237,10 +237,10 @@ export class FormStore<TValues extends FormValues> {
    * A location nobody named answers absent, the same as `state`: reading
    * what the form was not asked to keep track of is what `values` is for.
    */
-  snapshot<TPath extends Path<TValues>>(path: TPath): PathValue<TValues, TPath> | undefined {
-    const entry = this.#index.resolve(path);
-
-    return entry && (this.#value.snapshot(entry.id) as PathValue<TValues, TPath>);
+  snapshot(): TValues;
+  snapshot<TPath extends Path<TValues>>(path: TPath): PathValue<TValues, TPath> | undefined;
+  snapshot<TPath extends Path<TValues>>(path?: TPath): PathValue<TValues, TPath> | TValues | undefined {
+    return path === undefined ? this.#value.snapshot() : this.#value.snapshot(path);
   }
 
   /**

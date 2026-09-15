@@ -4,7 +4,7 @@
  */
 
 import type { Unsubscribe } from "../../EventEmitter";
-import type { FormValues } from "../../path";
+import type { FormValues, Path, PathValue } from "../../path";
 import { type Notifiable, ObservationChain } from "../observation/ObservationChain";
 import {
   type EntryId,
@@ -158,17 +158,29 @@ export class ValueStore<TValues extends FormValues = FormValues> {
    * gives it a new one exactly when something under it changed, while what it
    * copies is already correct — nothing below was cloned, only mutated.
    */
-  snapshot(id: EntryId): unknown {
-    const structural = this.#tree.entry(id);
-
-    if (structural.kind === PathKind.Field) {
-      return this.#value.read(structural);
+  snapshot(): TValues;
+  snapshot<TPath extends Path<TValues>>(path: TPath): PathValue<TValues, TPath> | undefined;
+  snapshot<TPath extends Path<TValues>>(path?: TPath): PathValue<TValues, TPath> | TValues | undefined {
+    if (path === undefined) {
+      return this.#held(this.#tree.root()) as TValues;
     }
 
-    const watcher = this.#chain.node(id);
+    const entry = this.#tree.resolve(path);
+
+    return (entry ? this.#held(entry) : this.#value.at(this.#tree.segmentsOf(path))) as
+      | PathValue<TValues, TPath>
+      | undefined;
+  }
+
+  #held(entry: PathIndexEntry): unknown {
+    if (entry.kind === PathKind.Field) {
+      return this.#value.read(entry);
+    }
+
+    const watcher = this.#chain.node(entry.id);
 
     if (watcher.snapshot === STALE) {
-      watcher.snapshot = ValueStore.#shallow(structural.kind, this.#value.read(structural));
+      watcher.snapshot = ValueStore.#shallow(entry.kind, this.#value.read(entry));
     }
 
     return watcher.snapshot;

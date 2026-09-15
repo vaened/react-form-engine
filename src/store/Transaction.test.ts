@@ -4,6 +4,7 @@
  */
 
 import { beforeEach, describe, expect, it } from "vitest";
+import type { Path } from "../path";
 import { FormWriting } from "./FormWriting";
 import { type Invoice, InvoiceStructure, sampleInvoice } from "./observation/__fixtures__/invoice";
 import type { EntryId } from "./path/types";
@@ -20,6 +21,9 @@ describe("Transaction", () => {
   let value: ValueStore<Invoice>;
   let writing: FormWriting<Invoice>;
   let state: StateGraph;
+
+  /** The public name of a location, so a read goes through the door a caller would use. */
+  const at = (id: EntryId) => form.index.describe(id) as Path<Invoice>;
 
   beforeEach(() => {
     form = new InvoiceStructure();
@@ -294,11 +298,11 @@ describe("Transaction", () => {
     it("leaves the reader holding the very same reference", () => {
       value.materialize(form.address0);
 
-      const before = value.snapshot(form.address0);
+      const before = value.snapshot(at(form.address0));
 
       writing.set("invoice.client.addresses.0.city" as never, "Lima" as never);
 
-      expect(value.snapshot(form.address0)).toBe(before);
+      expect(value.snapshot(at(form.address0))).toBe(before);
     });
 
     /** Only a field is asked: a node handed the very object it already holds is
@@ -342,43 +346,43 @@ describe("Transaction", () => {
     it("changes reference once something below it is written", () => {
       value.materialize(form.client);
 
-      const before = value.snapshot(form.client);
+      const before = value.snapshot(at(form.client));
 
       writing.set("invoice.client.addresses.0.city" as never, "Arequipa" as never);
 
-      expect(value.snapshot(form.client)).not.toBe(before);
+      expect(value.snapshot(at(form.client))).not.toBe(before);
     });
 
     it("changes reference for any write anywhere, since the root is always on the chain", () => {
-      const before = value.snapshot(form.root);
+      const before = value.snapshot();
 
       writing.set("invoice.client.addresses.0.city" as never, "Arequipa" as never);
 
-      expect(value.snapshot(form.root)).not.toBe(before);
+      expect(value.snapshot()).not.toBe(before);
     });
 
     it("changes every materialized ancestor's reference in one write, and nobody else's", () => {
       value.materialize(form.client);
       value.materialize(form.details);
 
-      const client = value.snapshot(form.client);
-      const details = value.snapshot(form.details);
+      const client = value.snapshot(at(form.client));
+      const details = value.snapshot(at(form.details));
 
       writing.set("invoice.client.addresses.0.city" as never, "Arequipa" as never);
 
-      expect(value.snapshot(form.client)).not.toBe(client);
-      expect(value.snapshot(form.details)).toBe(details);
+      expect(value.snapshot(at(form.client))).not.toBe(client);
+      expect(value.snapshot(at(form.details))).toBe(details);
     });
 
     it("gives a materialized descendant a new reference", () => {
       value.materialize(form.client);
       value.materialize(form.address0);
 
-      const before = value.snapshot(form.address0);
+      const before = value.snapshot(at(form.address0));
 
       writing.set("invoice.client" as never, sampleInvoice().invoice.client as never);
 
-      expect(value.snapshot(form.address0)).not.toBe(before);
+      expect(value.snapshot(at(form.address0))).not.toBe(before);
     });
 
     it("hands it the value the form now holds, not the tree it just left", () => {
@@ -386,15 +390,15 @@ describe("Transaction", () => {
 
       writing.set("invoice.client.addresses.0.city" as never, "Arequipa" as never);
 
-      expect(value.snapshot(form.address0)).toEqual({ city: "Arequipa", reference: "Frente al parque principal" });
+      expect(value.snapshot(at(form.address0))).toEqual({ city: "Arequipa", reference: "Frente al parque principal" });
     });
 
     it("reads a field straight from the live value, uncached", () => {
-      expect(value.snapshot(form.city0)).toBe("Lima");
+      expect(value.snapshot(at(form.city0))).toBe("Lima");
 
       writing.set("invoice.client.addresses.0.city" as never, "Chorrillos" as never);
 
-      expect(value.snapshot(form.city0)).toBe("Chorrillos");
+      expect(value.snapshot(at(form.city0))).toBe("Chorrillos");
     });
   });
 });

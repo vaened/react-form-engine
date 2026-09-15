@@ -93,6 +93,31 @@ export class FormValue<TValues extends FormValues = FormValues> {
     return steps as StepsOf<TSegments>;
   }
 
+  /**
+   * What lives at a run of names, for a caller holding no entry yet.
+   *
+   * It answers absent for a name the value stops before, which is the same
+   * answer a location holding nothing gives: a form is everything it can hold,
+   * less whatever nobody filled in, and neither side of that is worth telling
+   * apart from outside.
+   *
+   * It goes no further than `observe` would: a location the form holds as one
+   * value has no parts to reach into.
+   */
+  at(segments: readonly string[]): unknown {
+    let held: unknown = this.#root;
+
+    for (const segment of segments) {
+      if (!this.#classifier.isContainer(held)) {
+        return undefined;
+      }
+
+      held = FormValue.#at(held, segment);
+    }
+
+    return held;
+  }
+
   get value(): TValues {
     return this.#root;
   }
