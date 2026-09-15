@@ -54,7 +54,7 @@ export class PatchWrite<TValues extends FormValues = FormValues> implements Valu
       !PatchWrite.#keyed(incoming) ||
       this.#classifier.classify(incoming) !== PathKind.Object
     ) {
-      this.#value.write(at, incoming, () => {});
+      this.#value.write(at, incoming);
       written.push(at);
 
       return;

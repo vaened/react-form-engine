@@ -5,35 +5,58 @@
 
 import type { Unsubscribe } from "../../EventEmitter";
 import type { FormValues } from "../../path";
-import { ObservationChain } from "../observation/ObservationChain";
-import { type EntryId, type EntryTree, type PathIndexEntry, PathKind, type StepsOf } from "../path/types";
+import { type Notifiable, ObservationChain } from "../observation/ObservationChain";
+import {
+  type EntryId,
+  type EntryTree,
+  type ObservableStructure,
+  type PathIndexEntry,
+  PathKind,
+  type StepsOf,
+} from "../path/types";
 import { FormValue } from "./FormValue";
 import type { PathValueClassifier } from "./PathValueClassifier";
 
 const STALE = Symbol("stale");
 
-/** A `ChainNode`, spelled out because a type alias cannot reference itself. */
-export type ValueEntry = {
+export type ValueEntry = Notifiable & {
   readonly id: EntryId;
   parent: ValueEntry | null;
   snapshot: object | typeof STALE;
 };
 
 /**
- * The value domain of a form: what it holds, and who has to hear about a write.
+ * The value domain of a form: what it holds, and who is watching each location.
  *
- * A write always does both — change the value and tell its watchers — so the two
- * live in one place instead of being wired together by whoever calls this.
+ * It answers both and decides neither. Who has to hear about a write, and when,
+ * belongs to whoever is doing the writing.
  */
 export class ValueStore<TValues extends FormValues = FormValues> {
   readonly #value: FormValue<TValues>;
   readonly #tree: EntryTree;
   readonly #chain: ObservationChain<ValueEntry>;
 
-  constructor(tree: EntryTree, classifier: PathValueClassifier, values: TValues, defaults: TValues) {
+  constructor(
+    tree: EntryTree & ObservableStructure,
+    classifier: PathValueClassifier,
+    values: TValues,
+    defaults: TValues,
+  ) {
     this.#value = new FormValue(tree, classifier, values, defaults);
     this.#tree = tree;
     this.#chain = new ObservationChain<ValueEntry>(tree, { id: tree.root().id, parent: null, snapshot: STALE });
+
+    tree.on("discarded", (entries) => this.#discarded(entries));
+  }
+
+  /**
+   * A location the shape stopped having has nothing left to watch, so every
+   * claim on it goes at once rather than one per watcher that ever asked.
+   */
+  #discarded(entries: readonly PathIndexEntry[]): void {
+    for (const entry of entries) {
+      this.#chain.forget(entry.id);
+    }
   }
 
   get value(): TValues {
@@ -101,36 +124,23 @@ export class ValueStore<TValues extends FormValues = FormValues> {
     this.#chain.remove(id);
   }
 
-  /**
-   * Writes, then hands over everyone that has to hear about it, innermost
-   * first and the root last. A value can be written at any height, and a node
-   * nobody watches is not on the chain, so the start above is resolved rather
-   * than assumed.
-   *
-   * Writing anything but a field replaces the container everything below is
-   * reached through, which leaves those watchers holding a subtree the form no
-   * longer contains, so they are reached too.
-   *
-   * It visits rather than collects: this runs on every write and the answer is
-   * never empty.
-   */
-  write(entry: PathIndexEntry, value: unknown, visit: (watcher: ValueEntry) => void): void {
+  write(entry: PathIndexEntry, value: unknown): void {
     this.#value.write(entry, value);
+  }
 
-    if (entry.kind !== PathKind.Field) {
-      for (const inside of this.#chain.descendantsOf(entry.id)) {
-        inside.snapshot = STALE;
-        visit(inside);
-      }
-    }
+  /** What a reader would have to recalculate before being handed anything. */
+  stale(entry: ValueEntry): void {
+    entry.snapshot = STALE;
+  }
 
-    let watcher: ValueEntry | null = this.#chain.originOf(entry.id);
+  /** Where a walk from a location starts, which is itself when it is watched. */
+  originOf(id: EntryId): ValueEntry {
+    return this.#chain.originOf(id);
+  }
 
-    while (watcher) {
-      watcher.snapshot = STALE;
-      visit(watcher);
-      watcher = watcher.parent;
-    }
+  /** The ones on the chain inside a location, for a write that replaced them all. */
+  descendantsOf(id: EntryId): readonly ValueEntry[] {
+    return this.#chain.descendantsOf(id);
   }
 
   /**

@@ -21,16 +21,18 @@ describe("ValueStore", () => {
     store = new ValueStore(form.index, classifier, sampleInvoice(), sampleInvoice());
   });
 
-  /** Everyone the store says has to hear about a write, in the order it says it. */
+  /** The chain upward from a location, which is the path a write would take. */
   const reported = (id: EntryId) => {
-    const told: EntryId[] = [];
+    const walked: EntryId[] = [];
 
-    store.write(form.index.entry(id), "unused", (entry) => told.push(entry.id));
+    for (let at: ValueEntry | null = store.originOf(id); at; at = at.parent) {
+      walked.push(at.id);
+    }
 
-    return told;
+    return walked;
   };
 
-  const named = (id: EntryId) => reported(id).map((entryId) => form.index.describe(entryId));
+  const named = (id: EntryId) => reported(id).map((entry) => form.index.describe(entry));
 
   describe("root", () => {
     it("is there from the start with nobody above it", () => {
@@ -187,94 +189,11 @@ describe("ValueStore", () => {
     });
   });
 
-  describe("reporting", () => {
-    it("names the written location first and the root last", () => {
-      store.register(form.city0);
-      store.materialize(form.address0);
-
-      expect(reported(form.city0)).toEqual([form.city0, form.address0, form.root]);
-    });
-
-    it("never stops early, unlike the state", () => {
-      store.register(form.city0);
-      store.materialize(form.address0);
-      store.materialize(form.client);
-
-      // Nothing about a value change can leave an ancestor unaffected, so the
-      // walk has no reason to stop before the root.
-      expect(reported(form.city0)).toEqual([form.city0, form.address0, form.client, form.root]);
-    });
-
-    it("reaches the root in one hop when no node is watched", () => {
-      store.register(form.city0);
-
-      expect(reported(form.city0)).toEqual([form.city0, form.root]);
-    });
-
-    it("can start from a watched node rather than a field", () => {
-      store.register(form.city0);
-      store.materialize(form.address0);
-      store.materialize(form.client);
-
-      expect(reported(form.address0)).toEqual([form.city0, form.address0, form.client, form.root]);
-    });
-  });
-
   /**
    * A value can be written at any height: a whole node, or an array taking and
    * losing items. Those locations are not on the chain unless somebody watches
    * them, so the walk has to be told where to start.
    */
-  describe("writing above a field", () => {
-    it("reaches a watched ancestor when the array itself is not watched", () => {
-      store.register(form.city0);
-
-      const client = store.materialize(form.client);
-
-      expect(store.has(form.addresses)).toBe(false);
-      expect(reported(form.addresses)).toEqual([form.city0, form.client, form.root]);
-      expect(client.parent).toBe(store.root());
-    });
-
-    it("reaches a watched ancestor when a whole object is set and not watched", () => {
-      store.register(form.email);
-      store.materialize(form.client);
-
-      expect(store.has(form.address0)).toBe(false);
-      expect(reported(form.address0)).toEqual([form.client, form.root]);
-    });
-
-    it("reaches the root when not even an ancestor is watched", () => {
-      store.register(form.city0);
-
-      expect(reported(form.addresses)).toEqual([form.city0, form.root]);
-      expect(reported(form.client)).toEqual([form.city0, form.root]);
-    });
-
-    it("names the array itself once somebody watches it", () => {
-      store.register(form.city0);
-      store.materialize(form.addresses);
-      store.materialize(form.client);
-
-      expect(reported(form.addresses)).toEqual([form.city0, form.addresses, form.client, form.root]);
-    });
-
-    it("tells a watcher of the array about a write inside one of its items", () => {
-      store.register(form.city0);
-      store.materialize(form.addresses);
-
-      expect(reported(form.city0)).toEqual([form.city0, form.addresses, form.root]);
-    });
-
-    it("reaches a watched ancestor for an item a structural insert just created", () => {
-      store.materialize(form.client);
-
-      const inserted = form.index.insert(form.addresses, 2, PathKind.Object);
-
-      expect(store.has(form.addresses)).toBe(false);
-      expect(reported(inserted.id)).toEqual([form.client, form.root]);
-    });
-  });
 
   describe("more than one watcher on the same location", () => {
     it("keeps reporting to a node while a second watcher is still there", () => {
@@ -328,13 +247,13 @@ describe("ValueStore", () => {
 
   describe("writing the live value", () => {
     it("changes the live value at the written location", () => {
-      store.write(form.index.entry(form.city0), "Chorrillos", () => {});
+      store.write(form.index.entry(form.city0), "Chorrillos");
 
       expect(store.value.invoice.client.addresses[0]?.city).toBe("Chorrillos");
     });
 
     it("leaves the defaults untouched", () => {
-      store.write(form.index.entry(form.city0), "Chorrillos", () => {});
+      store.write(form.index.entry(form.city0), "Chorrillos");
 
       expect(store.defaults.invoice.client.addresses[0]?.city).toBe("Lima");
     });
@@ -344,7 +263,7 @@ describe("ValueStore", () => {
 
       const description = form.index.register("invoice.details.0.description", PathKind.Field);
 
-      store.write(description, "Support renewal", () => {});
+      store.write(description, "Support renewal");
 
       expect(store.value.invoice.details[0]).toMatchObject({ description: "Support renewal" });
     });
@@ -358,7 +277,7 @@ describe("ValueStore", () => {
     it("reads a field straight from the live value, uncached", () => {
       expect(store.snapshot(form.city0)).toBe("Lima");
 
-      store.write(form.index.entry(form.city0), "Chorrillos", () => {});
+      store.write(form.index.entry(form.city0), "Chorrillos");
 
       expect(store.snapshot(form.city0)).toBe("Chorrillos");
     });
@@ -369,21 +288,9 @@ describe("ValueStore", () => {
       expect(store.snapshot(form.client)).toBe(store.snapshot(form.client));
     });
 
-    it("changes reference once something below it is written", () => {
-      store.materialize(form.client);
-
-      const before = store.snapshot(form.client);
-
-      store.write(form.index.entry(form.city0), "Chorrillos", () => {});
-
-      const after = store.snapshot(form.client);
-
-      expect(after).not.toBe(before);
-    });
-
     it("carries correct data for everything below it without cloning it", () => {
       store.materialize(form.client);
-      store.write(form.index.entry(form.city0), "Chorrillos", () => {});
+      store.write(form.index.entry(form.city0), "Chorrillos");
 
       const client = store.snapshot(form.client) as { addresses: { city: string }[] };
 
@@ -396,7 +303,7 @@ describe("ValueStore", () => {
 
       const untouched = store.snapshot(form.details);
 
-      store.write(form.index.entry(form.city0), "Chorrillos", () => {});
+      store.write(form.index.entry(form.city0), "Chorrillos");
 
       expect(store.snapshot(form.details)).toBe(untouched);
     });
@@ -404,8 +311,8 @@ describe("ValueStore", () => {
     it("collapses two writes to the same node into a single rebuild", () => {
       store.materialize(form.client);
 
-      store.write(form.index.entry(form.city0), "Chorrillos", () => {});
-      store.write(form.index.entry(form.name), "Grace Hopper", () => {});
+      store.write(form.index.entry(form.city0), "Chorrillos");
+      store.write(form.index.entry(form.name), "Grace Hopper");
 
       const client = store.snapshot(form.client) as { name: string; addresses: { city: string }[] };
 
@@ -453,7 +360,7 @@ describe("ValueStore", () => {
     it("returns a field's own value by identity, never a copy", () => {
       const attachment = { name: "invoice.pdf" };
 
-      store.write(form.index.entry(form.email), attachment, () => {});
+      store.write(form.index.entry(form.email), attachment);
 
       expect(store.snapshot(form.email)).toBe(attachment);
     });
@@ -464,41 +371,6 @@ describe("ValueStore", () => {
 
         expect(store.snapshot(form.root)).toBe(store.snapshot(form.root));
       });
-
-      it("changes reference for any write anywhere, since it is always on the chain", () => {
-        store.materialize(form.root);
-
-        const before = store.snapshot(form.root);
-
-        store.write(form.index.entry(form.city0), "Chorrillos", () => {});
-
-        expect(store.snapshot(form.root)).not.toBe(before);
-      });
-
-      it("carries the same correct nested data as any other materialized node", () => {
-        store.materialize(form.root);
-        store.write(form.index.entry(form.city0), "Chorrillos", () => {});
-
-        const root = store.snapshot(form.root) as typeof store.value;
-
-        expect(root.invoice.client.addresses[0]?.city).toBe("Chorrillos");
-      });
-    });
-
-    it("changes every materialized ancestor's reference in one write, and nobody else's", () => {
-      store.materialize(form.client);
-      store.materialize(form.root);
-      store.materialize(form.details);
-
-      const clientBefore = store.snapshot(form.client);
-      const rootBefore = store.snapshot(form.root);
-      const detailsBefore = store.snapshot(form.details);
-
-      store.write(form.index.entry(form.city0), "Chorrillos", () => {});
-
-      expect(store.snapshot(form.client)).not.toBe(clientBefore);
-      expect(store.snapshot(form.root)).not.toBe(rootBefore);
-      expect(store.snapshot(form.details)).toBe(detailsBefore);
     });
 
     it("resets to a fresh snapshot after a node leaves and is materialized again", () => {
@@ -509,71 +381,6 @@ describe("ValueStore", () => {
       store.materialize(form.client);
 
       expect(store.snapshot(form.client)).toEqual(sampleInvoice().invoice.client);
-    });
-  });
-
-  /**
-   * A node write replaces the container everything below it is reached through,
-   * so what those watchers hold no longer belongs to the form.
-   */
-  describe("writing a node reaches what is under it", () => {
-    const reshapedClient = () => ({
-      documentNumber: "87654321",
-      name: "Grace Hopper",
-      email: "grace@example.com",
-      phones: [],
-      addresses: [{ city: "Cusco", reference: "Plaza de Armas" }],
-    });
-
-    it("gives a materialized descendant a new reference", () => {
-      store.materialize(form.addresses);
-
-      const before = store.snapshot(form.addresses);
-
-      store.write(form.index.entry(form.client), reshapedClient(), () => {});
-
-      expect(store.snapshot(form.addresses)).not.toBe(before);
-    });
-
-    it("hands it the value the form now holds, not the tree it just left", () => {
-      store.materialize(form.addresses);
-      store.snapshot(form.addresses);
-
-      store.write(form.index.entry(form.client), reshapedClient(), () => {});
-
-      expect(store.snapshot(form.addresses)).toEqual([{ city: "Cusco", reference: "Plaza de Armas" }]);
-    });
-
-    it("reaches an object as readily as an array, at any depth", () => {
-      store.materialize(form.address0);
-      store.snapshot(form.address0);
-
-      store.write(form.index.entry(form.client), reshapedClient(), () => {});
-
-      expect(store.snapshot(form.address0)).toEqual({ city: "Cusco", reference: "Plaza de Armas" });
-    });
-
-    it("tells a registered field below, whose own value the write changed", () => {
-      store.register(form.name);
-
-      expect(named(form.client)).toContain("invoice.client.name");
-    });
-
-    it("leaves a watcher outside the written subtree alone", () => {
-      store.materialize(form.details);
-
-      const before = store.snapshot(form.details);
-
-      store.write(form.index.entry(form.client), reshapedClient(), () => {});
-
-      expect(store.snapshot(form.details)).toBe(before);
-    });
-
-    it("does not walk down for a field, which has nothing under it", () => {
-      store.register(form.city0);
-      store.materialize(form.addresses);
-
-      expect(reported(form.name)).toEqual([form.root]);
     });
   });
 

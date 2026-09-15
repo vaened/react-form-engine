@@ -5,10 +5,10 @@
 
 import type { Unsubscribe } from "./EventEmitter";
 import type { FormValues, Path, PathValue } from "./path";
+import { type FormWrites, FormWriting } from "./store/FormWriting";
 import { PathIndex } from "./store/path/PathIndex";
-import type { PathIndexChildEntry, PathIndexEntry, RegisterableKind, WalkOf } from "./store/path/types";
+import type { PathIndexEntry, WalkOf } from "./store/path/types";
 import { PathKind } from "./store/path/types";
-import { Reconciler } from "./store/Reconciler";
 import { FieldState } from "./store/state/FieldState";
 import { type PathIdentifier, PathRegistry } from "./store/state/PathRegistry";
 import { StateAssessor } from "./store/state/StateAssessor";
@@ -20,10 +20,10 @@ import { PatchWrite } from "./store/value/PatchWrite";
 import { PathValueClassifier } from "./store/value/PathValueClassifier";
 import type { Scalar } from "./store/value/Scalar";
 import { type ValueEntry, ValueStore } from "./store/value/ValueStore";
-import type { ValueWrite } from "./store/value/ValueWrite";
 import type { DeepPartial } from "./types";
 
 export type { FormValues } from "./path";
+export type { FormWrites } from "./store/FormWriting";
 
 export type FormMode = "full" | "patch";
 
@@ -31,11 +31,6 @@ export type FormMode = "full" | "patch";
 type Admitted = {
   readonly value: ValueEntry;
   readonly state: StateEntry;
-};
-
-/** Locations of a form, each carrying the value its own path holds. */
-export type FormWrites<TValues extends FormValues> = {
-  [TPath in Path<TValues>]?: PathValue<TValues, TPath>;
 };
 
 export type FormStoreOptions<TValues extends FormValues> = {
@@ -103,8 +98,7 @@ export class FormStore<TValues extends FormValues> {
   readonly #value: ValueStore<TValues>;
   readonly #classifier: PathValueClassifier;
   readonly #assessor: StateAssessor;
-  readonly #reconciler: Reconciler<TValues>;
-  readonly #writer: ValueWrite;
+  readonly #writing: FormWriting<TValues>;
 
   constructor(options: FormStoreOptions<TValues>) {
     this.#mode = options.mode ?? "full";
@@ -119,11 +113,16 @@ export class FormStore<TValues extends FormValues> {
       this.#held(options.defaults),
     );
     this.#assessor = new StateAssessor(this.#classifier);
-    this.#reconciler = new Reconciler(this.#index, this.#state, this.#value, this.#classifier, this.#assessor);
-    this.#writer =
+    this.#writing = new FormWriting(
+      this.#index,
+      this.#value,
+      this.#state,
+      this.#assessor,
+      this.#classifier,
       this.#mode === "patch"
         ? new PatchWrite(this.#index, this.#value, this.#classifier)
-        : new FullWrite(this.#value, this.#classifier);
+        : new FullWrite(this.#value, this.#classifier),
+    );
   }
 
   get mode(): FormMode {
@@ -202,11 +201,7 @@ export class FormStore<TValues extends FormValues> {
   }
 
   set<TPath extends Path<TValues>>(path: TPath, value: PathValue<TValues, TPath>): void {
-    const entry = this.#index.resolve(path) ?? this.#claim(path, this.#classifier.classify(value));
-
-    for (const written of this.#writer.write(entry, value)) {
-      this.#reconciler.reconcile(written);
-    }
+    this.#writing.set(path, value);
   }
 
   /**
@@ -227,20 +222,13 @@ export class FormStore<TValues extends FormValues> {
    * });
    */
   assign(writes: FormWrites<TValues>): void {
-    for (const path of Object.keys(writes) as Path<TValues>[]) {
-      this.set(path, writes[path] as PathValue<TValues, Path<TValues>>);
-    }
+    this.#writing.assign(writes);
   }
 
   getState<TPath extends Path<TValues>>(path: TPath): StateEntry | undefined {
     const entry = this.#index.resolve(path);
 
     return entry && this.#state.find(entry.id);
-  }
-
-  /** Reaches a path in the index, having made sure the value lets it through. */
-  #claim<TPath extends Path<TValues>>(path: TPath, kind: RegisterableKind): PathIndexChildEntry {
-    return this.#index.ensure(path, kind, this.#walk(path));
   }
 
   /** Every segment of a path, alongside whatever the value holds at it. */

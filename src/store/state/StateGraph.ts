@@ -5,7 +5,7 @@
 
 import type { Unsubscribe } from "../../EventEmitter";
 import { ObservationChain } from "../observation/ObservationChain";
-import { type EntryId, type EntryTree, type ObservableStructure, PathKind } from "../path/types";
+import { type EntryId, type EntryTree, type ObservableStructure, type PathIndexEntry, PathKind } from "../path/types";
 import { ArrayStateAggregate } from "./ArrayStateAggregate";
 import { StateAggregateUnderflow, StateKindConflict } from "./errors";
 import { FieldState } from "./FieldState";
@@ -42,6 +42,7 @@ export class StateGraph {
     });
 
     tree.on("reopened", (id) => this.#reopened(id));
+    tree.on("discarded", (entries) => this.#discarded(entries));
   }
 
   /** Always materialized, so a form can always answer for itself as a whole. */
@@ -241,6 +242,39 @@ export class StateGraph {
     }
 
     this.#promote(entry);
+  }
+
+  /**
+   * A location the shape stopped having is discounted from everyone above and
+   * leaves the chain, however many watchers it had: there is no value left to
+   * compare, so nothing about it can be answered any more.
+   */
+  #discarded(entries: readonly PathIndexEntry[]): void {
+    for (const entry of entries) {
+      const existing = this.#chain.find(entry.id);
+
+      if (!existing) {
+        continue;
+      }
+
+      const held = existing.state.flags;
+      const removal = this.#chain.forget(entry.id);
+
+      if (!removal) {
+        continue;
+      }
+
+      const parent = removal.parent;
+      const before = parent.state.flags;
+
+      this.#contribute(parent, held, 0);
+
+      for (const child of removal.adopted) {
+        this.#contribute(parent, 0, child.state.flags);
+      }
+
+      this.#settle(parent, before);
+    }
   }
 
   /** The mirror of `materialize`: the children go back to reporting upward. */

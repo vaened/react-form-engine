@@ -29,7 +29,7 @@ export class FullWrite<TValues extends FormValues = FormValues> implements Value
   write(entry: PathIndexEntry, value: unknown): readonly PathIndexEntry[] {
     const held = entry.kind === PathKind.Field ? value : isolate(value, this.#classifier);
 
-    this.#value.write(entry, held, () => {});
+    this.#value.write(entry, held);
 
     return [entry];
   }

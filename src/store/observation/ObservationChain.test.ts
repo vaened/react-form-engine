@@ -14,6 +14,7 @@ type Node = {
   readonly id: EntryId;
   parent: Node | null;
   label: string;
+  listeners?: Set<() => void>;
 };
 
 describe("ObservationChain", () => {
@@ -53,46 +54,19 @@ describe("ObservationChain", () => {
   };
 
   describe("who is waiting to hear about a node", () => {
-    it("wakes whoever is waiting on it", () => {
-      const heard: string[] = [];
-      const name = join(form.name, "name");
-
-      chain.subscribe(name, () => heard.push("first"));
-      chain.wake(name);
-
-      expect(heard).toEqual(["first"]);
-    });
-
-    it("wakes nobody else", () => {
-      const heard: string[] = [];
-      const name = join(form.name, "name");
-      const email = join(form.email, "email");
-
-      chain.subscribe(name, () => heard.push("name"));
-      chain.subscribe(email, () => heard.push("email"));
-      chain.wake(name);
-
-      expect(heard).toEqual(["name"]);
-    });
-
-    it("wakes everyone waiting on the same node, in the order they arrived", () => {
+    it("keeps every listener that joined, in the order they arrived", () => {
       const heard: string[] = [];
       const name = join(form.name, "name");
 
       chain.subscribe(name, () => heard.push("first"));
       chain.subscribe(name, () => heard.push("second"));
-      chain.wake(name);
+
+      for (const listener of name.listeners ?? []) listener();
 
       expect(heard).toEqual(["first", "second"]);
     });
 
-    it("waking a node nobody waits on does nothing", () => {
-      const name = join(form.name, "name");
-
-      expect(() => chain.wake(name)).not.toThrow();
-    });
-
-    it("stops waking whoever left", () => {
+    it("drops the one that left and nobody else", () => {
       const heard: string[] = [];
       const name = join(form.name, "name");
 
@@ -100,23 +74,31 @@ describe("ObservationChain", () => {
       chain.subscribe(name, () => heard.push("stayed"));
 
       leave();
-      chain.wake(name);
+
+      for (const listener of name.listeners ?? []) listener();
 
       expect(heard).toEqual(["stayed"]);
     });
 
     it("leaving twice is the same as leaving once", () => {
-      const heard: string[] = [];
       const name = join(form.name, "name");
 
-      const leave = chain.subscribe(name, () => heard.push("gone"));
-      chain.subscribe(name, () => heard.push("stayed"));
+      const leave = chain.subscribe(name, () => {});
+      chain.subscribe(name, () => {});
 
       leave();
       leave();
-      chain.wake(name);
 
-      expect(heard).toEqual(["stayed"]);
+      expect(name.listeners?.size).toBe(1);
+    });
+
+    it("waits on nobody else", () => {
+      const name = join(form.name, "name");
+      const email = join(form.email, "email");
+
+      chain.subscribe(name, () => {});
+
+      expect(email.listeners).toBeUndefined();
     });
 
     /** Keeping it on the chain belongs to whoever joined it, so this claims nothing. */
@@ -126,27 +108,6 @@ describe("ObservationChain", () => {
       chain.subscribe(name, () => {});
 
       expect(chain.remove(name.id)).toBeDefined();
-    });
-
-    /** The same rule as the event emitter: the set is walked as it stands. */
-    it("still reaches one that leaves while the others are being woken", () => {
-      const heard: string[] = [];
-      const name = join(form.name, "name");
-
-      const leave = chain.subscribe(name, () => heard.push("leaving"));
-      chain.subscribe(name, () => {
-        leave();
-        heard.push("second");
-      });
-
-      chain.wake(name);
-
-      expect(heard).toEqual(["leaving", "second"]);
-
-      heard.length = 0;
-      chain.wake(name);
-
-      expect(heard).toEqual(["second"]);
     });
   });
 

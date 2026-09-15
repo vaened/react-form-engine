@@ -1335,18 +1335,17 @@ describe("FormStore", () => {
       expect(store.values.invoice.series).toBe("F001");
     });
 
+    /** Two locations that reach the same place: whichever came last is the one left standing. */
     it("writes in the order the locations were written down", () => {
-      const store = new FormStore<Invoice>({ defaults: sample() });
-      const seen: string[] = [];
-      const original = store.set.bind(store);
-      store.set = ((path: never, value: never) => {
-        seen.push(path);
-        original(path, value);
-      }) as typeof store.set;
+      const client = () => ({ ...sample().invoice.client, name: "Ada Lovelace" });
+      const first = new FormStore<Invoice>({ defaults: sample() });
+      const second = new FormStore<Invoice>({ defaults: sample() });
 
-      store.assign({ "invoice.series": "F002", "invoice.client.name": "Grace Hopper" });
+      first.assign({ "invoice.client": client(), "invoice.client.name": "Grace Hopper" });
+      second.assign({ "invoice.client.name": "Grace Hopper", "invoice.client": client() });
 
-      expect(seen).toEqual(["invoice.series", "invoice.client.name"]);
+      expect(first.values.invoice.client.name).toBe("Grace Hopper");
+      expect(second.values.invoice.client.name).toBe("Ada Lovelace");
     });
 
     it("reaches a location nobody registered, the same as a single write", () => {

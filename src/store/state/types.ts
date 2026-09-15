@@ -3,6 +3,7 @@
  * @link https://vaened.dev DevFolio
  */
 
+import type { Notifiable } from "../observation/ObservationChain";
 import type { EntryId, PathKind } from "../path/types";
 import type { ArrayStateAggregate } from "./ArrayStateAggregate";
 import type { FieldState } from "./FieldState";
@@ -22,7 +23,7 @@ export interface PathState {
   readonly isValidating: boolean;
 }
 
-type StateBase = {
+type StateBase = Notifiable & {
   readonly id: EntryId;
   /**
    * The nearest materialized ancestor, or `null` on the root.

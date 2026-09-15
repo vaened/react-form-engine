@@ -11,24 +11,35 @@ import { RootHasNoParent, RootObservationRequired, UnknownObservation } from "./
 const NOTHING_CLAIMED: readonly never[] = Object.freeze([]);
 
 /**
+ * What a chain puts on a node, whichever chain it is.
+ *
+ * Both sit here rather than in a registry of their own because a climb already
+ * holds the node it is standing on, and looking it up again by id would be
+ * undoing work that was just done. Both are absent until they are earned, so a
+ * node nobody reached and nobody listens to costs nothing.
+ */
+export type Notifiable = {
+  listeners?: Set<() => void>;
+  /**
+   * The last transaction this was told about.
+   *
+   * It answers whether a climb has already been here without anybody keeping a
+   * list: one that stops matching is one that is over, so the next makes every
+   * mark stale at once by counting one higher.
+   */
+  mark?: number;
+};
+
+/**
  * `parent` is not the structural parent: it is the nearest ancestor on the
  * chain, so a field can point straight at the root with five levels in between.
  *
  * It has its own type parameter because not every node can be one. In the state
  * a field never holds children, so only a node may sit above anybody.
  */
-export type ChainNode<TParent> = {
+export type ChainNode<TParent> = Notifiable & {
   readonly id: EntryId;
   parent: TParent | null;
-  /**
-   * Who is waiting to hear about this node.
-   *
-   * It sits here rather than in a registry of its own because a climb already
-   * holds the node it is standing on, and looking it up again by id would be
-   * undoing work that was just done. Absent while nobody waits, so a node
-   * nobody listens to costs nothing.
-   */
-  listeners?: Set<() => void>;
 };
 
 export type ChainInsertion<TNode> = {
@@ -50,9 +61,9 @@ export type ChainRemoval<TNode, TParent> = {
 /**
  * Who is being watched, and who each of them reports to.
  *
- * It never walks the chain. What travels up the links belongs to whoever owns
- * it: the state folds counters and stops when they stabilize, the value carries
- * a fact and never stops.
+ * It never walks the chain. What travels up the links, and where the walk
+ * stops, belongs to whoever owns it: the state folds counters and stops when
+ * they stabilize, the value stops wherever it has already been.
  *
  * It holds the tree because its one question — who above me is watching — needs
  * both halves. Shape does not know who watches; membership does not know who is
@@ -167,20 +178,6 @@ export class ObservationChain<TNode extends ChainNode<TParent>, TParent extends 
   }
 
   /**
-   * The set is walked as it stands: one that leaves while this runs may still
-   * be reached, and one that arrives will be.
-   */
-  wake(node: TNode): void {
-    if (!node.listeners) {
-      return;
-    }
-
-    for (const listener of node.listeners) {
-      listener();
-    }
-  }
-
-  /**
    * Puts a node on the chain, or counts one more watcher on the one already
    * there. It hands back whichever of the two is on the chain now.
    */
@@ -244,11 +241,32 @@ export class ObservationChain<TNode extends ChainNode<TParent>, TParent extends 
       throw new RootObservationRequired();
     }
 
-    if (!this.#release(id)) {
+    return this.#release(id) ? this.#detach(node, parent) : undefined;
+  }
+
+  /**
+   * Lets go of every claim at once, for a location the shape stopped having.
+   *
+   * However many asked to watch it, there is nothing left to watch: the answer
+   * is not that they have to ask again, it is that the question is gone. An
+   * owner that keeps counters over the chain is told what left, the same as any
+   * other removal.
+   */
+  forget(id: EntryId): ChainRemoval<TNode, TParent> | undefined {
+    const node = this.#nodes.get(id);
+
+    if (!node?.parent) {
       return undefined;
     }
 
-    this.#nodes.delete(id);
+    this.#claims.delete(id);
+
+    return this.#detach(node, node.parent);
+  }
+
+  /** Takes the node off the chain and hands its children to whoever it reported to. */
+  #detach(node: TNode, parent: TParent): ChainRemoval<TNode, TParent> {
+    this.#nodes.delete(node.id);
 
     const adopted: TNode[] = [];
 
