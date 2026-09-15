@@ -42,3 +42,24 @@ listAddresses({ addresses: store.values.invoice.client.addresses });
 void formatDate(store.values.invoice.createdAt);
 
 void createInvoice(store.defaults);
+
+/**
+ * What a watcher is handed is the type living at the path it named, absent
+ * included, so nobody has to cast what they just asked for by name.
+ */
+const watchedSeries: string | undefined = store.snapshot("invoice.series");
+const watchedClient: Invoice["invoice"]["client"] | undefined = store.snapshot("invoice.client");
+const watchedDate: Date | undefined = store.snapshot("invoice.createdAt");
+const watchedCity: string | undefined = store.snapshot("invoice.client.addresses.0.city");
+
+void watchedSeries;
+void watchedClient;
+void watchedDate;
+void watchedCity;
+
+// @ts-expect-error a field holding a string is not handed over as a number
+const wrongType: number | undefined = store.snapshot("invoice.series");
+void wrongType;
+
+// @ts-expect-error nothing lives at that path
+void store.snapshot("invoice.missing");

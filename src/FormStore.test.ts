@@ -57,7 +57,7 @@ describe("FormStore", () => {
     it("appears as a field once registered", () => {
       store.register("invoice.client.name");
 
-      const state = store.getState("invoice.client.name");
+      const state = store.state("invoice.client.name");
 
       expect(state).toBeDefined();
       expect(state?.kind).toBe(PathKind.Field);
@@ -68,17 +68,17 @@ describe("FormStore", () => {
 
       empty.register("invoice.client.name");
 
-      expect(empty.getState("invoice.client.name")?.kind).toBe(PathKind.Field);
+      expect(empty.state("invoice.client.name")?.kind).toBe(PathKind.Field);
     });
 
     it("is idempotent: registering twice does not duplicate anything", () => {
       store.register("invoice.client.name");
 
-      const first = store.getState("invoice.client.name");
+      const first = store.state("invoice.client.name");
 
       store.register("invoice.client.name");
 
-      expect(store.getState("invoice.client.name")).toBe(first);
+      expect(store.state("invoice.client.name")).toBe(first);
     });
 
     it("does not touch the value: registering never assigns or clears anything", () => {
@@ -92,7 +92,7 @@ describe("FormStore", () => {
 
       withDefaults.register("invoice.client.name");
 
-      const field = withDefaults.getState("invoice.client.name") as StateFieldEntry;
+      const field = withDefaults.state("invoice.client.name") as StateFieldEntry;
 
       expect(hasFlag(field.state.flags, StateFlag.Dirty)).toBe(false);
     });
@@ -106,7 +106,7 @@ describe("FormStore", () => {
 
       editing.register("invoice.client.name");
 
-      const field = editing.getState("invoice.client.name") as StateFieldEntry;
+      const field = editing.state("invoice.client.name") as StateFieldEntry;
 
       expect(hasFlag(field.state.flags, StateFlag.Dirty)).toBe(true);
     });
@@ -119,7 +119,7 @@ describe("FormStore", () => {
 
       editing.register("invoice.client.name");
 
-      const field = editing.getState("invoice.client.name") as StateFieldEntry;
+      const field = editing.state("invoice.client.name") as StateFieldEntry;
 
       expect(hasFlag(field.state.flags, StateFlag.Touched)).toBe(false);
     });
@@ -131,7 +131,7 @@ describe("FormStore", () => {
 
       shared.register("invoice.client.name");
 
-      const field = shared.getState("invoice.client.name") as StateFieldEntry;
+      const field = shared.state("invoice.client.name") as StateFieldEntry;
 
       expect(hasFlag(field.state.flags, StateFlag.Dirty)).toBe(false);
     });
@@ -141,25 +141,25 @@ describe("FormStore", () => {
     it("appears as a node, not a field", () => {
       store.register("invoice.client");
 
-      expect(store.getState("invoice.client")?.kind).toBe(PathKind.Object);
+      expect(store.state("invoice.client")?.kind).toBe(PathKind.Object);
     });
 
     it("is idempotent: registering twice does not duplicate or reset it", () => {
       store.register("invoice.client");
 
-      const first = store.getState("invoice.client");
+      const first = store.state("invoice.client");
 
       store.register("invoice.client");
 
-      expect(store.getState("invoice.client")).toBe(first);
+      expect(store.state("invoice.client")).toBe(first);
     });
 
     it("parents a field already registered under the node once the node registers too", () => {
       store.register("invoice.client.name");
       store.register("invoice.client");
 
-      const field = store.getState("invoice.client.name");
-      const node = store.getState("invoice.client");
+      const field = store.state("invoice.client.name");
+      const node = store.state("invoice.client");
 
       expect(field?.parent).toBe(node);
     });
@@ -168,8 +168,8 @@ describe("FormStore", () => {
       store.register("invoice.client");
       store.register("invoice.client.name");
 
-      const field = store.getState("invoice.client.name");
-      const node = store.getState("invoice.client");
+      const field = store.state("invoice.client.name");
+      const node = store.state("invoice.client");
 
       expect(field?.parent).toBe(node);
     });
@@ -187,11 +187,11 @@ describe("FormStore", () => {
 
       empty.register("invoice.client");
 
-      expect(empty.getState("invoice.client")?.kind).toBe(PathKind.Field);
+      expect(empty.state("invoice.client")?.kind).toBe(PathKind.Field);
 
       empty.register("invoice.client.name");
 
-      expect(empty.getState("invoice.client")?.kind).toBe(PathKind.Object);
+      expect(empty.state("invoice.client")?.kind).toBe(PathKind.Object);
     });
 
     it("stops being a field the moment a write reaches through it", () => {
@@ -199,11 +199,11 @@ describe("FormStore", () => {
 
       empty.register("invoice.client");
 
-      expect(empty.getState("invoice.client")?.kind).toBe(PathKind.Field);
+      expect(empty.state("invoice.client")?.kind).toBe(PathKind.Field);
 
       empty.set("invoice.client.name", "Ada Lovelace");
 
-      expect(empty.getState("invoice.client")?.kind).toBe(PathKind.Object);
+      expect(empty.state("invoice.client")?.kind).toBe(PathKind.Object);
     });
 
     it("can still be unregistered afterwards, from the kind it is now", () => {
@@ -214,7 +214,7 @@ describe("FormStore", () => {
 
       empty.unregister("invoice.client");
 
-      expect(empty.getState("invoice.client")).toBeUndefined();
+      expect(empty.state("invoice.client")).toBeUndefined();
     });
 
     it("leaves a location nobody watches alone", () => {
@@ -222,7 +222,7 @@ describe("FormStore", () => {
 
       empty.set("invoice.client.name", "Ada Lovelace");
 
-      expect(empty.getState("invoice.client")).toBeUndefined();
+      expect(empty.state("invoice.client")).toBeUndefined();
     });
   });
 
@@ -232,7 +232,7 @@ describe("FormStore", () => {
 
       store.unregister("invoice.client.name");
 
-      expect(store.getState("invoice.client.name")).toBeUndefined();
+      expect(store.state("invoice.client.name")).toBeUndefined();
     });
 
     it("dematerializes a node", () => {
@@ -240,7 +240,7 @@ describe("FormStore", () => {
 
       store.unregister("invoice.client");
 
-      expect(store.getState("invoice.client")).toBeUndefined();
+      expect(store.state("invoice.client")).toBeUndefined();
     });
 
     it("ignores a path that was never registered", () => {
@@ -261,11 +261,11 @@ describe("FormStore", () => {
 
       store.unregister("invoice.client.name");
 
-      expect(store.getState("invoice.client.name")).toBeDefined();
+      expect(store.state("invoice.client.name")).toBeDefined();
 
       store.unregister("invoice.client.name");
 
-      expect(store.getState("invoice.client.name")).toBeUndefined();
+      expect(store.state("invoice.client.name")).toBeUndefined();
     });
 
     it("does not throw when a mounted Controller cleans up after its array item was already replaced", () => {
@@ -281,20 +281,20 @@ describe("FormStore", () => {
     it("brings a path nobody had named onto the chain", () => {
       store.watch("invoice.client.name", () => {});
 
-      expect(store.getState("invoice.client.name")).toBeDefined();
+      expect(store.state("invoice.client.name")).toBeDefined();
     });
 
     it("materializes a node the same way registering it does", () => {
       store.feel("invoice.client", () => {});
 
-      expect(store.getState("invoice.client")).toBeDefined();
+      expect(store.state("invoice.client")).toBeDefined();
     });
 
     /** Materializing answers for the path, so the other domain is reached too. */
     it("waiting on the value leaves the state materialized as well", () => {
       store.watch("invoice.client.addresses", () => {});
 
-      expect(store.getState("invoice.client.addresses")).toBeDefined();
+      expect(store.state("invoice.client.addresses")).toBeDefined();
     });
 
     it("takes back what it claimed, leaving nothing behind on the chain", () => {
@@ -302,7 +302,7 @@ describe("FormStore", () => {
 
       leave();
 
-      expect(store.getState("invoice.client.name")).toBeUndefined();
+      expect(store.state("invoice.client.name")).toBeUndefined();
     });
 
     it("leaves the location alone while somebody else is still waiting", () => {
@@ -311,7 +311,7 @@ describe("FormStore", () => {
 
       first();
 
-      expect(store.getState("invoice.client.name")).toBeDefined();
+      expect(store.state("invoice.client.name")).toBeDefined();
     });
 
     it("leaves alone what somebody else registered", () => {
@@ -320,7 +320,7 @@ describe("FormStore", () => {
 
       leave();
 
-      expect(store.getState("invoice.client.name")).toBeDefined();
+      expect(store.state("invoice.client.name")).toBeDefined();
     });
   });
 
@@ -343,7 +343,7 @@ describe("FormStore", () => {
 
       store.set("invoice.client.name", "Grace Hopper");
 
-      const field = store.getState("invoice.client.name") as StateFieldEntry;
+      const field = store.state("invoice.client.name") as StateFieldEntry;
 
       expect(hasFlag(field.state.flags, StateFlag.Dirty)).toBe(true);
     });
@@ -353,7 +353,7 @@ describe("FormStore", () => {
 
       store.set("invoice.client.name", "Ada Lovelace");
 
-      const field = store.getState("invoice.client.name") as StateFieldEntry;
+      const field = store.state("invoice.client.name") as StateFieldEntry;
 
       expect(hasFlag(field.state.flags, StateFlag.Dirty)).toBe(false);
     });
@@ -364,7 +364,7 @@ describe("FormStore", () => {
 
       store.set("invoice.client.name", "Ada Lovelace");
 
-      const field = store.getState("invoice.client.name") as StateFieldEntry;
+      const field = store.state("invoice.client.name") as StateFieldEntry;
 
       expect(hasFlag(field.state.flags, StateFlag.Dirty)).toBe(false);
     });
@@ -372,7 +372,7 @@ describe("FormStore", () => {
     it("does not create state for a field nobody registered", () => {
       store.set("invoice.client.name", "Grace Hopper");
 
-      expect(store.getState("invoice.client.name")).toBeUndefined();
+      expect(store.state("invoice.client.name")).toBeUndefined();
     });
 
     /**
@@ -397,7 +397,7 @@ describe("FormStore", () => {
 
       store.set("invoice.client.addresses", null as never);
 
-      expect(store.getState("invoice.client.addresses.0.city")).toBeUndefined();
+      expect(store.state("invoice.client.addresses.0.city")).toBeUndefined();
       expect(store.values.invoice.client.addresses).toBeNull();
     });
 
@@ -406,7 +406,7 @@ describe("FormStore", () => {
 
       store.set("invoice.client", null as never);
 
-      const field = store.getState("invoice.client.name") as StateFieldEntry;
+      const field = store.state("invoice.client.name") as StateFieldEntry;
 
       expect(field).toBeDefined();
       expect(hasFlag(field.state.flags, StateFlag.Dirty)).toBe(true);
@@ -417,7 +417,7 @@ describe("FormStore", () => {
 
       store.set("invoice", { ...sample().invoice, series: "F002" });
 
-      const field = store.getState("invoice.series") as StateFieldEntry;
+      const field = store.state("invoice.series") as StateFieldEntry;
 
       expect(store.values.invoice.series).toBe("F002");
       expect(hasFlag(field.state.flags, StateFlag.Dirty)).toBe(true);
@@ -434,7 +434,7 @@ describe("FormStore", () => {
         addresses: [],
       });
 
-      const field = store.getState("invoice.client.name") as StateFieldEntry;
+      const field = store.state("invoice.client.name") as StateFieldEntry;
 
       expect(hasFlag(field.state.flags, StateFlag.Dirty)).toBe(true);
     });
@@ -444,7 +444,7 @@ describe("FormStore", () => {
 
       store.set("invoice.client.addresses", [{ city: "Trujillo", reference: "cerca al mercado" }]);
 
-      expect(store.getState("invoice.client.addresses.1.city")).toBeUndefined();
+      expect(store.state("invoice.client.addresses.1.city")).toBeUndefined();
     });
 
     it("compares a freshly replaced array item against whatever default still occupies that position", () => {
@@ -452,7 +452,7 @@ describe("FormStore", () => {
 
       store.register("invoice.client.addresses.0.city");
 
-      const field = store.getState("invoice.client.addresses.0.city") as StateFieldEntry;
+      const field = store.state("invoice.client.addresses.0.city") as StateFieldEntry;
 
       expect(field.kind).toBe(PathKind.Field);
       expect(hasFlag(field.state.flags, StateFlag.Dirty)).toBe(true);
@@ -467,17 +467,17 @@ describe("FormStore", () => {
 
       store.set("invoice.client.addresses", addresses("Trujillo"));
 
-      expect(store.getState("invoice.client.addresses.0.city")).toBeDefined();
+      expect(store.state("invoice.client.addresses.0.city")).toBeDefined();
     });
 
     it("keeps it as the very same entry, so whoever holds it is still holding it", () => {
       store.register("invoice.client.addresses.0.city");
 
-      const held = store.getState("invoice.client.addresses.0.city");
+      const held = store.state("invoice.client.addresses.0.city");
 
       store.set("invoice.client.addresses", addresses("Trujillo"));
 
-      expect(store.getState("invoice.client.addresses.0.city")).toBe(held);
+      expect(store.state("invoice.client.addresses.0.city")).toBe(held);
     });
 
     it("reassesses the fields inside, however deep, instead of leaving them behind", () => {
@@ -485,7 +485,7 @@ describe("FormStore", () => {
 
       store.set("invoice.client.addresses", addresses("Trujillo"));
 
-      const field = store.getState("invoice.client.addresses.0.city") as StateFieldEntry;
+      const field = store.state("invoice.client.addresses.0.city") as StateFieldEntry;
 
       expect(hasFlag(field.state.flags, StateFlag.Dirty)).toBe(true);
     });
@@ -496,7 +496,7 @@ describe("FormStore", () => {
 
       store.set("invoice.client.addresses", addresses("Trujillo"));
 
-      const node = store.getState("invoice.client.addresses");
+      const node = store.state("invoice.client.addresses");
 
       expect(node).toBeDefined();
       expect(hasFlag((node as StateEntry).state.flags, StateFlag.Dirty)).toBe(true);
@@ -509,7 +509,7 @@ describe("FormStore", () => {
       store.set("invoice.client.addresses", addresses("Trujillo"));
       store.set("invoice.client.addresses", [{ city: "Lima", reference: "Frente al parque principal" }]);
 
-      const node = store.getState("invoice.client.addresses") as StateEntry;
+      const node = store.state("invoice.client.addresses") as StateEntry;
 
       expect(hasFlag(node.state.flags, StateFlag.Dirty)).toBe(false);
     });
@@ -520,19 +520,19 @@ describe("FormStore", () => {
 
       store.set("invoice.client.addresses", addresses("Trujillo"));
 
-      expect(store.getState("invoice.client.addresses.0.city")).toBeDefined();
-      expect(store.getState("invoice.client.addresses.1.city")).toBeUndefined();
-      expect(store.getState("invoice.client.addresses.2.city")).toBeUndefined();
+      expect(store.state("invoice.client.addresses.0.city")).toBeDefined();
+      expect(store.state("invoice.client.addresses.1.city")).toBeUndefined();
+      expect(store.state("invoice.client.addresses.2.city")).toBeUndefined();
     });
 
     it("takes on the positions a longer value brings, without touching the ones already there", () => {
       store.register("invoice.client.addresses.0.city");
 
-      const held = store.getState("invoice.client.addresses.0.city");
+      const held = store.state("invoice.client.addresses.0.city");
 
       store.set("invoice.client.addresses", addresses("Trujillo", "Piura", "Cusco"));
 
-      expect(store.getState("invoice.client.addresses.0.city")).toBe(held);
+      expect(store.state("invoice.client.addresses.0.city")).toBe(held);
       expect(store.values.invoice.client.addresses).toHaveLength(3);
     });
 
@@ -541,7 +541,7 @@ describe("FormStore", () => {
 
       store.set("invoice.client.phones", [{ nested: true }] as never);
 
-      expect(store.getState("invoice.client.phones.0")).toBeUndefined();
+      expect(store.state("invoice.client.phones.0")).toBeUndefined();
     });
   });
 
@@ -591,7 +591,7 @@ describe("FormStore", () => {
 
       form.register("rows.1");
 
-      expect(form.getState("rows.1")).toBeDefined();
+      expect(form.state("rows.1")).toBeDefined();
     });
 
     it("falls back to the path string where nothing lives yet", () => {
@@ -610,8 +610,8 @@ describe("FormStore", () => {
       form.set("addresses", [{ city: "Lima" }]);
       form.register("addresses.0.city");
 
-      expect(form.getState("addresses")?.kind).toBe(PathKind.Array);
-      expect(form.getState("addresses.0.city")).toBeDefined();
+      expect(form.state("addresses")?.kind).toBe(PathKind.Array);
+      expect(form.state("addresses.0.city")).toBeDefined();
       expect(form.values.addresses).toEqual([{ city: "Lima" }]);
     });
 
@@ -628,7 +628,7 @@ describe("FormStore", () => {
   describe("an array that holds a different number of items than its base", () => {
     const addresses = (...cities: string[]) => cities.map((city) => ({ city, reference: "-" }));
     const dirty = (path: "invoice.client.addresses") =>
-      hasFlag((store.getState(path) as StateEntry).state.flags, StateFlag.Dirty);
+      hasFlag((store.state(path) as StateEntry).state.flags, StateFlag.Dirty);
 
     beforeEach(() => {
       store = new FormStore<Invoice>({
@@ -697,11 +697,11 @@ describe("FormStore", () => {
 
       store.set("invoice.client.addresses", addresses("A"));
 
-      expect(hasFlag(store.getState("invoice")?.state.flags ?? 0, StateFlag.Dirty)).toBe(false);
+      expect(hasFlag(store.state("invoice")?.state.flags ?? 0, StateFlag.Dirty)).toBe(false);
 
       store.register("invoice");
 
-      expect(hasFlag((store.getState("invoice") as StateEntry).state.flags, StateFlag.Dirty)).toBe(true);
+      expect(hasFlag((store.state("invoice") as StateEntry).state.flags, StateFlag.Dirty)).toBe(true);
     });
 
     it("says nothing when nobody is watching the array itself", () => {
@@ -709,9 +709,9 @@ describe("FormStore", () => {
 
       store.set("invoice.client.addresses", addresses("A"));
 
-      expect(store.getState("invoice.client.addresses")).toBeUndefined();
+      expect(store.state("invoice.client.addresses")).toBeUndefined();
       expect(
-        hasFlag((store.getState("invoice.client.addresses.0.city") as StateFieldEntry).state.flags, StateFlag.Dirty),
+        hasFlag((store.state("invoice.client.addresses.0.city") as StateFieldEntry).state.flags, StateFlag.Dirty),
       ).toBe(false);
     });
   });
@@ -751,10 +751,8 @@ describe("FormStore", () => {
 
       patch.set("invoice.client", { name: "Grace Hopper" } as never);
 
-      expect(hasFlag((patch.getState("invoice.client.name") as StateFieldEntry).state.flags, StateFlag.Dirty)).toBe(
-        true,
-      );
-      expect(hasFlag((patch.getState("invoice.client.email") as StateFieldEntry).state.flags, StateFlag.Dirty)).toBe(
+      expect(hasFlag((patch.state("invoice.client.name") as StateFieldEntry).state.flags, StateFlag.Dirty)).toBe(true);
+      expect(hasFlag((patch.state("invoice.client.email") as StateFieldEntry).state.flags, StateFlag.Dirty)).toBe(
         false,
       );
     });
@@ -765,7 +763,7 @@ describe("FormStore", () => {
 
       patch.set("invoice.client", { name: "Grace Hopper" } as never);
 
-      expect(patch.getState("invoice.client.addresses.0.city")).toBeDefined();
+      expect(patch.state("invoice.client.addresses.0.city")).toBeDefined();
       expect(patch.values.invoice.client.addresses[0]?.city).toBe("Lima");
     });
 
@@ -776,7 +774,7 @@ describe("FormStore", () => {
 
       expect(patch.values.invoice.client.addresses).toEqual([{ city: "Trujillo" }]);
 
-      const field = patch.getState("invoice.client.addresses.0.city") as StateFieldEntry;
+      const field = patch.state("invoice.client.addresses.0.city") as StateFieldEntry;
 
       expect(hasFlag(field.state.flags, StateFlag.Dirty)).toBe(true);
     });
@@ -864,7 +862,7 @@ describe("FormStore", () => {
 
       expect(born.values.billing.city).toBe("Cusco");
       expect(born.values.shipping.city).toBe("Lima");
-      expect(hasFlag(born.getState("shipping.city")?.state.flags ?? 0, StateFlag.Dirty)).toBe(false);
+      expect(hasFlag(born.state("shipping.city")?.state.flags ?? 0, StateFlag.Dirty)).toBe(false);
     });
 
     it("keeps two rows apart when the same one was handed in twice", () => {
@@ -937,7 +935,7 @@ describe("FormStore", () => {
       born.register("invoice.client.name");
 
       expect(born.values.invoice.client.name).toBe("Ada Lovelace");
-      expect(hasFlag(born.getState("invoice.client.name")?.state.flags ?? 0, StateFlag.Dirty)).toBe(false);
+      expect(hasFlag(born.state("invoice.client.name")?.state.flags ?? 0, StateFlag.Dirty)).toBe(false);
     });
 
     it("starts wherever it is told to, which is not always its base", () => {
@@ -950,7 +948,7 @@ describe("FormStore", () => {
 
       expect(born.values.invoice.client.name).toBe("Grace Hopper");
       expect(born.defaults.invoice.client.name).toBe("Ada Lovelace");
-      expect(hasFlag(born.getState("invoice.client.name")?.state.flags ?? 0, StateFlag.Dirty)).toBe(true);
+      expect(hasFlag(born.state("invoice.client.name")?.state.flags ?? 0, StateFlag.Dirty)).toBe(true);
     });
 
     it("keeps its own tree, so what it was handed is never written into", () => {
@@ -1025,7 +1023,7 @@ describe("FormStore", () => {
       same.register("client.name");
       same.set("client.name", "Grace Hopper");
 
-      expect(hasFlag(same.getState("client.name")?.state.flags ?? 0, StateFlag.Dirty)).toBe(true);
+      expect(hasFlag(same.state("client.name")?.state.flags ?? 0, StateFlag.Dirty)).toBe(true);
     });
 
     it("still shares what only compares as itself", () => {
@@ -1042,7 +1040,7 @@ describe("FormStore", () => {
 
       dated.register("when");
 
-      expect(hasFlag(dated.getState("when")?.state.flags ?? 0, StateFlag.Dirty)).toBe(false);
+      expect(hasFlag(dated.state("when")?.state.flags ?? 0, StateFlag.Dirty)).toBe(false);
     });
 
     it("is dirty once a real instant replaces it", () => {
@@ -1051,7 +1049,7 @@ describe("FormStore", () => {
       dated.register("when");
       dated.set("when", new Date(0));
 
-      expect(hasFlag(dated.getState("when")?.state.flags ?? 0, StateFlag.Dirty)).toBe(true);
+      expect(hasFlag(dated.state("when")?.state.flags ?? 0, StateFlag.Dirty)).toBe(true);
     });
   });
 
@@ -1137,7 +1135,7 @@ describe("FormStore", () => {
 
       expect(() => empty.register("invoice.client.__proto__" as never)).toThrow(InvalidPathSegment);
 
-      expect(empty.getState("invoice.client")?.kind).toBe(PathKind.Field);
+      expect(empty.state("invoice.client")?.kind).toBe(PathKind.Field);
     });
 
     it("leaves it alone on an index no array could ever hold", () => {
@@ -1145,7 +1143,7 @@ describe("FormStore", () => {
 
       expect(() => empty.register("invoice.client.99999999999999999999" as never)).toThrow(InvalidArrayIndex);
 
-      expect(empty.getState("invoice.client")?.kind).toBe(PathKind.Field);
+      expect(empty.state("invoice.client")?.kind).toBe(PathKind.Field);
     });
 
     it("says nothing happened, not even to whoever watches the shape", () => {
@@ -1153,7 +1151,7 @@ describe("FormStore", () => {
 
       expect(() => empty.set("invoice.client.__proto__" as never, "x" as never)).toThrow(InvalidPathSegment);
 
-      expect(empty.getState("invoice.client")?.kind).toBe(PathKind.Field);
+      expect(empty.state("invoice.client")?.kind).toBe(PathKind.Field);
     });
   });
 
@@ -1234,15 +1232,15 @@ describe("FormStore", () => {
       },
     });
 
-    const dirty = (form: FormStore<Priced>, path: Parameters<FormStore<Priced>["getState"]>[0]) =>
-      hasFlag((form.getState(path) as StateFieldEntry).state.flags, StateFlag.Dirty);
+    const dirty = (form: FormStore<Priced>, path: Parameters<FormStore<Priced>["state"]>[0]) =>
+      hasFlag((form.state(path) as StateFieldEntry).state.flags, StateFlag.Dirty);
 
     it("stops at a record a scalar claims, instead of taking it apart", () => {
       const form = new FormStore<Priced>({ defaults: priced(), scalars: [addressScalar] });
 
       form.register("invoice.client.addresses.0");
 
-      expect(form.getState("invoice.client.addresses.0")?.kind).toBe(PathKind.Field);
+      expect(form.state("invoice.client.addresses.0")?.kind).toBe(PathKind.Field);
     });
 
     it("takes the same record apart when nothing claims it", () => {
@@ -1250,7 +1248,7 @@ describe("FormStore", () => {
 
       form.register("invoice.client.addresses.0");
 
-      expect(form.getState("invoice.client.addresses.0")?.kind).toBe(PathKind.Object);
+      expect(form.state("invoice.client.addresses.0")?.kind).toBe(PathKind.Object);
     });
 
     it("compares two of them by what they say", () => {
@@ -1391,10 +1389,8 @@ describe("FormStore", () => {
 
       store.assign({ "invoice.client.name": "Grace Hopper" });
 
-      expect(hasFlag((store.getState("invoice.client.name") as StateFieldEntry).state.flags, StateFlag.Dirty)).toBe(
-        true,
-      );
-      expect(hasFlag((store.getState("invoice.client.email") as StateFieldEntry).state.flags, StateFlag.Dirty)).toBe(
+      expect(hasFlag((store.state("invoice.client.name") as StateFieldEntry).state.flags, StateFlag.Dirty)).toBe(true);
+      expect(hasFlag((store.state("invoice.client.email") as StateFieldEntry).state.flags, StateFlag.Dirty)).toBe(
         false,
       );
     });
@@ -1439,7 +1435,7 @@ describe("FormStore", () => {
 
       store.assign({ "invoice.details": [] });
 
-      expect(store.getState("invoice.details.0.quantity")).toBeUndefined();
+      expect(store.state("invoice.details.0.quantity")).toBeUndefined();
     });
 
     /** Nothing stops one location from sitting under another here: they are two
@@ -1471,9 +1467,68 @@ describe("FormStore", () => {
     });
   });
 
+  describe("what a watcher compares", () => {
+    it("hands a field the value it holds", () => {
+      store.register("invoice.client.name");
+
+      expect(store.snapshot("invoice.client.name")).toBe("Ada Lovelace");
+    });
+
+    it("hands a field the value it holds now", () => {
+      store.register("invoice.client.name");
+      store.set("invoice.client.name", "Grace Hopper");
+
+      expect(store.snapshot("invoice.client.name")).toBe("Grace Hopper");
+    });
+
+    it("answers a node with the same reference until something under it moves", () => {
+      store.register("invoice.client");
+      const client = store.snapshot("invoice.client");
+
+      expect(client).toEqual(sample().invoice.client);
+      expect(store.snapshot("invoice.client")).toBe(client);
+    });
+
+    it("answers a node with another reference once something under it moved", () => {
+      store.register("invoice.client");
+      const before = store.snapshot("invoice.client");
+
+      store.set("invoice.client.name", "Grace Hopper");
+      const after = store.snapshot("invoice.client");
+
+      expect(after).toEqual({ ...sample().invoice.client, name: "Grace Hopper" });
+      expect(after).not.toBe(before);
+    });
+
+    it("keeps a node's reference when the write left the value as it was", () => {
+      store.register("invoice.client");
+      const before = store.snapshot("invoice.client");
+
+      store.set("invoice.client.name", "Ada Lovelace");
+
+      expect(before).toEqual(sample().invoice.client);
+      expect(store.snapshot("invoice.client")).toBe(before);
+    });
+
+    it("leaves a node alone when the write landed somewhere else", () => {
+      store.register("invoice.client");
+      store.register("invoice.details");
+      const details = store.snapshot("invoice.details");
+
+      store.set("invoice.client.name", "Grace Hopper");
+
+      expect(details).toEqual(sample().invoice.details);
+      expect(store.snapshot("invoice.details")).toBe(details);
+    });
+
+    it("answers absent for a location nobody named", () => {
+      expect(store.snapshot("invoice.client.name")).toBeUndefined();
+    });
+  });
+
   describe("guards", () => {
     it("finds nothing for a path that was never registered", () => {
-      expect(store.getState("invoice.client.name")).toBeUndefined();
+      expect(store.state("invoice.client.name")).toBeUndefined();
     });
 
     it("keeps its own defaults untouched by a write to values", () => {

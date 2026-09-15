@@ -225,7 +225,25 @@ export class FormStore<TValues extends FormValues> {
     this.#writing.assign(writes);
   }
 
-  getState<TPath extends Path<TValues>>(path: TPath): StateEntry | undefined {
+  /**
+   * What a location holds, as something that can be compared with `Object.is`
+   * against what was read last.
+   *
+   * A field answers with its value, which already compares correctly on its
+   * own. A node answers with a shallow copy that is replaced exactly when
+   * something under it moved, because a write lands inside the container the
+   * node already was and would otherwise leave it looking untouched forever.
+   *
+   * A location nobody named answers absent, the same as `state`: reading
+   * what the form was not asked to keep track of is what `values` is for.
+   */
+  snapshot<TPath extends Path<TValues>>(path: TPath): PathValue<TValues, TPath> | undefined {
+    const entry = this.#index.resolve(path);
+
+    return entry && (this.#value.snapshot(entry.id) as PathValue<TValues, TPath>);
+  }
+
+  state<TPath extends Path<TValues>>(path: TPath): StateEntry | undefined {
     const entry = this.#index.resolve(path);
 
     return entry && this.#state.find(entry.id);

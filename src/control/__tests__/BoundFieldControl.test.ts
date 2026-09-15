@@ -33,12 +33,12 @@ describe("BoundFieldControl", () => {
     control.register();
 
     expect(register).toHaveBeenCalledWith("invoice.client.name");
-    expect(store.getState("invoice.client.name")).toBeDefined();
+    expect(store.state("invoice.client.name")).toBeDefined();
 
     control.unregister();
 
     expect(unregister).toHaveBeenCalledWith("invoice.client.name");
-    expect(store.getState("invoice.client.name")).toBeUndefined();
+    expect(store.state("invoice.client.name")).toBeUndefined();
   });
 
   it("writes to its exact field path without receiving the path again", () => {
