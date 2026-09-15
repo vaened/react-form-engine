@@ -10,7 +10,16 @@ import { ArrayStateAggregate } from "./ArrayStateAggregate";
 import { StateAggregateUnderflow, StateKindConflict } from "./errors";
 import { FieldState } from "./FieldState";
 import { StateAggregate } from "./StateAggregate";
-import type { StateArrayEntry, StateEntry, StateFieldEntry, StateNodeEntry } from "./types";
+import {
+  type FieldPathState,
+  type NodePathState,
+  type PathState,
+  STALE,
+  type StateArrayEntry,
+  type StateEntry,
+  type StateFieldEntry,
+  type StateNodeEntry,
+} from "./types";
 
 /** Shared so that a keystroke that moves nothing does not allocate to say so. */
 const NOTHING_MOVED: readonly StateEntry[] = Object.freeze([]);
@@ -38,6 +47,7 @@ export class StateGraph {
       id: tree.root().id,
       kind: PathKind.Root,
       parent: null,
+      snapshot: STALE,
       state: new StateAggregate(),
     });
 
@@ -80,7 +90,7 @@ export class StateGraph {
       return field;
     }
 
-    const field: StateFieldEntry = { id, kind: PathKind.Field, parent: null, state: initial };
+    const field: StateFieldEntry = { id, kind: PathKind.Field, parent: null, snapshot: STALE, state: initial };
 
     this.#chain.join(field);
     this.#propagate(field.parent, 0, field.state.flags);
@@ -183,10 +193,38 @@ export class StateGraph {
    */
   #moved(field: StateFieldEntry, heldFlags: number, shownErrors: readonly unknown[]): readonly StateEntry[] {
     if (field.state.flags === heldFlags) {
-      return field.state.errors === shownErrors ? NOTHING_MOVED : [field];
+      if (field.state.errors === shownErrors) {
+        return NOTHING_MOVED;
+      }
+
+      field.snapshot = STALE;
+
+      return [field];
     }
 
     return this.#propagate(field.parent, heldFlags, field.state.flags, [field]);
+  }
+
+  /**
+   * How a location stands, built once and kept until something moves it.
+   *
+   * What it is built from is read rather than copied: the flags are a number
+   * living on the state itself, and the errors are the very collection they
+   * were validated with.
+   */
+  snapshot(entry: StateEntry): FieldPathState | NodePathState {
+    if (entry.snapshot === STALE) {
+      const held: PathState = {
+        isDirty: entry.state.isDirty,
+        isTouched: entry.state.isTouched,
+        isInvalid: entry.state.isInvalid,
+        isValidating: entry.state.isValidating,
+      };
+
+      entry.snapshot = entry.kind === PathKind.Field ? { ...held, errors: entry.state.errors } : held;
+    }
+
+    return entry.snapshot;
   }
 
   /** For callers that do not hold the field, such as an imperative set. */
@@ -337,7 +375,15 @@ export class StateGraph {
       node = node.parent;
     }
 
-    return moved ?? NOTHING_MOVED;
+    if (!moved) {
+      return NOTHING_MOVED;
+    }
+
+    for (const entry of moved) {
+      entry.snapshot = STALE;
+    }
+
+    return moved;
   }
 
   /**
@@ -388,8 +434,8 @@ export class StateGraph {
   /** A location that holds others answers with whatever its kind can answer with. */
   #hold(id: EntryId): StateNodeEntry {
     return this.#tree.entry(id).kind === PathKind.Array
-      ? { id, kind: PathKind.Array, parent: null, state: new ArrayStateAggregate() }
-      : { id, kind: PathKind.Object, parent: null, state: new StateAggregate() };
+      ? { id, kind: PathKind.Array, parent: null, snapshot: STALE, state: new ArrayStateAggregate() }
+      : { id, kind: PathKind.Object, parent: null, snapshot: STALE, state: new StateAggregate() };
   }
 
   static #asField(entry: StateEntry): StateFieldEntry {

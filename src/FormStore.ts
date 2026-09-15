@@ -4,7 +4,7 @@
  */
 
 import type { Unsubscribe } from "./EventEmitter";
-import type { FormValues, Path, PathValue } from "./path";
+import type { FieldPath, FormValues, NodePath, Path, PathValue } from "./path";
 import { type FormWrites, FormWriting } from "./store/FormWriting";
 import { PathIndex } from "./store/path/PathIndex";
 import type { PathIndexEntry, WalkOf } from "./store/path/types";
@@ -13,7 +13,7 @@ import { FieldState } from "./store/state/FieldState";
 import { type PathIdentifier, PathRegistry } from "./store/state/PathRegistry";
 import { StateAssessor } from "./store/state/StateAssessor";
 import { StateGraph } from "./store/state/StateGraph";
-import type { StateEntry } from "./store/state/types";
+import type { FieldPathState, NodePathState, StateEntry } from "./store/state/types";
 import { FullWrite } from "./store/value/FullWrite";
 import { isolate } from "./store/value/isolate";
 import { PatchWrite } from "./store/value/PatchWrite";
@@ -243,10 +243,45 @@ export class FormStore<TValues extends FormValues> {
     return entry && (this.#value.snapshot(entry.id) as PathValue<TValues, TPath>);
   }
 
-  state<TPath extends Path<TValues>>(path: TPath): StateEntry | undefined {
-    const entry = this.#index.resolve(path);
+  /**
+   * What a location is: one the form answers for on its own, or one holding
+   * others that answer for it.
+   *
+   * It is what the location *is* and not how it stands, so it moves only when
+   * the shape does — a field reopens into a node the moment anything registers
+   * or lands underneath it.
+   */
+  kindOf<TPath extends Path<TValues>>(path: TPath): PathKind | undefined {
+    return this.#index.resolve(path)?.kind;
+  }
 
-    return entry && this.#state.find(entry.id);
+  /**
+   * How a location stands, as something that can be compared with `Object.is`
+   * against what was read last.
+   *
+   * It is one answer and not several because whoever waits on `feel` is told
+   * once and then asks what changed: a caller holding four of them apart would
+   * have to be told four times, and a field whose verdict held while what it
+   * has to show changed would not be told at all.
+   *
+   * What comes back is decided by the path: a field answers with what a
+   * validation found on it, and a node has no such thing to answer with. A node
+   * still reports being invalid, because that is derived from the children
+   * reporting to it — what it cannot do is say what any of them found.
+   *
+   * A location nobody named answers absent, the same as `snapshot`.
+   *
+   * @example
+   * store.state("invoice.client.name")?.errors;  // what validation found here
+   * store.state("invoice.client")?.isInvalid;    // whether anything under it is
+   */
+  state<TPath extends FieldPath<TValues>>(path: TPath): FieldPathState | undefined;
+  state<TPath extends NodePath<TValues>>(path: TPath): NodePathState | undefined;
+  state<TPath extends Path<TValues>>(path: TPath): FieldPathState | NodePathState | undefined {
+    const entry = this.#index.resolve(path);
+    const found = entry && this.#state.find(entry.id);
+
+    return found && this.#state.snapshot(found);
   }
 
   /** Every segment of a path, alongside whatever the value holds at it. */

@@ -23,8 +23,36 @@ export interface PathState {
   readonly isValidating: boolean;
 }
 
+/**
+ * How a field stands, as one answer.
+ *
+ * It is one answer and not several because whoever asks compares what came
+ * back against what it read last. The errors travel with the flags for the
+ * same reason: a verdict that held while what it has to show changed is a
+ * move, and nothing about the flags says so.
+ */
+export interface FieldPathState extends PathState {
+  /** What a validation found, kept as the very collection it landed with. */
+  readonly errors: readonly unknown[];
+}
+
+/**
+ * How a node stands, which is everything its reactive children report and
+ * nothing of its own.
+ *
+ * It carries no errors, and that is the whole of why it is its own answer: a
+ * node derives how many of its children carry a flag, and there is no such
+ * thing as deriving what they say. Handing over an empty collection would read
+ * as a location that was validated and found nothing, which is a different
+ * thing from one that cannot be validated at all.
+ */
+export type NodePathState = PathState;
+
+export const STALE = Symbol("stale");
+
 interface StateBase extends Notifiable {
   readonly id: EntryId;
+  snapshot: FieldPathState | NodePathState | typeof STALE;
   /**
    * The nearest materialized ancestor, or `null` on the root.
    *

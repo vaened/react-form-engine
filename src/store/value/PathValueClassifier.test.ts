@@ -4,11 +4,12 @@
  */
 
 import { beforeEach, describe, expect, it } from "vitest";
+import type { FormScalar } from "../../path";
 import { PathKind } from "../path/types";
 import { PathValueClassifier } from "./PathValueClassifier";
 import type { Scalar } from "./Scalar";
 
-type Money = { currency: string; amount: number };
+type Money = { currency: string; amount: number } & FormScalar;
 
 const money = (currency: string, amount: number): Money => ({ currency, amount });
 
@@ -78,8 +79,8 @@ describe("PathValueClassifier", () => {
     });
 
     it("lets a scalar claim an array before the array rule sees it", () => {
-      const point: Scalar<[number, number]> = {
-        matches: (value): value is [number, number] => Array.isArray(value) && value.length === 2,
+      const point: Scalar<[number, number] & FormScalar> = {
+        matches: (value): value is [number, number] & FormScalar => Array.isArray(value) && value.length === 2,
         equals: (left, right) => left[0] === right[0] && left[1] === right[1],
       };
 

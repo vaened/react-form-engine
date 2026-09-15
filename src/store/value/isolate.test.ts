@@ -4,6 +4,7 @@
  */
 
 import { describe, expect, it } from "vitest";
+import type { FormScalar } from "../../path";
 import { PathKind } from "../path/types";
 import { CircularValue } from "./errors";
 import { isolate } from "./isolate";
@@ -149,8 +150,10 @@ describe("isolate", () => {
         constructor(public amount: number) {}
       }
 
-      const money: Scalar<Money> = {
-        matches: (value): value is Money => value instanceof Money,
+      type Held = Money & FormScalar;
+
+      const money: Scalar<Held> = {
+        matches: (value): value is Held => value instanceof Money,
         equals: (left, right) => left.amount === right.amount,
         isolate: (value) => new Money(value.amount),
       };

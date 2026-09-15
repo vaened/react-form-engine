@@ -898,4 +898,103 @@ describe("StateGraph", () => {
       expect(graph.entry(invoice.id)).toBe(before);
     });
   });
+
+  describe("how a location stands, as one answer", () => {
+    it("builds it once and keeps it while nothing moves", () => {
+      graph.register(form.city0);
+      const snapshot = graph.snapshot(graph.field(form.city0));
+
+      expect(snapshot).toEqual({
+        isDirty: false,
+        isTouched: false,
+        isInvalid: false,
+        isValidating: false,
+        errors: [],
+      });
+      expect(graph.snapshot(graph.field(form.city0))).toBe(snapshot);
+    });
+
+    it("builds another once a flag moved", () => {
+      graph.register(form.city0);
+      const field = graph.field(form.city0);
+      const before = graph.snapshot(field);
+
+      graph.touch(field);
+
+      expect(graph.snapshot(field)).not.toBe(before);
+      expect(graph.snapshot(field).isTouched).toBe(true);
+    });
+
+    /**
+     * The verdict holds and what it has to show changes. Nothing about the
+     * flags says so, which is the whole reason the errors travel in the same
+     * answer rather than alongside it.
+     */
+    it("builds another when the verdict held and only the errors moved", () => {
+      graph.register(form.city0);
+      const field = graph.field(form.city0);
+
+      graph.validated(field, true, ["too short"]);
+      const first = graph.snapshot(field);
+
+      graph.validated(field, true, ["too long"]);
+      const second = graph.snapshot(field);
+
+      expect(first.isInvalid).toBe(true);
+      expect(second.isInvalid).toBe(true);
+      expect(second).toHaveProperty("errors", ["too long"]);
+      expect(second).not.toBe(first);
+    });
+
+    it("keeps it when a validation landed the very collection it already showed", () => {
+      graph.register(form.city0);
+      const field = graph.field(form.city0);
+      const errors = ["too short"];
+
+      graph.validated(field, true, errors);
+      const before = graph.snapshot(field);
+
+      graph.validated(field, true, errors);
+
+      expect(graph.snapshot(field)).toBe(before);
+    });
+
+    /** A field's errors are its own: an ancestor derives flags and never what they say. */
+    it("carries no errors up to an ancestor that only derives flags", () => {
+      graph.register(form.city0);
+      graph.materialize(form.client);
+
+      graph.validated(graph.field(form.city0), true, ["too short"]);
+
+      const node = graph.snapshot(graph.entry(form.client));
+
+      expect(node.isInvalid).toBe(true);
+      expect(node).not.toHaveProperty("errors");
+    });
+
+    it("builds another for every ancestor the move reached", () => {
+      graph.register(form.city0);
+      graph.materialize(form.client);
+      const node = graph.entry(form.client);
+      const before = graph.snapshot(node);
+
+      graph.assessed(graph.field(form.city0), true);
+
+      expect(graph.snapshot(node)).not.toBe(before);
+      expect(graph.snapshot(node).isDirty).toBe(true);
+    });
+
+    it("leaves an ancestor alone when its own derived answer did not move", () => {
+      graph.register(form.city0);
+      graph.register(form.city1);
+      graph.materialize(form.client);
+
+      graph.assessed(graph.field(form.city0), true);
+      const settled = graph.snapshot(graph.entry(form.client));
+
+      graph.assessed(graph.field(form.city1), true);
+
+      expect(graph.snapshot(graph.entry(form.client))).toBe(settled);
+    });
+  });
 });

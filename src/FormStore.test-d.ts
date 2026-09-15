@@ -4,6 +4,8 @@
  */
 
 import { FormStore } from "./FormStore";
+import type { FormScalar } from "./path";
+import type { Scalar } from "./store/value/Scalar";
 
 type Address = { city: string };
 
@@ -63,3 +65,47 @@ void wrongType;
 
 // @ts-expect-error nothing lives at that path
 void store.snapshot("invoice.missing");
+
+/**
+ * A field answers with what a validation found on it; a node has no such thing
+ * to answer with, and the compiler is what says so.
+ */
+const fieldState = store.state("invoice.series");
+const nodeState = store.state("invoice.client");
+
+const seriesErrors: readonly unknown[] | undefined = fieldState?.errors;
+const clientInvalid: boolean | undefined = nodeState?.isInvalid;
+
+void seriesErrors;
+void clientInvalid;
+
+// @ts-expect-error a node derives flags from its children and never what they say
+void store.state("invoice.client")?.errors;
+
+// @ts-expect-error an array is a node, however many fields answer for it
+void store.state("invoice.client.addresses")?.errors;
+
+// a shape the types end at is a field, so it answers with its own errors
+const dateErrors: readonly unknown[] | undefined = store.state("invoice.createdAt")?.errors;
+void dateErrors;
+
+/** A scalar the engine is told to hold whole has to be one the types end at too. */
+class Money {
+  constructor(
+    readonly amount: number,
+    readonly currency: string,
+  ) {}
+}
+
+interface Marked extends FormScalar {
+  amount: number;
+}
+
+// @ts-expect-error nothing marked it terminal, so paths would still walk into it
+declare const moneyScalar: Scalar<Money>;
+declare const markedScalar: Scalar<Marked>;
+declare const dayScalar: Scalar<Date>;
+
+void moneyScalar;
+void markedScalar;
+void dayScalar;

@@ -3,6 +3,8 @@
  * @link https://vaened.dev DevFolio
  */
 
+import type { IsTerminal } from "../../path";
+
 /**
  * Teaches the engine to treat a shape as a single value.
  *
@@ -20,7 +22,16 @@
  * shared, which is what an unchangeable one wants: a `File` compares as the
  * same file only while it stays the same object.
  */
-export interface Scalar<T = unknown> {
+/**
+ * A shape the engine may be told to hold whole has to be one the types already
+ * end at, so that a path stops at the same place on both sides.
+ *
+ * Saying it only here would leave `Path` walking into a shape the form holds
+ * whole, and the two would disagree about what a location even is.
+ */
+type TypeLevelTerminal<T> = IsTerminal<T> extends true ? unknown : never;
+
+export interface Scalar<T extends TypeLevelTerminal<T> = unknown> {
   matches(value: unknown): value is T;
   equals(left: T, right: T): boolean;
   isolate?(value: T): T;
