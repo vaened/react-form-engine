@@ -282,6 +282,62 @@ describe("Transaction", () => {
     });
   });
 
+  /** A value landing on what it already held did not move, so nothing moved. */
+  describe("a write that changes nothing", () => {
+    it("tells nobody", () => {
+      value.register(form.city0);
+      value.materialize(form.address0);
+
+      expect(told(form.city0, "Lima")).toEqual([]);
+    });
+
+    it("leaves the reader holding the very same reference", () => {
+      value.materialize(form.address0);
+
+      const before = value.snapshot(form.address0);
+
+      writing.set("invoice.client.addresses.0.city" as never, "Lima" as never);
+
+      expect(value.snapshot(form.address0)).toBe(before);
+    });
+
+    /** Only a field is asked: a node handed the very object it already holds is
+     * still copied in, or the form would keep two names for one slot. */
+    it("still copies a node handed the object it already holds", () => {
+      const held = value.value.invoice.client;
+
+      writing.set("invoice.client" as never, held as never);
+
+      expect(value.value.invoice.client).not.toBe(held);
+      expect(value.value.invoice.client).toEqual(held);
+    });
+
+    it("still tells everyone when the value actually moved", () => {
+      value.register(form.city0);
+      value.materialize(form.address0);
+
+      expect(told(form.city0, "Arequipa")).toEqual([form.city0, form.address0, form.root]);
+    });
+
+    it("tells nobody about the one that stayed and everyone about the one that moved", () => {
+      value.register(form.city0);
+      value.register(form.reference0);
+      value.materialize(form.address0);
+
+      const heard: EntryId[] = [];
+      const leave = value.subscribe(value.entry(form.address0), () => heard.push(form.address0));
+
+      writing.assign({
+        "invoice.client.addresses.0.city": "Lima",
+        "invoice.client.addresses.0.reference": "Al costado",
+      } as never);
+
+      leave();
+
+      expect(heard).toEqual([form.address0]);
+    });
+  });
+
   describe("what a reader is handed afterwards", () => {
     it("changes reference once something below it is written", () => {
       value.materialize(form.client);

@@ -126,15 +126,25 @@ export class FormValue<TValues extends FormValues = FormValues> {
   /**
    * Writes, creating whatever containers the destination needs. A missing
    * container is never a special case, however it came to be missing.
+   *
+   * It answers whether anything actually moved, which is what lets a caller
+   * leave alone what a write that landed on its own value never touched. Only a
+   * field is compared: a container is reached through and what lives inside
+   * answers for itself, one field at a time.
    */
-  write(entry: PathIndexEntry, value: unknown): void {
+  write(entry: PathIndexEntry, value: unknown): boolean {
     if (!entry.parent) {
       throw new InvalidRootValue();
     }
 
     const container = this.#build(entry.parent);
+    const key = this.#keyOf(entry);
 
-    FormValue.#assign(container, this.#keyOf(entry), value);
+    if (entry.kind === PathKind.Field && this.#classifier.equals(FormValue.#at(container, key), value)) {
+      return false;
+    }
+
+    FormValue.#assign(container, key, value);
 
     // Writing a field replaces a leaf nobody descends through, but writing a
     // node replaces the very container this and everything under it is reached
@@ -142,6 +152,8 @@ export class FormValue<TValues extends FormValues = FormValues> {
     if (entry.kind !== PathKind.Field) {
       this.clear();
     }
+
+    return true;
   }
 
   /**

@@ -42,6 +42,9 @@ export class PatchWrite<TValues extends FormValues = FormValues> implements Valu
    * Descent stops wherever a whole value belongs: at a location that is not an
    * object, and at anything the classifier answers for on its own, such as a
    * date, which is an object nobody means to be walked into.
+   *
+   * A field landing on what it already held went nowhere, and is left out of
+   * what comes back: nothing moved there, so nothing above it moved either.
    */
   #descend(
     at: PathIndexEntry,
@@ -54,8 +57,9 @@ export class PatchWrite<TValues extends FormValues = FormValues> implements Valu
       !PatchWrite.#keyed(incoming) ||
       this.#classifier.classify(incoming) !== PathKind.Object
     ) {
-      this.#value.write(at, incoming);
-      written.push(at);
+      if (this.#value.write(at, incoming)) {
+        written.push(at);
+      }
 
       return;
     }

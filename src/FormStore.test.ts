@@ -788,6 +788,34 @@ describe("FormStore", () => {
     });
   });
 
+  describe("a patch write that changes nothing", () => {
+    it("tells nobody about a leaf landing on what it already held", () => {
+      const patch = new FormStore<Invoice>({ defaults: sample(), mode: "patch" });
+      let avisos = 0;
+
+      patch.register("invoice.client.name");
+      patch.watch("invoice.client", () => avisos++);
+
+      patch.set("invoice.client", { name: "Ada Lovelace" } as never);
+
+      expect(avisos).toBe(0);
+    });
+
+    it("tells them about the leaf that did move, and only that one", () => {
+      const patch = new FormStore<Invoice>({ defaults: sample(), mode: "patch" });
+      let avisos = 0;
+
+      patch.register("invoice.client.name");
+      patch.register("invoice.client.email");
+      patch.watch("invoice.client", () => avisos++);
+
+      patch.set("invoice.client", { name: "Ada Lovelace", email: "grace@example.com" } as never);
+
+      expect(avisos).toBe(1);
+      expect(patch.values.invoice.client.email).toBe("grace@example.com");
+    });
+  });
+
   describe("a patch value that reaches itself", () => {
     it("refuses a value holding a reference back to itself", () => {
       const patch = new FormStore<Invoice>({ defaults: sample(), mode: "patch" });

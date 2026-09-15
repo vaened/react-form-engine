@@ -26,10 +26,11 @@ export type ValueEntry = Notifiable & {
 };
 
 /**
- * The value domain of a form: what it holds, and who is watching each location.
+ * The value of a form: what it holds, and who is watching each location.
  *
- * It answers both and decides neither. Who has to hear about a write, and when,
- * belongs to whoever is doing the writing.
+ * Who reports to whom belongs to the chain, and when they hear about it belongs
+ * to whoever is doing the writing. What is left here is what a reader is handed,
+ * which is the one thing about a value that is not simply read from the tree.
  */
 export class ValueStore<TValues extends FormValues = FormValues> {
   readonly #value: FormValue<TValues>;
@@ -124,8 +125,9 @@ export class ValueStore<TValues extends FormValues = FormValues> {
     this.#chain.remove(id);
   }
 
-  write(entry: PathIndexEntry, value: unknown): void {
-    this.#value.write(entry, value);
+  /** Answers whether anything moved, so a write onto its own value reaches nobody. */
+  write(entry: PathIndexEntry, value: unknown): boolean {
+    return this.#value.write(entry, value);
   }
 
   /** What a reader would have to recalculate before being handed anything. */
