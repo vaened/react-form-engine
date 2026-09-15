@@ -360,6 +360,7 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
     id: EntryId,
     onField: (entry: PathIndexFieldEntry) => void,
     onArray: (entry: PathIndexArrayEntry) => void,
+    onObject: (entry: PathIndexRootEntry | PathIndexObjectEntry) => void,
   ): void {
     const entry = this.entry(id);
 
@@ -370,10 +371,12 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
 
     if (entry.kind === PathKind.Array) {
       onArray(entry);
+    } else {
+      onObject(entry);
     }
 
     for (const child of PathIndex.#children(entry)) {
-      this.reconcile(child.id, onField, onArray);
+      this.reconcile(child.id, onField, onArray, onObject);
     }
   }
 

@@ -719,6 +719,7 @@ describe("PathIndex", () => {
         name.id,
         (field) => fields.push(field.id),
         (array) => arrays.push(array.id),
+        () => {},
       );
 
       expect(fields).toEqual([name.id]);
@@ -733,6 +734,7 @@ describe("PathIndex", () => {
         addresses.id,
         (field) => seen.push(`field:${field.id}`),
         (array) => seen.push(`array:${array.id}`),
+        () => {},
       );
 
       expect(seen).toEqual([`array:${addresses.id}`, `field:${lima.id}`, `field:${arequipa.id}`]);
@@ -749,6 +751,7 @@ describe("PathIndex", () => {
         client.id,
         (field) => fields.push(field.id),
         (array) => arrays.push(array.id),
+        () => {},
       );
 
       expect(fields).toEqual([name.id, lima.id, arequipa.id]);

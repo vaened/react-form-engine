@@ -10,6 +10,8 @@ import {
   type PathIndexChildEntry,
   type PathIndexEntry,
   type PathIndexFieldEntry,
+  type PathIndexObjectEntry,
+  type PathIndexRootEntry,
   PathKind,
   type RegisterableKind,
 } from "./path/types";
@@ -134,7 +136,25 @@ export class Transaction<TValues extends FormValues> {
       entry.id,
       (field) => this.#field(field),
       (array) => this.#array(array),
+      (object) => this.#object(object),
     );
+  }
+
+  /**
+   * Brings what a location is composed of back in step with what it holds, the
+   * same way an array's positions are: a name the value carries is a location
+   * the form can address, whether or not anybody asked for it first.
+   */
+  #object(object: PathIndexRootEntry | PathIndexObjectEntry): void {
+    const held = this.#value.read(object);
+
+    if (!this.#classifier.isContainer(held) || Array.isArray(held)) {
+      return;
+    }
+
+    for (const key of Object.keys(held)) {
+      this.#index.ensureChild(object, key, this.#classifier.classify(held[key]));
+    }
   }
 
   #field(field: PathIndexFieldEntry): void {

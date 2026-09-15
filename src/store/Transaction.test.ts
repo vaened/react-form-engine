@@ -8,6 +8,7 @@ import type { Path } from "../path";
 import { FormWriting } from "./FormWriting";
 import { type Invoice, InvoiceStructure, sampleInvoice } from "./observation/__fixtures__/invoice";
 import type { EntryId } from "./path/types";
+import { PathKind } from "./path/types";
 import { StateAssessor } from "./state/StateAssessor";
 import { StateGraph } from "./state/StateGraph";
 import { FullWrite } from "./value/FullWrite";
@@ -399,6 +400,100 @@ describe("Transaction", () => {
       writing.set("invoice.client.addresses.0.city" as never, "Chorrillos" as never);
 
       expect(value.snapshot(at(form.city0))).toBe("Chorrillos");
+    });
+  });
+
+  /**
+   * A write brings names the form did not have, and the shape takes them on the
+   * same way an array takes on positions: what the value carries is a location
+   * the form can address, asked for or not.
+   */
+  describe("what a write leaves the shape knowing", () => {
+    /** What the index holds under a location, said the way a reader would ask. */
+    const under = (id: EntryId): string[] =>
+      form.index
+        .childrenOf(id)
+        .map((child) => `${child.segment ?? form.index.positionOf(child.id)}:${PathKind[child.kind]}`);
+
+    it("takes on every name a whole write brought, not only the ones asked for", () => {
+      expect(under(form.client).sort()).toEqual(["addresses:Array", "email:Field", "name:Field"]);
+
+      writing.set("invoice.client", sampleInvoice().invoice.client as never);
+
+      expect(under(form.client).sort()).toEqual([
+        "addresses:Array",
+        "documentNumber:Field",
+        "email:Field",
+        "name:Field",
+        "phones:Array",
+      ]);
+    });
+
+    it("reaches inside every position a list brought", () => {
+      writing.set("invoice.client.addresses", [
+        { city: "Cusco", reference: "a" },
+        { city: "Piura", reference: "b" },
+      ] as never);
+
+      const items = form.index.childrenOf(form.addresses);
+
+      expect(items).toHaveLength(2);
+      expect(under(items[0].id).sort()).toEqual(["city:Field", "reference:Field"]);
+      expect(under(items[1].id).sort()).toEqual(["city:Field", "reference:Field"]);
+    });
+
+    it("says nothing new about a list of values that hold nothing inside", () => {
+      writing.set("invoice.client.phones" as never, ["+51 1", "+51 2"] as never);
+
+      const items = form.index.childrenOf(form.index.resolve("invoice.client.phones")?.id as never);
+
+      expect(items.map((item) => PathKind[item.kind])).toEqual(["Field", "Field"]);
+      expect(under(items[0].id)).toEqual([]);
+    });
+
+    /**
+     * A location the shape already opened can still be handed a value the form
+     * was told to hold whole, and there is nothing inside one of those to name.
+     */
+    it("takes on nothing from a value the form holds whole", () => {
+      const holding = new PathValueClassifier([
+        {
+          matches: (value: unknown): value is never => typeof value === "object" && value !== null && "city" in value,
+          equals: () => false,
+        } as never,
+      ]);
+      const index = new InvoiceStructure();
+      const value = new ValueStore<Invoice>(index.index, holding, sampleInvoice(), sampleInvoice());
+      const held = new FormWriting(
+        index.index,
+        value,
+        new StateGraph(index.index),
+        new StateAssessor(holding),
+        holding,
+        new FullWrite(value, holding),
+      );
+
+      const before = index.index.childrenOf(index.client).map((child) => child.segment);
+
+      held.set("invoice.client", { city: "Cusco" } as never);
+
+      expect(index.index.childrenOf(index.client).map((child) => child.segment)).toEqual(before);
+    });
+
+    it("keeps what was already there rather than building it again", () => {
+      const before = form.index.entry(form.city0);
+
+      writing.set("invoice.client.addresses", [{ city: "Cusco", reference: "x" }] as never);
+
+      expect(form.index.entry(form.city0)).toBe(before);
+    });
+
+    it("takes on nothing new when the write landed on one name", () => {
+      const before = under(form.client).sort();
+
+      writing.set("invoice.client.name", "Grace Hopper" as never);
+
+      expect(under(form.client).sort()).toEqual(before);
     });
   });
 });
