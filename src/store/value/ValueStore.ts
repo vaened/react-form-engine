@@ -80,6 +80,11 @@ export class ValueStore<TValues extends FormValues = FormValues> {
     return this.#value.observe(segments);
   }
 
+  /** Every location under one, with what it holds and what it is measured against. */
+  reconcile(entry: PathIndexEntry, each: (at: PathIndexEntry, value: unknown, defaultValue: unknown) => void): void {
+    this.#value.reconcile(entry, each);
+  }
+
   replace(values: TValues): void {
     this.#value.replace(values);
   }

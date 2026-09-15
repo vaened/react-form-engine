@@ -518,4 +518,95 @@ describe("FormValue", () => {
       expect(discarded.invoice.client.addresses[0].city).toBe("Cusco");
     });
   });
+
+  /**
+   * The walk carries the containers down rather than looking each location up
+   * from the root, so what it hands over has to be the same thing `read` and
+   * `default` would have answered on their own.
+   */
+  describe("reconcile", () => {
+    /** Every stop, said as the path a caller would name and what it was handed. */
+    const trip = (from: Path<Invoice>) => {
+      const seen: string[] = [];
+
+      value.reconcile(index.entry(index.resolve(from)?.id as never), (at, held, base) => {
+        seen.push(`${index.describe(at.id)} = ${JSON.stringify(held)} / ${JSON.stringify(base)}`);
+      });
+
+      return seen;
+    };
+
+    it("answers a location before the ones under it", () => {
+      index.register(ADDRESSES, PathKind.Array);
+      field(CITY_0);
+
+      const seen = trip(ADDRESSES).map((line) => line.split(" =")[0]);
+
+      expect(seen).toEqual([ADDRESSES, "invoice.client.addresses.0", CITY_0]);
+    });
+
+    it("hands each location what it holds now and what it is measured against", () => {
+      index.register(ADDRESSES, PathKind.Array);
+      const city = field(CITY_0);
+
+      value.write(city, "Cusco");
+
+      const seen: string[] = [];
+
+      value.reconcile(city, (_, held, base) => seen.push(`${held} / ${base}`));
+
+      expect(seen).toEqual(["Cusco / Lima"]);
+    });
+
+    it("says the same as reading each location on its own", () => {
+      index.register(ADDRESSES, PathKind.Array);
+      field(CITY_0);
+      field(CITY_1);
+
+      const walked: string[] = [];
+      const asked: string[] = [];
+
+      value.reconcile(index.entry(index.resolve(ADDRESSES)?.id as never), (at, held, base) => {
+        walked.push(`${JSON.stringify(held)}/${JSON.stringify(base)}`);
+        asked.push(`${JSON.stringify(value.read(at))}/${JSON.stringify(value.default(at))}`);
+      });
+
+      expect(walked).toEqual(asked);
+    });
+
+    it("hands nothing down from a shape the form holds whole", () => {
+      const holding = new PathValueClassifier([
+        {
+          matches: (candidate: unknown): candidate is never =>
+            typeof candidate === "object" && candidate !== null && "city" in candidate,
+          equals: () => false,
+        } as never,
+      ]);
+      const whole = new FormValue<Invoice>(index, holding, sample(), sample());
+      const address = index.register("invoice.client.addresses.0", PathKind.Object);
+      const city = field(CITY_0);
+
+      const seen: string[] = [];
+
+      whole.reconcile(address, (at, held) => {
+        if (at.id === city.id) seen.push(JSON.stringify(held));
+      });
+
+      expect(seen).toEqual([JSON.stringify(undefined)]);
+    });
+
+    it("hands nothing down where the value stops before the shape does", () => {
+      const empty = new FormValue<Invoice>(index, classifier, {} as Invoice, {} as Invoice);
+      index.register(ADDRESSES, PathKind.Array);
+      const city = field(CITY_0);
+
+      const seen: unknown[] = [];
+
+      empty.reconcile(index.entry(city.parent.id), (at, held) => {
+        if (at.id === city.id) seen.push(held);
+      });
+
+      expect(seen).toEqual([undefined]);
+    });
+  });
 });

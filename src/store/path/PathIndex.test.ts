@@ -709,56 +709,6 @@ describe("PathIndex", () => {
     });
   });
 
-  describe("reconcile", () => {
-    it("reports a field to onField, and never touches onArray", () => {
-      const name = index.register("invoice.client.name", PathKind.Field);
-      const fields: EntryId[] = [];
-      const arrays: EntryId[] = [];
-
-      index.reconcile(
-        name.id,
-        (field) => fields.push(field.id),
-        (array) => arrays.push(array.id),
-        () => {},
-      );
-
-      expect(fields).toEqual([name.id]);
-      expect(arrays).toEqual([]);
-    });
-
-    it("tells an array how many positions it has before going on into them", () => {
-      const { addresses, lima, arequipa } = registerAddresses();
-      const seen: string[] = [];
-
-      index.reconcile(
-        addresses.id,
-        (field) => seen.push(`field:${field.id}`),
-        (array) => seen.push(`array:${array.id}`),
-        () => {},
-      );
-
-      expect(seen).toEqual([`array:${addresses.id}`, `field:${lima.id}`, `field:${arequipa.id}`]);
-    });
-
-    it("reaches every field at any depth, telling each array it passes through", () => {
-      const name = index.register("invoice.client.name", PathKind.Field);
-      const { addresses, lima, arequipa } = registerAddresses();
-      const client = index.register("invoice.client", PathKind.Object);
-      const fields: EntryId[] = [];
-      const arrays: EntryId[] = [];
-
-      index.reconcile(
-        client.id,
-        (field) => fields.push(field.id),
-        (array) => arrays.push(array.id),
-        () => {},
-      );
-
-      expect(fields).toEqual([name.id, lima.id, arequipa.id]);
-      expect(arrays).toEqual([addresses.id]);
-    });
-  });
-
   describe("move", () => {
     it("keeps the routes correct without touching them", () => {
       const { addresses, lima, arequipa } = registerAddresses();

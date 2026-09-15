@@ -347,39 +347,6 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
     return { nodes, fields };
   }
 
-  /**
-   * Walks down from `id`, stopping the instant a field answers for itself and
-   * descending through anything else, on the assumption that a name still
-   * reaches the location it always reached.
-   *
-   * An array is told before the walk goes on, because how many positions it
-   * has is the value's to decide and the ones that outlive the value have to
-   * be gone before anything looks for them.
-   */
-  reconcile(
-    id: EntryId,
-    onField: (entry: PathIndexFieldEntry) => void,
-    onArray: (entry: PathIndexArrayEntry) => void,
-    onObject: (entry: PathIndexRootEntry | PathIndexObjectEntry) => void,
-  ): void {
-    const entry = this.entry(id);
-
-    if (entry.kind === PathKind.Field) {
-      onField(entry);
-      return;
-    }
-
-    if (entry.kind === PathKind.Array) {
-      onArray(entry);
-    } else {
-      onObject(entry);
-    }
-
-    for (const child of PathIndex.#children(entry)) {
-      this.reconcile(child.id, onField, onArray, onObject);
-    }
-  }
-
   /** Rebuilds the public path of an entry. */
   describe(id: EntryId): string {
     const segments: string[] = [];

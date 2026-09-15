@@ -17,6 +17,9 @@ import { InvalidRootValue, PathInsideValue } from "./errors";
 import { PathValueClassifier } from "./PathValueClassifier";
 import type { ValueContainer } from "./types";
 
+/** What a walk hands over at every location it stops on. */
+type Reached = (at: PathIndexEntry, value: unknown, defaultValue: unknown) => void;
+
 /**
  * The live value of a form, plus the defaults it is compared against.
  *
@@ -146,6 +149,44 @@ export class FormValue<TValues extends FormValues = FormValues> {
     const container = this.#reach(entry.parent, this.#defaults);
 
     return container === undefined ? undefined : FormValue.#at(container, this.#keyOf(entry));
+  }
+
+  /**
+   * Every location under one, each with what it holds and what it is measured
+   * against, innermost last.
+   *
+   * The walk carries the containers down rather than looking each location up
+   * from the root: it is already standing where the next one lives, and asking
+   * again would be undoing the step it just took.
+   *
+   * A location is answered for before the ones under it, because what it is
+   * composed of is its own to decide — a list says how many positions it has,
+   * and only then is there anything in them to reach.
+   */
+  reconcile(entry: PathIndexEntry, each: Reached): void {
+    this.#descend(entry, this.read(entry), this.default(entry), each);
+  }
+
+  #descend(at: PathIndexEntry, value: unknown, defaultValue: unknown, each: Reached): void {
+    each(at, value, defaultValue);
+
+    if (at.kind === PathKind.Field) {
+      return;
+    }
+
+    const children = this.#tree.childrenOf(at.id);
+    // Asked once for the level rather than once for each of its children, and
+    // asked of the classifier so that a shape the form holds whole is not read
+    // for parts it does not have.
+    const held = this.#classifier.isContainer(value) ? value : undefined;
+    const measured = this.#classifier.isContainer(defaultValue) ? defaultValue : undefined;
+
+    for (let position = 0; position < children.length; position++) {
+      const child = children[position];
+      const key = child.segment ?? position;
+
+      this.#descend(child, held && FormValue.#at(held, key), measured && FormValue.#at(measured, key), each);
+    }
   }
 
   /**

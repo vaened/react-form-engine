@@ -132,12 +132,17 @@ export class Transaction<TValues extends FormValues> {
    * that outlived the value have to be gone before anything looks for them.
    */
   #reconcile(entry: PathIndexEntry): void {
-    this.#index.reconcile(
-      entry.id,
-      (field) => this.#field(field),
-      (array) => this.#array(array),
-      (object) => this.#object(object),
-    );
+    this.#value.reconcile(entry, (at, value, defaultValue) => {
+      if (at.kind === PathKind.Field) {
+        return this.#field(at, value, defaultValue);
+      }
+
+      if (at.kind === PathKind.Array) {
+        return this.#array(at, value, defaultValue);
+      }
+
+      this.#object(at, value);
+    });
   }
 
   /**
@@ -145,9 +150,7 @@ export class Transaction<TValues extends FormValues> {
    * same way an array's positions are: a name the value carries is a location
    * the form can address, whether or not anybody asked for it first.
    */
-  #object(object: PathIndexRootEntry | PathIndexObjectEntry): void {
-    const held = this.#value.read(object);
-
+  #object(object: PathIndexRootEntry | PathIndexObjectEntry, held: unknown): void {
     if (!this.#classifier.isContainer(held) || Array.isArray(held)) {
       return;
     }
@@ -157,21 +160,21 @@ export class Transaction<TValues extends FormValues> {
     }
   }
 
-  #field(field: PathIndexFieldEntry): void {
+  #field(field: PathIndexFieldEntry, value: unknown, defaultValue: unknown): void {
     if (!this.#state.has(field.id)) {
       return;
     }
 
-    const dirty = this.#assessor.assess(this.#value.read(field), this.#value.default(field));
+    const dirty = this.#assessor.assess(value, defaultValue);
 
     for (const moved of this.#state.assessed(this.#state.field(field.id), dirty)) {
       this.#reach(moved);
     }
   }
 
-  #array(array: PathIndexArrayEntry): void {
-    const items = Transaction.#itemsOf(this.#value.read(array));
-    const expected = Transaction.#itemsOf(this.#value.default(array)).length;
+  #array(array: PathIndexArrayEntry, value: unknown, defaultValue: unknown): void {
+    const items = Transaction.#itemsOf(value);
+    const expected = Transaction.#itemsOf(defaultValue).length;
 
     this.#index.truncate(array.id, items.length);
 
