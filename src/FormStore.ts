@@ -28,12 +28,12 @@ export type { FormWrites } from "./store/FormWriting";
 export type FormMode = "full" | "patch";
 
 /** The one location, as each domain knows it. */
-type Admitted = {
+interface Admitted {
   readonly value: ValueEntry;
   readonly state: StateEntry;
-};
+}
 
-export type FormStoreOptions<TValues extends FormValues> = {
+export interface FormStoreOptions<TValues extends FormValues> {
   /**
    * What the form is measured against, and what `reset` returns it to.
    *
@@ -88,7 +88,7 @@ export type FormStoreOptions<TValues extends FormValues> = {
    * // "patch": { city: "Arequipa", reference: "Frente al parque principal" }
    */
   mode?: FormMode;
-};
+}
 
 export class FormStore<TValues extends FormValues> {
   readonly #mode: FormMode;

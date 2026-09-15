@@ -18,7 +18,7 @@ const NOTHING_CLAIMED: readonly never[] = Object.freeze([]);
  * undoing work that was just done. Both are absent until they are earned, so a
  * node nobody reached and nobody listens to costs nothing.
  */
-export type Notifiable = {
+export interface Notifiable {
   listeners?: Set<() => void>;
   /**
    * The last transaction this was told about.
@@ -28,7 +28,7 @@ export type Notifiable = {
    * mark stale at once by counting one higher.
    */
   mark?: number;
-};
+}
 
 /**
  * `parent` is not the structural parent: it is the nearest ancestor on the
@@ -37,26 +37,26 @@ export type Notifiable = {
  * It has its own type parameter because not every node can be one. In the state
  * a field never holds children, so only a node may sit above anybody.
  */
-export type ChainNode<TParent> = Notifiable & {
+export interface ChainNode<TParent> extends Notifiable {
   readonly id: EntryId;
   parent: TParent | null;
-};
+}
 
-export type ChainInsertion<TNode> = {
+export interface ChainInsertion<TNode> {
   /** The node on the chain, which is the existing one when it was already there. */
   readonly node: TNode;
   /** Empty when it was already there, since nothing changed hands. */
   readonly claimed: readonly TNode[];
-};
+}
 
-export type ChainRemoval<TNode, TParent> = {
+export interface ChainRemoval<TNode, TParent> {
   /** Already detached: its `parent` is null. */
   readonly node: TNode;
   /** Who the removed node reported to, and who its children report to now. */
   readonly parent: TParent;
   /** Already relinked to `parent`. */
   readonly adopted: readonly TNode[];
-};
+}
 
 /**
  * Who is being watched, and who each of them reports to.

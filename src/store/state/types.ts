@@ -23,7 +23,7 @@ export interface PathState {
   readonly isValidating: boolean;
 }
 
-type StateBase = Notifiable & {
+interface StateBase extends Notifiable {
   readonly id: EntryId;
   /**
    * The nearest materialized ancestor, or `null` on the root.
@@ -33,34 +33,34 @@ type StateBase = Notifiable & {
    * when five structural levels sit in between.
    */
   parent: StateNodeEntry | null;
-};
+}
 
 /** A registered field owns its state outright. */
-export type StateFieldEntry = StateBase & {
+export interface StateFieldEntry extends StateBase {
   readonly kind: PathKind.Field;
   readonly state: FieldState;
-};
+}
 
 /** Always materialized, so a form can always answer for itself as a whole. */
-export type StateRootEntry = StateBase & {
+export interface StateRootEntry extends StateBase {
   readonly kind: PathKind.Root;
   readonly state: StateAggregate;
-};
+}
 
 /**
  * A materialized object owns no state of its own: its flags are derived from
  * counters of how many reactive children carry each one.
  */
-export type StateObjectEntry = StateBase & {
+export interface StateObjectEntry extends StateBase {
   readonly kind: PathKind.Object;
   readonly state: StateAggregate;
-};
+}
 
 /** The one location that also answers for something no child of it can. */
-export type StateArrayEntry = StateBase & {
+export interface StateArrayEntry extends StateBase {
   readonly kind: PathKind.Array;
   readonly state: ArrayStateAggregate;
-};
+}
 
 export type StateNodeEntry = StateRootEntry | StateObjectEntry | StateArrayEntry;
 

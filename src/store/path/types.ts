@@ -24,39 +24,39 @@ export enum PathKind {
   Field = 4,
 }
 
-type EntryBase = {
+interface EntryBase {
   readonly id: EntryId;
   /** `null` when the parent names this entry by position instead of by key. */
   readonly segment: string | null;
-};
+}
 
-export type PathIndexRootEntry = EntryBase & {
+export interface PathIndexRootEntry extends EntryBase {
   readonly kind: PathKind.Root;
   readonly parent: null;
   readonly children: Map<string, PathIndexChildEntry>;
   composition?: readonly EntryId[] | undefined;
-};
+}
 
-export type PathIndexObjectEntry = EntryBase & {
+export interface PathIndexObjectEntry extends EntryBase {
   readonly kind: PathKind.Object;
   readonly parent: PathIndexStructuralEntry;
   readonly children: Map<string, PathIndexChildEntry>;
   composition?: readonly EntryId[] | undefined;
-};
+}
 
 /** `children` is the order. Position lives here and nowhere else. */
-export type PathIndexArrayEntry = EntryBase & {
+export interface PathIndexArrayEntry extends EntryBase {
   readonly kind: PathKind.Array;
   readonly parent: PathIndexStructuralEntry;
   readonly children: PathIndexChildEntry[];
   positions?: Map<EntryId, number>;
   composition?: readonly EntryId[] | undefined;
-};
+}
 
-export type PathIndexFieldEntry = EntryBase & {
+export interface PathIndexFieldEntry extends EntryBase {
   readonly kind: PathKind.Field;
   readonly parent: PathIndexStructuralEntry;
-};
+}
 
 export type PathIndexStructuralEntry = PathIndexRootEntry | PathIndexObjectEntry | PathIndexArrayEntry;
 
@@ -73,10 +73,10 @@ export type RegisterableKind = PathKind.Object | PathKind.Array | PathKind.Field
  * `observed` is absent where nothing lives yet, which is the only case left for
  * the path string to decide on its own.
  */
-export type PathStep<TSegment extends string = string> = {
+export interface PathStep<TSegment extends string = string> {
   readonly segment: TSegment;
   readonly observed?: RegisterableKind;
-};
+}
 
 /** A path taken apart, each segment kept as the literal it is. */
 export type Split<TPath extends string> = TPath extends `${infer THead}.${infer TRest}`
@@ -99,10 +99,14 @@ export type StepsOf<TSegments extends readonly string[]> = {
 export type WalkOf<TPath extends string> = StepsOf<Split<TPath>>;
 
 /** Take `children[at]` of the current array entry. */
-export type PositionalStep = { readonly at: number };
+export interface PositionalStep {
+  readonly at: number;
+}
 
 /** Take `children.get(key)` of the current object entry. */
-export type KeyedStep = { readonly key: string };
+export interface KeyedStep {
+  readonly key: string;
+}
 
 export type RouteStep = PositionalStep | KeyedStep;
 
@@ -117,15 +121,15 @@ export type RouteStep = PositionalStep | KeyedStep;
  * The route stores the question ("position 0 of this array"), never the answer
  * ("this entry"). That is why array operations do not invalidate it.
  */
-export type Route = {
+export interface Route {
   readonly anchor: PathIndexEntry;
   readonly steps: readonly RouteStep[];
-};
+}
 
-export type PathDescendants = {
+export interface PathDescendants {
   readonly nodes: readonly (PathIndexObjectEntry | PathIndexArrayEntry)[];
   readonly fields: readonly PathIndexFieldEntry[];
-};
+}
 
 /**
  * What is inside what, read only, keyed by identity.

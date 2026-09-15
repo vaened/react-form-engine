@@ -19,11 +19,11 @@ import type { PathValueClassifier } from "./PathValueClassifier";
 
 const STALE = Symbol("stale");
 
-export type ValueEntry = Notifiable & {
+export interface ValueEntry extends Notifiable {
   readonly id: EntryId;
   parent: ValueEntry | null;
   snapshot: object | typeof STALE;
-};
+}
 
 /**
  * The value of a form: what it holds, and who is watching each location.
