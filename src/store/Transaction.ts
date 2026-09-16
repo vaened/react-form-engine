@@ -160,9 +160,25 @@ export class Transaction<TValues extends FormValues> {
     }
   }
 
+  /**
+   * A field a write reached has state, whether or not anybody asked for it:
+   * setting a value is saying the location is the form's, and a form that
+   * answers clean about a value it just took is answering about half of itself.
+   *
+   * One the write left as it found it is not reached at all, so it claims
+   * nothing: nothing moved there, and a location the form was already holding
+   * correctly has nothing to say.
+   *
+   * It is claimed once and lives as long as the location does. Nobody hands that
+   * claim back, because nobody made it on their own behalf — the form made it,
+   * and only the shape losing the location ends it.
+   *
+   * It is born clean and assessed right after, so what its arrival moves is
+   * reported the same way any other move is.
+   */
   #field(field: PathIndexFieldEntry, value: unknown, defaultValue: unknown): void {
     if (!this.#state.has(field.id)) {
-      return;
+      this.#state.register(field.id);
     }
 
     const dirty = this.#assessor.assess(value, defaultValue);

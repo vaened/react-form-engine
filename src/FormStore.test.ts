@@ -331,10 +331,56 @@ describe("FormStore", () => {
       expect(store.state("invoice.client.name")?.isDirty).toBe(false);
     });
 
-    it("does not create state for a field nobody registered", () => {
-      store.set("invoice.client.name", "Grace Hopper");
+    /**
+     * Setting a value is saying the location is the form's, so the form answers
+     * for it from then on. Nobody has to have asked first.
+     */
+    it("gives a field state the moment the form holds a value for it", () => {
+      const editing = new FormStore<Invoice>({ values: sample(), defaults: sample() });
 
-      expect(store.state("invoice.client.name")).toBeUndefined();
+      editing.set("invoice.client.name", "Grace Hopper");
+
+      expect(editing.state("invoice.client.name")?.isDirty).toBe(true);
+    });
+
+    it("carries that up to a node nobody had registered before the write", () => {
+      const editing = new FormStore<Invoice>({ values: sample(), defaults: sample() });
+
+      editing.set("invoice.client.name", "Grace Hopper");
+      editing.register("invoice.client");
+
+      expect(editing.state("invoice.client")?.isDirty).toBe(true);
+    });
+
+    it("stays clean once the value is back where it was measured from", () => {
+      const editing = new FormStore<Invoice>({ values: sample(), defaults: sample() });
+
+      editing.set("invoice.client.email", "grace@example.com");
+      editing.set("invoice.client.email", "ada@example.com");
+
+      expect(editing.state("invoice.client.email")?.isDirty).toBe(false);
+    });
+
+    /** A write onto the value already there went nowhere, so it claims nothing either. */
+    it("claims nothing when the write landed on the value already there", () => {
+      const editing = new FormStore<Invoice>({ values: sample(), defaults: sample() });
+
+      editing.set("invoice.client.email", "ada@example.com");
+
+      expect(editing.state("invoice.client.email")).toBeUndefined();
+    });
+
+    it("claims a location once, however many times it is written", () => {
+      const editing = new FormStore<Invoice>({ values: sample(), defaults: sample() });
+
+      editing.set("invoice.client.name", "Grace Hopper");
+      editing.set("invoice.client.name", "Ada Lovelace");
+      editing.set("invoice.client.name", "Grace Hopper");
+
+      const leave = editing.watch("invoice.client.name", () => {});
+      leave();
+
+      expect(editing.state("invoice.client.name")?.isDirty).toBe(true);
     });
 
     /**
@@ -1543,6 +1589,60 @@ describe("FormStore", () => {
 
     it("answers absent for a location nobody named", () => {
       expect(store.state("invoice.client.name")).toBeUndefined();
+    });
+  });
+
+  /**
+   * A node derives what it is from the children reporting to it, so it can only
+   * answer for what the form claimed. Writing a value is what claims it — which
+   * is why a node can be asked about a location nobody ever registered.
+   */
+  describe("what a node answers for after a write nobody asked for", () => {
+    it("counts a field written under it that nobody had registered", () => {
+      const editing = new FormStore<Invoice>({ values: sample(), defaults: sample() });
+      editing.register("invoice.client");
+      editing.register("invoice.client.name");
+
+      editing.set("invoice.client.email", "grace@example.com");
+
+      expect(editing.state("invoice.client")?.isDirty).toBe(true);
+    });
+
+    it("counts a whole value landing on it with nothing registered underneath", () => {
+      const editing = new FormStore<Invoice>({ values: sample(), defaults: sample() });
+      editing.register("invoice.client");
+
+      editing.set("invoice.client", { ...sample().invoice.client, name: "Grace Hopper" });
+
+      expect(editing.state("invoice.client")?.isDirty).toBe(true);
+    });
+
+    it("counts what landed inside the positions of a list", () => {
+      const editing = new FormStore<Invoice>({ values: sample(), defaults: sample() });
+      editing.register("invoice.client.addresses");
+
+      editing.set("invoice.client.addresses", [{ city: "Cusco", reference: "x" }]);
+
+      expect(editing.state("invoice.client.addresses")?.isDirty).toBe(true);
+    });
+
+    it("says nothing when what landed is what it already held", () => {
+      const editing = new FormStore<Invoice>({ values: sample(), defaults: sample() });
+      editing.register("invoice.client");
+
+      editing.set("invoice.client", sample().invoice.client);
+
+      expect(editing.state("invoice.client")?.isDirty).toBe(false);
+    });
+
+    it("goes back to clean when the value returns to what it is measured against", () => {
+      const editing = new FormStore<Invoice>({ values: sample(), defaults: sample() });
+      editing.register("invoice.client");
+
+      editing.set("invoice.client.email", "grace@example.com");
+      editing.set("invoice.client.email", "ada@example.com");
+
+      expect(editing.state("invoice.client")?.isDirty).toBe(false);
     });
   });
 
