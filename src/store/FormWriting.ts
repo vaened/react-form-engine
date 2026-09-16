@@ -3,8 +3,8 @@
  * @link https://vaened.dev DevFolio
  */
 
-import type { FormValues, Path, PathValue } from "../path";
-import type { DeepPartial } from "../types";
+import type { ArrayPath, FormValues, Path, PathValue } from "../path";
+import type { ArrayItem, DeepPartial } from "../types";
 import type { PathIndex } from "./path/PathIndex";
 import type { StateAssessor } from "./state/StateAssessor";
 import type { StateGraph } from "./state/StateGraph";
@@ -72,6 +72,27 @@ export class FormWriting<TValues extends FormValues = FormValues> {
     }
 
     transaction.commit();
+  }
+
+  /** The positions of a list, each move told once like any other change. */
+  insert<TPath extends ArrayPath<TValues> & Path<TValues>>(
+    path: TPath,
+    index: number,
+    value: ArrayItem<TValues, TPath>,
+  ): void {
+    this.#begin().insert(path, index, value).commit();
+  }
+
+  remove<TPath extends ArrayPath<TValues> & Path<TValues>>(path: TPath, index: number): void {
+    this.#begin().remove(path, index).commit();
+  }
+
+  move<TPath extends ArrayPath<TValues> & Path<TValues>>(path: TPath, from: number, to: number): void {
+    this.#begin().move(path, from, to).commit();
+  }
+
+  swap<TPath extends ArrayPath<TValues> & Path<TValues>>(path: TPath, left: number, right: number): void {
+    this.#begin().swap(path, left, right).commit();
   }
 
   /** A form born again, told once like any other change. */

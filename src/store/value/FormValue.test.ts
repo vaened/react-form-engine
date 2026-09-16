@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { Path } from "../../path";
 import { UnknownEntryId } from "../path/errors";
 import { PathIndex } from "../path/PathIndex";
-import { PathKind } from "../path/types";
+import { type PathIndexArrayEntry, PathKind } from "../path/types";
 import { PathRegistry } from "../state/PathRegistry";
 import { InvalidRootValue } from "./errors";
 import { FormValue } from "./FormValue";
@@ -396,6 +396,82 @@ describe("FormValue", () => {
 
       expect(descents).toBe(1);
       expect(value.read(city)).toBe("Trujillo");
+    });
+  });
+
+  describe("moving the positions of a list", () => {
+    const addresses = () => index.register(ADDRESSES, PathKind.Array) as PathIndexArrayEntry;
+    const cities = () => (value.read(addresses()) as { city: string }[]).map((held) => held.city);
+
+    it("inserts at a position, pushing the rest along", () => {
+      value.insert(addresses(), 1, { city: "Cusco", reference: "x" });
+
+      expect(cities()).toEqual(["Lima", "Cusco", "Arequipa"]);
+    });
+
+    it("inserts past the end without leaving a hole", () => {
+      value.insert(addresses(), 9, { city: "Cusco", reference: "x" });
+
+      expect(cities()).toEqual(["Lima", "Arequipa", "Cusco"]);
+    });
+
+    it("removes a position, closing the gap", () => {
+      value.remove(addresses(), 0);
+
+      expect(cities()).toEqual(["Arequipa"]);
+    });
+
+    it("moves an item forward", () => {
+      value.insert(addresses(), 2, { city: "Cusco", reference: "x" });
+      value.move(addresses(), 0, 2);
+
+      expect(cities()).toEqual(["Arequipa", "Cusco", "Lima"]);
+    });
+
+    it("moves an item backward", () => {
+      value.insert(addresses(), 2, { city: "Cusco", reference: "x" });
+      value.move(addresses(), 2, 0);
+
+      expect(cities()).toEqual(["Cusco", "Lima", "Arequipa"]);
+    });
+
+    it("swaps two positions, leaving everything between them alone", () => {
+      value.insert(addresses(), 1, { city: "Cusco", reference: "x" });
+      value.swap(addresses(), 0, 2);
+
+      expect(cities()).toEqual(["Arequipa", "Cusco", "Lima"]);
+    });
+
+    /** The very objects travel, which is what lets state and watchers follow an item. */
+    it("carries the item objects rather than copies of them", () => {
+      const held = (value.read(addresses()) as unknown[])[0];
+
+      value.move(addresses(), 0, 1);
+
+      expect((value.read(addresses()) as unknown[])[1]).toBe(held);
+    });
+
+    it("leaves the base alone", () => {
+      value.remove(addresses(), 0);
+
+      expect((value.default(addresses()) as { city: string }[]).map((held) => held.city)).toEqual(["Lima", "Arequipa"]);
+    });
+
+    it("gives a list to a location the value stopped holding as one", () => {
+      const array = addresses();
+
+      value.write(array, { city: "Lima" });
+      value.insert(array, 0, { city: "Cusco", reference: "x" });
+
+      expect(value.read(array)).toEqual([{ city: "Cusco", reference: "x" }]);
+    });
+
+    it("builds the list on the way in when nothing was there", () => {
+      const empty = new FormValue<Invoice>(index, classifier, { invoice: {} } as Invoice, sample());
+
+      empty.insert(addresses(), 0, { city: "Cusco", reference: "x" });
+
+      expect(empty.read(addresses())).toEqual([{ city: "Cusco", reference: "x" }]);
     });
   });
 

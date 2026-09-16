@@ -221,6 +221,14 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
   }
 
   /** Resolves a path id to the entry that currently occupies it. */
+  /**
+   * The item at a position, minting the ones before it so the list stays
+   * contiguous. What `ensureChild` is to a record, this is to a list.
+   */
+  ensureItem(arrayId: EntryId, index: number, kind: RegisterableKind): PathIndexChildEntry {
+    return this.#ensureItem(this.#array(arrayId), index, kind);
+  }
+
   locate(pathId: PathId<FormPath<TValues>>): PathIndexEntry {
     const route = this.#routes.get(pathId);
 

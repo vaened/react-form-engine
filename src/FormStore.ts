@@ -4,7 +4,7 @@
  */
 
 import type { Unsubscribe } from "./EventEmitter";
-import type { FieldPath, FormValues, NodePath, Path, PathValue } from "./path";
+import type { ArrayPath, FieldPath, FormValues, NodePath, Path, PathValue } from "./path";
 import { type FormWrites, FormWriting } from "./store/FormWriting";
 import { PathIndex } from "./store/path/PathIndex";
 import type { PathIndexEntry, WalkOf } from "./store/path/types";
@@ -20,7 +20,7 @@ import { PatchWrite } from "./store/value/PatchWrite";
 import { PathValueClassifier } from "./store/value/PathValueClassifier";
 import type { Scalar } from "./store/value/Scalar";
 import { type ValueEntry, ValueStore } from "./store/value/ValueStore";
-import type { DeepPartial } from "./types";
+import type { ArrayItem, DeepPartial } from "./types";
 
 export type { FormValues } from "./path";
 export type { FormWrites } from "./store/FormWriting";
@@ -277,6 +277,52 @@ export class FormStore<TValues extends FormValues> {
    */
   reset(values?: DeepPartial<TValues>): void {
     this.#writing.reset(values);
+  }
+
+  /**
+   * Puts an item at a position, pushing whatever was there and everything after
+   * it one place along. The position one past the end appends.
+   *
+   * What the items already there hold, and everything the form knows about
+   * them, travels with them: an item is itself wherever it ends up sitting, and
+   * only its position changed.
+   *
+   * @example
+   * store.insert("invoice.client.addresses", 0, { city: "Cusco" });
+   */
+  insert<TPath extends ArrayPath<TValues> & Path<TValues>>(
+    path: TPath,
+    index: number,
+    value: ArrayItem<TValues, TPath>,
+  ): void {
+    this.#writing.insert(path, index, value);
+  }
+
+  /**
+   * Takes the item at a position out, closing the gap behind it.
+   *
+   * What it held is gone along with everything the form knew about it. The ones
+   * after it keep theirs and answer one position earlier.
+   */
+  remove<TPath extends ArrayPath<TValues> & Path<TValues>>(path: TPath, index: number): void {
+    this.#writing.remove(path, index);
+  }
+
+  /**
+   * Takes the item at one position and puts it at another, sliding everything
+   * between them one place over.
+   *
+   * Nothing is written: the same items are in the same list, in another order.
+   * What that changes is what each position holds, which is why a list whose
+   * base it no longer matches reports itself dirty.
+   */
+  move<TPath extends ArrayPath<TValues> & Path<TValues>>(path: TPath, from: number, to: number): void {
+    this.#writing.move(path, from, to);
+  }
+
+  /** Two positions trade items, leaving every position between them alone. */
+  swap<TPath extends ArrayPath<TValues> & Path<TValues>>(path: TPath, left: number, right: number): void {
+    this.#writing.swap(path, left, right);
   }
 
   /**

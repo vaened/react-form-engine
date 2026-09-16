@@ -11,6 +11,7 @@ import {
   type EntryId,
   type EntryTree,
   type ObservableStructure,
+  type PathIndexArrayEntry,
   type PathIndexEntry,
   PathKind,
   type StepsOf,
@@ -145,6 +146,22 @@ export class ValueStore<TValues extends FormValues = FormValues> {
 
   dematerialize(id: EntryId): void {
     this.#chain.remove(id);
+  }
+
+  insert(array: PathIndexArrayEntry, index: number, value: unknown): void {
+    this.#value.insert(array, index, value);
+  }
+
+  remove(array: PathIndexArrayEntry, index: number): void {
+    this.#value.remove(array, index);
+  }
+
+  move(array: PathIndexArrayEntry, from: number, to: number): void {
+    this.#value.move(array, from, to);
+  }
+
+  swap(array: PathIndexArrayEntry, left: number, right: number): void {
+    this.#value.swap(array, left, right);
   }
 
   /** Answers whether anything moved, so a write onto its own value reaches nobody. */

@@ -6,7 +6,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { FormStore } from "./FormStore";
 import type { FieldPath, FormScalar, Path } from "./path";
-import { InvalidArrayIndex, InvalidPathSegment } from "./store/path/errors";
+import { InvalidArrayIndex, InvalidPathSegment, MissingArrayPosition } from "./store/path/errors";
 import { PathKind } from "./store/path/types";
 import { CircularPatchValue, CircularValue, PathInsideValue } from "./store/value/errors";
 import type { Scalar } from "./store/value/Scalar";
@@ -1864,6 +1864,324 @@ describe("FormStore", () => {
 
     it("refuses a value that is not a record", () => {
       expect(() => store.reset([] as unknown as Invoice)).toThrow();
+    });
+  });
+
+  describe("the positions of a list", () => {
+    const ADDRESSES = "invoice.client.addresses";
+    const cities = () => store.values.invoice.client.addresses.map((held) => held.city);
+
+    it("inserts, pushing the rest along", () => {
+      store.insert(ADDRESSES, 0, { city: "Cusco", reference: "x" });
+
+      expect(cities()).toEqual(["Cusco", "Lima"]);
+    });
+
+    it("appends at the position one past the end", () => {
+      store.insert(ADDRESSES, 1, { city: "Cusco", reference: "x" });
+
+      expect(cities()).toEqual(["Lima", "Cusco"]);
+    });
+
+    it("removes, closing the gap", () => {
+      store.insert(ADDRESSES, 1, { city: "Cusco", reference: "x" });
+      store.remove(ADDRESSES, 0);
+
+      expect(cities()).toEqual(["Cusco"]);
+    });
+
+    it("moves without writing anything", () => {
+      store.insert(ADDRESSES, 1, { city: "Cusco", reference: "x" });
+      store.move(ADDRESSES, 0, 1);
+
+      expect(cities()).toEqual(["Cusco", "Lima"]);
+    });
+
+    it("swaps two positions", () => {
+      store.insert(ADDRESSES, 1, { city: "Cusco", reference: "x" });
+      store.swap(ADDRESSES, 0, 1);
+
+      expect(cities()).toEqual(["Cusco", "Lima"]);
+    });
+
+    it("does not keep the object the caller handed it", () => {
+      const handed = { city: "Cusco", reference: "x" };
+
+      store.insert(ADDRESSES, 0, handed);
+      handed.city = "Puno";
+
+      expect(store.values.invoice.client.addresses[0].city).toBe("Cusco");
+    });
+
+    /**
+     * The point of the whole thing: an item is itself wherever it sits, so what
+     * the form knows about it is read at its new position and not at its old.
+     */
+    it("carries what the form knows about an item to its new position", () => {
+      store.insert(ADDRESSES, 1, { city: "Cusco", reference: "x" });
+      store.register("invoice.client.addresses.0.city");
+      store.register("invoice.client.addresses.1.city");
+      store.set("invoice.client.addresses.1.city", "Puno");
+
+      expect(store.state("invoice.client.addresses.1.city")?.isTouched).toBe(true);
+
+      store.move(ADDRESSES, 1, 0);
+
+      expect(store.state("invoice.client.addresses.0.city")?.isTouched).toBe(true);
+      expect(store.state("invoice.client.addresses.1.city")?.isTouched).toBe(false);
+    });
+
+    /**
+     * The shape has to insert where the value did: an item that appears at the
+     * end of one half and in the middle of the other leaves every position
+     * between them answering for its neighbour.
+     */
+    it("pushes what the form knows along with the items it pushed", () => {
+      store.insert(ADDRESSES, 1, { city: "Arequipa", reference: "y" });
+      store.register("invoice.client.addresses.0.city");
+      store.register("invoice.client.addresses.1.city");
+      store.set("invoice.client.addresses.0.city", "Puno");
+
+      store.insert(ADDRESSES, 0, { city: "Cusco", reference: "x" });
+
+      expect(cities()).toEqual(["Cusco", "Puno", "Arequipa"]);
+      expect(store.state("invoice.client.addresses.1.city")?.isTouched).toBe(true);
+      expect(store.snapshot("invoice.client.addresses.1.city")).toBe("Puno");
+    });
+
+    it("loses what it knew about the item it took out", () => {
+      store.insert(ADDRESSES, 1, { city: "Cusco", reference: "x" });
+      store.set("invoice.client.addresses.1.city", "Puno");
+
+      store.remove(ADDRESSES, 1);
+
+      expect(store.state("invoice.client.addresses.1.city")).toBeUndefined();
+    });
+
+    it("says the list is dirty once it holds more than its base", () => {
+      store.register(ADDRESSES);
+
+      expect(store.state(ADDRESSES)?.isDirty).toBe(false);
+
+      store.insert(ADDRESSES, 0, { city: "Cusco", reference: "x" });
+
+      expect(store.state(ADDRESSES)?.isDirty).toBe(true);
+    });
+
+    /** Nothing was written, yet every position after the move holds another value. */
+    it("says the list is dirty after a move that wrote nothing", () => {
+      store.insert(ADDRESSES, 1, { city: "Cusco", reference: "x" });
+      store.remove(ADDRESSES, 1);
+      store.register(ADDRESSES);
+
+      store.set("invoice.client.addresses.1", { city: "Arequipa", reference: "y" });
+      store.reset(store.values);
+
+      expect(store.state(ADDRESSES)?.isDirty).toBe(false);
+
+      store.move(ADDRESSES, 0, 1);
+
+      expect(store.state(ADDRESSES)?.isDirty).toBe(true);
+    });
+
+    it("tells whoever watches the list once", () => {
+      let woken = 0;
+
+      store.watch(ADDRESSES, () => {
+        woken++;
+      });
+
+      store.insert(ADDRESSES, 0, { city: "Cusco", reference: "x" });
+
+      expect(woken).toBe(1);
+    });
+
+    it("tells whoever watches a position whose value moved under it", () => {
+      let woken = 0;
+
+      store.insert(ADDRESSES, 1, { city: "Cusco", reference: "x" });
+      store.watch("invoice.client.addresses.0.city", () => {
+        woken++;
+      });
+
+      store.swap(ADDRESSES, 0, 1);
+
+      expect(woken).toBe(1);
+      expect(store.snapshot("invoice.client.addresses.0.city")).toBe("Cusco");
+    });
+
+    /**
+     * The shape is the one that can refuse, so it is the one that goes first: a
+     * value already moved for an operation that never happened would leave the
+     * form holding what nobody can address.
+     */
+    it("leaves the value untouched when the shape refuses the position", () => {
+      store.insert(ADDRESSES, 1, { city: "Arequipa", reference: "y" });
+      store.register("invoice.client.addresses.0.city");
+      store.register("invoice.client.addresses.1.city");
+
+      const before = cities();
+
+      expect(() => store.insert(ADDRESSES, 99, { city: "Cusco", reference: "x" })).toThrow();
+      expect(() => store.remove(ADDRESSES, 99)).toThrow();
+      expect(() => store.move(ADDRESSES, 0, 99)).toThrow();
+      expect(() => store.swap(ADDRESSES, 0, 99)).toThrow();
+
+      expect(cities()).toEqual(before);
+    });
+
+    /**
+     * The shape only holds the positions somebody named, so a reorder can land
+     * an item where it has no entry. What the form knows about that item has to
+     * arrive with it, or it stays behind answering for whoever took its place.
+     */
+    it("carries what it knows to a position nobody had named", () => {
+      const listed = new FormStore<Invoice>({
+        values: {
+          invoice: {
+            ...sample().invoice,
+            client: {
+              ...sample().invoice.client,
+              addresses: Array.from({ length: 6 }, (_, at) => ({ city: `c${at}`, reference: "x" })),
+            },
+          },
+        },
+        defaults: sample(),
+      });
+
+      listed.register("invoice.client.addresses.0.city");
+      listed.register("invoice.client.addresses.1.city");
+      listed.set("invoice.client.addresses.1.city", "Cusco");
+
+      expect(listed.state("invoice.client.addresses.1.city")?.isTouched).toBe(true);
+
+      listed.move("invoice.client.addresses", 1, 5);
+      listed.register("invoice.client.addresses.5.city");
+
+      expect(listed.values.invoice.client.addresses[5].city).toBe("Cusco");
+      expect(listed.state("invoice.client.addresses.5.city")?.isTouched).toBe(true);
+      expect(listed.snapshot("invoice.client.addresses.1.city")).toBe("c2");
+      expect(listed.state("invoice.client.addresses.1.city")).toBeUndefined();
+    });
+
+    /** Reordering a list says nothing about the lists its items carry. */
+    it("brings a list inside a moved item back in step", () => {
+      type Nested = { rows: { tags: string[] }[] };
+      const nested = new FormStore<Nested>({
+        defaults: { rows: [{ tags: ["a"] }, { tags: ["b", "c"] }] },
+      });
+
+      nested.register("rows.0.tags");
+      nested.register("rows.1.tags");
+
+      nested.move("rows", 0, 1);
+
+      expect(nested.snapshot("rows.0.tags")).toEqual(["b", "c"]);
+      expect(nested.kindOf("rows.0.tags")).toBe(PathKind.Array);
+      expect(nested.state("rows.0.tags")?.isDirty).toBe(true);
+    });
+
+    it("makes everything a freshly inserted item carries readable", () => {
+      store.insert(ADDRESSES, 0, { city: "Cusco", reference: "x" });
+
+      expect(store.snapshot("invoice.client.addresses.0.city")).toBe("Cusco");
+      expect(store.snapshot("invoice.client.addresses.0.reference")).toBe("x");
+      expect(store.register("invoice.client.addresses.0.city") && store.kindOf("invoice.client.addresses.0.city")).toBe(
+        PathKind.Field,
+      );
+    });
+
+    /** Two positions nobody named hold no identity, so the shape has nothing to move. */
+    it("moves the value alone when neither end was ever named", () => {
+      const listed = new FormStore<Invoice>({
+        values: {
+          invoice: {
+            ...sample().invoice,
+            client: {
+              ...sample().invoice.client,
+              addresses: Array.from({ length: 6 }, (_, at) => ({ city: `c${at}`, reference: "x" })),
+            },
+          },
+        },
+        defaults: sample(),
+      });
+
+      listed.register("invoice.client.addresses.0.city");
+
+      listed.move(ADDRESSES, 3, 5);
+
+      expect(listed.values.invoice.client.addresses.map((held) => held.city)).toEqual([
+        "c0",
+        "c1",
+        "c2",
+        "c4",
+        "c5",
+        "c3",
+      ]);
+      expect(listed.snapshot("invoice.client.addresses.0.city")).toBe("c0");
+    });
+
+    describe("positions a list does not have", () => {
+      it("refuses to insert past the one place after the end", () => {
+        expect(() => store.insert(ADDRESSES, 2, { city: "Cusco", reference: "x" })).toThrow(MissingArrayPosition);
+      });
+
+      it("refuses to remove the position after the last", () => {
+        expect(() => store.remove(ADDRESSES, 1)).toThrow(MissingArrayPosition);
+      });
+
+      it("refuses to remove from a list that holds nothing", () => {
+        store.remove(ADDRESSES, 0);
+
+        expect(() => store.remove(ADDRESSES, 0)).toThrow(MissingArrayPosition);
+      });
+
+      it("refuses a move whose origin is not there", () => {
+        expect(() => store.move(ADDRESSES, 9, 0)).toThrow(MissingArrayPosition);
+      });
+
+      it("refuses a move whose destination is not there", () => {
+        expect(() => store.move(ADDRESSES, 0, 9)).toThrow(MissingArrayPosition);
+      });
+
+      it("refuses a swap on either side", () => {
+        expect(() => store.swap(ADDRESSES, 9, 0)).toThrow(MissingArrayPosition);
+        expect(() => store.swap(ADDRESSES, 0, 9)).toThrow(MissingArrayPosition);
+      });
+
+      it("refuses a position that counts backwards", () => {
+        expect(() => store.insert(ADDRESSES, -1, { city: "Cusco", reference: "x" })).toThrow(MissingArrayPosition);
+        expect(() => store.remove(ADDRESSES, -1)).toThrow(MissingArrayPosition);
+        expect(() => store.move(ADDRESSES, -1, 0)).toThrow(MissingArrayPosition);
+        expect(() => store.swap(ADDRESSES, -1, 0)).toThrow(MissingArrayPosition);
+      });
+
+      /** A list is addressed by whole places, and half of one is nowhere. */
+      it("refuses a position between two of them", () => {
+        expect(() => store.insert(ADDRESSES, 0.5, { city: "Cusco", reference: "x" })).toThrow(MissingArrayPosition);
+        expect(() => store.remove(ADDRESSES, 0.5)).toThrow(MissingArrayPosition);
+        expect(() => store.move(ADDRESSES, 0.5, 0)).toThrow(MissingArrayPosition);
+        expect(() => store.swap(ADDRESSES, 0.5, 0)).toThrow(MissingArrayPosition);
+      });
+
+      it("leaves the list exactly as it was when it refuses", () => {
+        store.insert(ADDRESSES, 1, { city: "Arequipa", reference: "y" });
+
+        const before = cities();
+
+        expect(() => store.insert(ADDRESSES, 9, { city: "z", reference: "z" })).toThrow();
+        expect(() => store.remove(ADDRESSES, 9)).toThrow();
+        expect(() => store.move(ADDRESSES, 9, 0)).toThrow();
+        expect(() => store.swap(ADDRESSES, 0, 9)).toThrow();
+
+        expect(cities()).toEqual(before);
+      });
+    });
+
+    it("refuses a path the form does not hold as a list", () => {
+      store.register("invoice.series");
+
+      expect(() => store.insert("invoice.series" as never, 0, "x" as never)).toThrow();
     });
   });
 

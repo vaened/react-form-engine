@@ -7,6 +7,7 @@ import type { FormValues } from "../../path";
 import { SingleEntryCache } from "../../SingleEntryCache";
 import {
   type EntryTree,
+  type PathIndexArrayEntry,
   type PathIndexEntry,
   type PathIndexStructuralEntry,
   PathKind,
@@ -220,6 +221,47 @@ export class FormValue<THeld extends FormValues = FormValues> {
     }
 
     return true;
+  }
+
+  insert(array: PathIndexArrayEntry, index: number, value: unknown): void {
+    this.#items(array).splice(index, 0, value);
+  }
+
+  remove(array: PathIndexArrayEntry, index: number): void {
+    this.#items(array).splice(index, 1);
+  }
+
+  move(array: PathIndexArrayEntry, from: number, to: number): void {
+    const items = this.#items(array);
+    const [held] = items.splice(from, 1);
+
+    items.splice(to, 0, held);
+  }
+
+  swap(array: PathIndexArrayEntry, left: number, right: number): void {
+    const items = this.#items(array);
+
+    [items[left], items[right]] = [items[right], items[left]];
+  }
+
+  /**
+   * A location the shape calls a list is given one when the value stopped being
+   * one, rather than reordering whatever it turned into: what the form was
+   * asked to hold is what says how it is addressed.
+   */
+  #items(array: PathIndexArrayEntry): unknown[] {
+    const held = this.#build(array);
+
+    if (Array.isArray(held)) {
+      return held;
+    }
+
+    const items: unknown[] = [];
+
+    FormValue.#assign(this.#build(array.parent), this.#keyOf(array), items);
+    this.#container.set(array, items);
+
+    return items;
   }
 
   /**

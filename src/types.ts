@@ -3,7 +3,7 @@
  * @link https://vaened.dev DevFolio
  */
 
-import type { IsTerminal } from "./path";
+import type { FormValues, IsTerminal, Path, PathValue } from "./path";
 
 /**
  * A value that says the same shape, with nothing required.
@@ -42,3 +42,7 @@ export type DeepReadonly<TValue> = TValue extends DeepReadonlyPrimitive | ((...a
         : TValue extends object
           ? { readonly [TKey in keyof TValue]: DeepReadonly<TValue[TKey]> }
           : TValue;
+
+/** What a list holds at each of its positions. */
+export type ArrayItem<TValues extends FormValues, TPath extends Path<TValues>> =
+  PathValue<TValues, TPath> extends readonly (infer TItem)[] ? TItem : never;

@@ -3,8 +3,9 @@
  * @link https://vaened.dev DevFolio
  */
 
-import type { FormValues, Path, PathValue } from "../path";
-import type { DeepPartial } from "../types";
+import type { ArrayPath, FormValues, Path, PathValue } from "../path";
+import type { ArrayItem, DeepPartial } from "../types";
+import { MissingArrayPosition, NotAnArrayEntry } from "./path/errors";
 import type { PathIndex } from "./path/PathIndex";
 import {
   type PathIndexArrayEntry,
@@ -19,6 +20,7 @@ import {
 import type { StateAssessor } from "./state/StateAssessor";
 import type { StateGraph } from "./state/StateGraph";
 import type { StateEntry } from "./state/types";
+import { isolate } from "./value/isolate";
 import type { PathValueClassifier } from "./value/PathValueClassifier";
 import type { ValueEntry, ValueStore } from "./value/ValueStore";
 import type { ValueWrite } from "./value/ValueWrite";
@@ -82,6 +84,168 @@ export class Transaction<TValues extends FormValues> {
     }
 
     return this;
+  }
+
+  /**
+   * The positions of a list, moved on both halves of the form at once.
+   *
+   * The shape carries the identity of an item and the value carries what it
+   * holds, so an operation that moved one and not the other would leave every
+   * position after it answering for its neighbour.
+   *
+   * The shape goes first, because it is the one that can refuse: a position it
+   * does not have is an operation that never happened, and a value already
+   * moved for it would be a form holding what nobody can address.
+   *
+   * Past the positions it has there is no entry to move, so the shape is left
+   * alone rather than made to learn what nobody asked it: a position nobody
+   * named holds no identity that shifting could preserve.
+   */
+  insert<TPath extends ArrayPath<TValues> & Path<TValues>>(
+    path: TPath,
+    index: number,
+    value: ArrayItem<TValues, TPath>,
+  ): this {
+    const array = this.#list(path);
+    const kind = this.#classifier.classify(value);
+    const held = this.#held(array);
+
+    this.#assertPosition(index, held);
+
+    if (index <= array.children.length) {
+      this.#index.insert(array.id, index, kind);
+    }
+
+    this.#value.insert(array, index, kind === PathKind.Field ? value : isolate(value, this.#classifier));
+
+    return this.#settle(array);
+  }
+
+  remove<TPath extends ArrayPath<TValues> & Path<TValues>>(path: TPath, index: number): this {
+    const array = this.#list(path);
+
+    this.#assertPosition(index, this.#held(array) - 1);
+
+    if (index < array.children.length) {
+      this.#index.remove(array.id, index);
+    }
+
+    this.#value.remove(array, index);
+
+    return this.#settle(array);
+  }
+
+  move<TPath extends ArrayPath<TValues> & Path<TValues>>(path: TPath, from: number, to: number): this {
+    const array = this.#list(path);
+    const last = this.#held(array) - 1;
+
+    this.#assertPosition(from, last);
+    this.#assertPosition(to, last);
+
+    if (this.#addressable(array, from, to)) {
+      this.#index.move(array.id, from, to);
+    }
+
+    this.#value.move(array, from, to);
+
+    return this.#settle(array);
+  }
+
+  swap<TPath extends ArrayPath<TValues> & Path<TValues>>(path: TPath, left: number, right: number): this {
+    const array = this.#list(path);
+    const last = this.#held(array) - 1;
+
+    this.#assertPosition(left, last);
+    this.#assertPosition(right, last);
+
+    if (this.#addressable(array, left, right)) {
+      this.#index.swap(array.id, left, right);
+    }
+
+    this.#value.swap(array, left, right);
+
+    return this.#settle(array);
+  }
+
+  /**
+   * What a list owes everyone once its positions stopped meaning what they
+   * meant.
+   *
+   * Nothing here was written and nothing changed shape: the same items are in
+   * the same list, in another order, and one that arrived came whole rather
+   * than typed into. So every position is measured against its base again,
+   * every list says how long it turned out to be, and nobody is said to have
+   * been anywhere.
+   */
+  #settle(array: PathIndexArrayEntry): this {
+    this.#climb(array);
+
+    this.#value.reconcile(array, (at, value, defaultValue) => {
+      if (at.kind === PathKind.Field) {
+        return this.#assess(at, value, defaultValue);
+      }
+
+      if (at.kind === PathKind.Array) {
+        this.#measure(at, Transaction.#itemsOf(value).length, Transaction.#itemsOf(defaultValue).length);
+      }
+    });
+
+    return this;
+  }
+
+  /**
+   * Whether the shape can name both ends of a reorder.
+   *
+   * One end it has is an item whose state has to arrive at the other end, so the
+   * shape is made to reach that far. Neither end it has is two positions nobody
+   * named, and there is no identity for the move to carry.
+   */
+  #addressable(array: PathIndexArrayEntry, one: number, other: number): boolean {
+    const known = array.children.length;
+
+    if (Math.min(one, other) >= known) {
+      return false;
+    }
+
+    const reach = Math.max(one, other);
+
+    if (reach >= known) {
+      const items = this.#value.read(array);
+
+      this.#index.ensureItem(
+        array.id,
+        reach,
+        this.#classifier.classify(Array.isArray(items) ? items[reach] : undefined),
+      );
+    }
+
+    return true;
+  }
+
+  /**
+   * How many positions a list has, which only the value can answer: the shape
+   * holds the ones somebody named, and a caller counts the ones it can see.
+   */
+  #held(array: PathIndexArrayEntry): number {
+    const items = this.#value.read(array);
+
+    return Array.isArray(items) ? items.length : 0;
+  }
+
+  #assertPosition(index: number, limit: number): void {
+    if (!Number.isInteger(index) || index < 0 || index > limit) {
+      throw new MissingArrayPosition(index, Math.max(limit, 0));
+    }
+  }
+
+  #list<TPath extends ArrayPath<TValues> & Path<TValues>>(path: TPath): PathIndexArrayEntry {
+    const entry = this.#index.resolve(path) ?? this.#claim(path, PathKind.Array);
+
+    if (entry.kind !== PathKind.Array) {
+      throw new NotAnArrayEntry(entry.id);
+    }
+
+    return entry;
   }
 
   reset(base?: DeepPartial<TValues>): this {
@@ -236,13 +400,22 @@ export class Transaction<TValues extends FormValues> {
       this.#state.register(field.id);
     }
 
-    const held = this.#state.field(field.id);
+    this.#assess(field, value, defaultValue);
 
-    for (const moved of this.#state.assessed(held, this.#assessor.assess(value, defaultValue))) {
+    for (const moved of this.#state.touch(this.#state.field(field.id))) {
       this.#reach(moved);
     }
+  }
 
-    for (const moved of this.#state.touch(held)) {
+  /** What comparing a location against its base implies, for a location that has state. */
+  #assess(field: PathIndexFieldEntry, value: unknown, defaultValue: unknown): void {
+    if (!this.#state.has(field.id)) {
+      return;
+    }
+
+    const verdict = this.#assessor.assess(value, defaultValue);
+
+    for (const moved of this.#state.assessed(this.#state.field(field.id), verdict)) {
       this.#reach(moved);
     }
   }
@@ -268,11 +441,16 @@ export class Transaction<TValues extends FormValues> {
       }
     }
 
+    this.#measure(array, items.length, expected);
+  }
+
+  /** How long a list turned out to be, for one whose positions are already in step. */
+  #measure(array: PathIndexArrayEntry, length: number, expected: number): void {
     if (!this.#state.has(array.id)) {
       return;
     }
 
-    for (const moved of this.#state.measured(array.id, items.length, expected)) {
+    for (const moved of this.#state.measured(array.id, length, expected)) {
       this.#reach(moved);
     }
   }
