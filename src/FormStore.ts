@@ -154,37 +154,68 @@ export class FormStore<TValues extends FormValues> {
     return this.#paths;
   }
 
-  register<TPath extends Path<TValues>>(path: TPath): void {
+  /**
+   * Claims a location, so the form answers for it whether or not anything is
+   * listening.
+   *
+   * What comes back is how to let go of this claim and no other. Two callers
+   * naming the same location hold one each, and the first to let go leaves the
+   * second holding what it asked for — which is why there is no way to let go
+   * of a location by name.
+   */
+  register<TPath extends Path<TValues>>(path: TPath): Unsubscribe {
     this.#admit(path);
+
+    return this.#release(path);
   }
 
   /**
    * Takes somebody waiting to hear that a location's value moved.
    *
-   * Waiting on a location brings it onto the chain the same way registering it
-   * does, so a caller never has to have named it first. What that costs is one
-   * watcher, which is what the returned call gives back.
+   * Waiting on a location claims it the same way registering does, so a caller
+   * never has to have named it first. What that costs is one claim, which is
+   * what the returned call gives back.
    */
   watch<TPath extends Path<TValues>>(path: TPath, listener: () => void): Unsubscribe {
     const leave = this.#value.subscribe(this.#admit(path).value, listener);
+    const release = this.#release(path);
 
     return () => {
       leave();
-      this.unregister(path);
+      release();
     };
   }
 
   /** The same as `watch`, for how a location stands rather than what it holds. */
   feel<TPath extends Path<TValues>>(path: TPath, listener: () => void): Unsubscribe {
     const leave = this.#state.subscribe(this.#admit(path).state, listener);
+    const release = this.#release(path);
 
     return () => {
       leave();
-      this.unregister(path);
+      release();
     };
   }
 
-  unregister<TPath extends Path<TValues>>(path: TPath): void {
+  /**
+   * One claim's way out, which spends itself: letting go twice would take back
+   * something this caller never held, and the location would stop answering for
+   * somebody who is still asking.
+   */
+  #release<TPath extends Path<TValues>>(path: TPath): Unsubscribe {
+    let holding = true;
+
+    return () => {
+      if (!holding) {
+        return;
+      }
+
+      holding = false;
+      this.#forget(path);
+    };
+  }
+
+  #forget<TPath extends Path<TValues>>(path: TPath): void {
     const entry = this.#index.resolve(path);
 
     if (!entry) {

@@ -47,7 +47,6 @@ type ProjectedValues = {
 type StoreMock = FormStore<InvoiceValues> & {
   identifier: PathRegistry<Path<InvoiceValues>>;
   register: ReturnType<typeof vi.fn>;
-  unregister: ReturnType<typeof vi.fn>;
   set: ReturnType<typeof vi.fn>;
   assign: ReturnType<typeof vi.fn>;
 };
@@ -55,8 +54,7 @@ type StoreMock = FormStore<InvoiceValues> & {
 function createStoreMock(): StoreMock {
   return {
     identifier: new PathRegistry<Path<InvoiceValues>>(),
-    register: vi.fn(),
-    unregister: vi.fn(),
+    register: vi.fn(() => vi.fn()),
     set: vi.fn(),
     assign: vi.fn(),
   } as StoreMock;
@@ -68,11 +66,11 @@ describe("MappedNodeControl", () => {
     const control: Control<InvoiceValues> = MappedNodeControl.from(store);
 
     control.register("invoice.client.person.name");
-    control.unregister("invoice.serial.series");
+    control.register("invoice.serial.series")();
     control.set("invoice.client.person.name", "Grace");
 
     expect(store.register).toHaveBeenCalledWith("invoice.client.person.name");
-    expect(store.unregister).toHaveBeenCalledWith("invoice.serial.series");
+    expect(store.register).toHaveBeenCalledWith("invoice.serial.series");
     expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Grace");
   });
 
@@ -86,11 +84,11 @@ describe("MappedNodeControl", () => {
     const control: Control<ProjectedValues> = MappedNodeControl.from(store, aliases);
 
     control.register("person.name");
-    control.unregister("serial.number");
+    control.register("serial.number")();
     control.set("person.documentNumber", "123");
 
     expect(store.register).toHaveBeenCalledWith("invoice.client.person.name");
-    expect(store.unregister).toHaveBeenCalledWith("invoice.serial.number");
+    expect(store.register).toHaveBeenCalledWith("invoice.serial.number");
     expect(store.set).toHaveBeenCalledWith("invoice.client.person.documentNumber", "123");
   });
 
@@ -108,11 +106,11 @@ describe("MappedNodeControl", () => {
     });
 
     personFields.register("name");
-    personFields.unregister("document");
+    personFields.register("document")();
     personFields.set("name", "Ada");
 
     expect(store.register).toHaveBeenCalledWith("invoice.client.person.name");
-    expect(store.unregister).toHaveBeenCalledWith("invoice.client.person.documentNumber");
+    expect(store.register).toHaveBeenCalledWith("invoice.client.person.documentNumber");
     expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Ada");
   });
 
@@ -132,11 +130,11 @@ describe("MappedNodeControl", () => {
     aliases.person = "invoice.client.contact" as never;
 
     personFields.register("name");
-    personFields.unregister("document");
+    personFields.register("document")();
     personFields.set("name", "Ada");
 
     expect(store.register).toHaveBeenCalledWith("invoice.client.person.name");
-    expect(store.unregister).toHaveBeenCalledWith("invoice.client.person.documentNumber");
+    expect(store.register).toHaveBeenCalledWith("invoice.client.person.documentNumber");
     expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Ada");
   });
 
@@ -146,11 +144,11 @@ describe("MappedNodeControl", () => {
     const person = control.lens("invoice.client.person");
 
     person.register("name");
-    person.unregister("documentNumber");
+    person.register("documentNumber")();
     person.set("name", "Grace");
 
     expect(store.register).toHaveBeenCalledWith("invoice.client.person.name");
-    expect(store.unregister).toHaveBeenCalledWith("invoice.client.person.documentNumber");
+    expect(store.register).toHaveBeenCalledWith("invoice.client.person.documentNumber");
     expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Grace");
   });
 
@@ -167,11 +165,11 @@ describe("MappedNodeControl", () => {
     aliases.person = "invoice.client.contact" as never;
 
     person.register("name");
-    person.unregister("documentNumber");
+    person.register("documentNumber")();
     person.set("name", "Ada");
 
     expect(store.register).toHaveBeenCalledWith("invoice.client.person.name");
-    expect(store.unregister).toHaveBeenCalledWith("invoice.client.person.documentNumber");
+    expect(store.register).toHaveBeenCalledWith("invoice.client.person.documentNumber");
     expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Ada");
   });
 
@@ -188,11 +186,11 @@ describe("MappedNodeControl", () => {
     aliases.client = "invoice.otherClient" as never;
 
     person.register("name");
-    person.unregister("documentNumber");
+    person.register("documentNumber")();
     person.set("name", "Ada");
 
     expect(store.register).toHaveBeenCalledWith("invoice.client.person.name");
-    expect(store.unregister).toHaveBeenCalledWith("invoice.client.person.documentNumber");
+    expect(store.register).toHaveBeenCalledWith("invoice.client.person.documentNumber");
     expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Ada");
   });
 
@@ -203,11 +201,11 @@ describe("MappedNodeControl", () => {
     const person = client.lens("person");
 
     person.register("name");
-    person.unregister("documentNumber");
+    person.register("documentNumber")();
     person.set("name", "Grace");
 
     expect(store.register).toHaveBeenCalledWith("invoice.client.person.name");
-    expect(store.unregister).toHaveBeenCalledWith("invoice.client.person.documentNumber");
+    expect(store.register).toHaveBeenCalledWith("invoice.client.person.documentNumber");
     expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Grace");
   });
 
@@ -227,11 +225,11 @@ describe("MappedNodeControl", () => {
     });
 
     fields.register("name");
-    fields.unregister("document");
+    fields.register("document")();
     fields.set("name", "Grace");
 
     expect(store.register).toHaveBeenCalledWith("invoice.client.person.name");
-    expect(store.unregister).toHaveBeenCalledWith("invoice.client.person.documentNumber");
+    expect(store.register).toHaveBeenCalledWith("invoice.client.person.documentNumber");
     expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Grace");
   });
 
@@ -249,11 +247,11 @@ describe("MappedNodeControl", () => {
     aliases.client = "invoice.otherClient" as never;
 
     person.register("name");
-    person.unregister("documentNumber");
+    person.register("documentNumber")();
     person.set("name", "Grace");
 
     expect(store.register).toHaveBeenCalledWith("invoice.client.person.name");
-    expect(store.unregister).toHaveBeenCalledWith("invoice.client.person.documentNumber");
+    expect(store.register).toHaveBeenCalledWith("invoice.client.person.documentNumber");
     expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Grace");
   });
 
@@ -372,7 +370,7 @@ describe("MappedNodeControl", () => {
       ).toThrow(OverlappingAlias);
     });
 
-    it("registers and unregisters every member the name groups", () => {
+    it("claims every member the name groups, and lets go of every one at once", () => {
       const store = createStoreMock();
       const control: Control<InvoiceValues> = MappedNodeControl.from(store);
 
@@ -380,14 +378,19 @@ describe("MappedNodeControl", () => {
         card: { who: "invoice.client.person.name", serie: "invoice.serial.series" },
       });
 
-      projected.register("card");
-      projected.unregister("card");
+      const release = projected.register("card");
 
       expect(store.register).toHaveBeenCalledWith("invoice.client.person.name");
       expect(store.register).toHaveBeenCalledWith("invoice.serial.series");
-      expect(store.unregister).toHaveBeenCalledWith("invoice.client.person.name");
-      expect(store.unregister).toHaveBeenCalledWith("invoice.serial.series");
       expect(store.register).toHaveBeenCalledTimes(2);
+
+      const handed = store.register.mock.results.map((result) => result.value as ReturnType<typeof vi.fn>);
+
+      expect(handed.every((one) => one.mock.calls.length === 0)).toBe(true);
+
+      release();
+
+      expect(handed.every((one) => one.mock.calls.length === 1)).toBe(true);
     });
 
     it("still writes a single path when the name is a plain alias", () => {

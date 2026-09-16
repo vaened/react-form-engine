@@ -3,6 +3,7 @@
  * @link https://vaened.dev DevFolio
  */
 
+import type { Unsubscribe } from "../EventEmitter";
 import type { FormStore, FormValues } from "../FormStore";
 import type { FieldPath, Path, PathValue } from "../path";
 import type { FieldControl } from "./Control";
@@ -25,12 +26,8 @@ export class BoundFieldControl<TFormValues extends FormValues, TPath extends Fie
     return new BoundFieldControl(store, path);
   }
 
-  register(): void {
-    this.#store.register(this.#path);
-  }
-
-  unregister(): void {
-    this.#store.unregister(this.#path);
+  register(): Unsubscribe {
+    return this.#store.register(this.#path);
   }
 
   set(value: PathValue<TFormValues, TPath>): void {

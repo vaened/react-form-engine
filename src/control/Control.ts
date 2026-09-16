@@ -3,6 +3,7 @@
  * @link https://vaened.dev DevFolio
  */
 
+import type { Unsubscribe } from "../EventEmitter";
 import type { FormStore, FormValues as StoreFormValues } from "../FormStore";
 import type { FormValues, IsTerminal, NodePath, Path, PathValue } from "../path";
 import { MappedNodeControl } from "./MappedNodeControl";
@@ -22,26 +23,23 @@ import type { ControlProjection, FocusedValue, ProjectionValue, WithoutOverrides
  */
 export interface NodeControl<TValues extends FormValues> {
   /**
-   * Registers a path inside the current context without assigning or changing
-   * its value.
+   * Claims a path inside the current context without assigning or changing its
+   * value, so the form answers for it from then on.
    *
    * The path uses dot notation and is interpreted relative to the control.
    *
-   * @example
-   * control.register("person.name");
-   */
-  register: <TPath extends Path<TValues>>(path: TPath) => void;
-
-  /**
-   * Removes a path from the registration lifecycle without deleting or
-   * changing its value.
+   * What comes back lets go of this claim and no other: two callers naming the
+   * same path hold one each, and the first to let go leaves the second holding
+   * what it asked for. Letting go twice does nothing.
    *
-   * The path is interpreted relative to the current context.
+   * Letting go does not delete or change the value.
    *
    * @example
-   * control.unregister("person.name");
+   * const release = control.register("person.name");
+   *
+   * release();
    */
-  unregister: <TPath extends Path<TValues>>(path: TPath) => void;
+  register: <TPath extends Path<TValues>>(path: TPath) => Unsubscribe;
 
   /**
    * Writes a value to a path in the current context without changing its
@@ -101,21 +99,17 @@ export interface NodeControl<TValues extends FormValues> {
  */
 export interface FieldControl<TValue> {
   /**
-   * Registers this field without assigning or changing its value.
+   * Claims this field without assigning or changing its value.
+   *
+   * What comes back lets go of this claim and no other, and letting go leaves
+   * the value exactly as it is.
    *
    * @example
-   * control.register();
-   */
-  register: () => void;
-
-  /**
-   * Removes this field from the registration lifecycle while preserving its
-   * current value.
+   * const release = control.register();
    *
-   * @example
-   * control.unregister();
+   * release();
    */
-  unregister: () => void;
+  register: () => Unsubscribe;
 
   /**
    * Writes this field's value without changing whether it is registered.

@@ -3,6 +3,7 @@
  * @link https://vaened.dev DevFolio
  */
 
+import type { Unsubscribe } from "../EventEmitter";
 import type { FormStore, FormWrites, FormValues as StoreFormValues } from "../FormStore";
 import type { FormValues, NodePath, Path, PathValue } from "../path";
 import type { NodeControl } from "./Control";
@@ -38,12 +39,20 @@ export class MappedNodeControl<TLocalValues extends FormValues, TFormValues exte
     return new MappedNodeControl(store, pathResolver as PathResolver<TLocalValues, TFormValues>);
   }
 
-  register<TPath extends Path<TLocalValues>>(path: TPath): void {
-    this.#each(path, (real) => this.#store.register(real));
-  }
+  /**
+   * A name standing for several claims each of them, and the one call that
+   * comes back lets go of every one: whoever asked for the group asked once.
+   */
+  register<TPath extends Path<TLocalValues>>(path: TPath): Unsubscribe {
+    const held: Unsubscribe[] = [];
 
-  unregister<TPath extends Path<TLocalValues>>(path: TPath): void {
-    this.#each(path, (real) => this.#store.unregister(real));
+    this.#each(path, (real) => held.push(this.#store.register(real)));
+
+    return () => {
+      for (const release of held) {
+        release();
+      }
+    };
   }
 
   set<TPath extends Path<TLocalValues>>(path: TPath, value: PathValue<TLocalValues, TPath>): void {

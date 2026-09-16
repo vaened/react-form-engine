@@ -27,17 +27,14 @@ describe("BoundFieldControl", () => {
   it("binds the registration lifecycle to its exact field path", () => {
     const store = createStore();
     const register = vi.spyOn(store, "register");
-    const unregister = vi.spyOn(store, "unregister");
     const control = BoundFieldControl.from(store, "invoice.client.name");
 
-    control.register();
+    const release = control.register();
 
     expect(register).toHaveBeenCalledWith("invoice.client.name");
     expect(store.state("invoice.client.name")).toBeDefined();
 
-    control.unregister();
-
-    expect(unregister).toHaveBeenCalledWith("invoice.client.name");
+    release();
     expect(store.state("invoice.client.name")).toBeUndefined();
   });
 

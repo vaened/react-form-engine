@@ -162,14 +162,14 @@ declare const address: Control<Address>;
 declare const arrayControl: Control<readonly Address[]>;
 
 form.register("invoice.client.name");
-form.unregister("invoice.client.contact.email");
+form.register("invoice.client.contact.email")();
 form.set("invoice.client.name", "Grace");
 
 const client = form.lens("invoice.client");
 client.set("contact.email", "grace@example.com");
 
 name.register();
-name.unregister();
+name.register()();
 name.set("Grace");
 name.set(null);
 
@@ -185,7 +185,7 @@ void clientLensExpectation;
 form.register();
 
 // @ts-expect-error node controls require a relative path to unregister
-form.unregister();
+form.register()();
 
 // @ts-expect-error node controls require a path before the value
 form.set("Grace");
@@ -203,7 +203,7 @@ form.lens("invoice.client.name");
 name.register("invoice.client.name");
 
 // @ts-expect-error field controls already contain their exact path
-name.unregister("invoice.client.name");
+name.register("invoice.client.name")();
 
 // @ts-expect-error field controls accept only their value
 name.set("invoice.client.name", "Grace");

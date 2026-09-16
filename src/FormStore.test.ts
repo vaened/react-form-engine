@@ -177,10 +177,10 @@ describe("FormStore", () => {
     it("can still be unregistered afterwards, from the kind it is now", () => {
       const empty = new FormStore<Invoice>({ defaults: {} as Invoice });
 
-      empty.register("invoice.client");
+      const release = empty.register("invoice.client");
       empty.set("invoice.client.name", "Ada Lovelace");
 
-      empty.unregister("invoice.client");
+      release();
 
       expect(empty.state("invoice.client")).toBeUndefined();
     });
@@ -196,52 +196,55 @@ describe("FormStore", () => {
 
   describe("unregistering", () => {
     it("removes a field from state and value", () => {
-      store.register("invoice.client.name");
+      const release = store.register("invoice.client.name");
 
-      store.unregister("invoice.client.name");
+      release();
 
       expect(store.state("invoice.client.name")).toBeUndefined();
     });
 
     it("dematerializes a node", () => {
-      store.register("invoice.client");
+      const release = store.register("invoice.client");
 
-      store.unregister("invoice.client");
+      release();
 
       expect(store.state("invoice.client")).toBeUndefined();
     });
 
-    it("ignores a path that was never registered", () => {
-      expect(() => store.unregister("invoice.client.name")).not.toThrow();
-    });
+    /** Letting go is the one call that came back, so it cannot be spent twice. */
+    it("lets go once, however many times the same call is made", () => {
+      const release = store.register("invoice.client.name");
+      const second = store.register("invoice.client.name");
 
-    it("ignores a path that only exists structurally, never registered on its own", () => {
-      // Registering the field creates the client node structurally in the
-      // index, but nobody registered `client` itself in state or value.
-      store.register("invoice.client.name");
-
-      expect(() => store.unregister("invoice.client")).not.toThrow();
-    });
-
-    it("keeps a field alive for a second watcher until the last one leaves", () => {
-      store.register("invoice.client.name");
-      store.register("invoice.client.name");
-
-      store.unregister("invoice.client.name");
+      release();
+      release();
 
       expect(store.state("invoice.client.name")).toBeDefined();
 
-      store.unregister("invoice.client.name");
+      second();
 
       expect(store.state("invoice.client.name")).toBeUndefined();
     });
 
-    it("does not throw when a mounted Controller cleans up after its array item was already replaced", () => {
-      store.register("invoice.client.addresses.0.city");
+    it("keeps a field alive for a second holder until the last one lets go", () => {
+      const first = store.register("invoice.client.name");
+      const second = store.register("invoice.client.name");
+
+      first();
+
+      expect(store.state("invoice.client.name")).toBeDefined();
+
+      second();
+
+      expect(store.state("invoice.client.name")).toBeUndefined();
+    });
+
+    it("does not throw when a holder lets go after its array item was already replaced", () => {
+      const release = store.register("invoice.client.addresses.0.city");
 
       store.set("invoice.client.addresses", [{ city: "Trujillo", reference: "cerca al mercado" }]);
 
-      expect(() => store.unregister("invoice.client.addresses.0.city")).not.toThrow();
+      expect(() => release()).not.toThrow();
     });
   });
 
