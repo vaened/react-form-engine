@@ -175,15 +175,24 @@ export class Transaction<TValues extends FormValues> {
    *
    * It is born clean and assessed right after, so what its arrival moves is
    * reported the same way any other move is.
+   *
+   * A location a write reached has been written, and that is all being touched
+   * ever meant. Nothing here asks who was holding the keyboard: a form is
+   * handed the values it starts with, and one handed them later is being
+   * written to, whoever asked for it.
    */
   #field(field: PathIndexFieldEntry, value: unknown, defaultValue: unknown): void {
     if (!this.#state.has(field.id)) {
       this.#state.register(field.id);
     }
 
-    const dirty = this.#assessor.assess(value, defaultValue);
+    const held = this.#state.field(field.id);
 
-    for (const moved of this.#state.assessed(this.#state.field(field.id), dirty)) {
+    for (const moved of this.#state.assessed(held, this.#assessor.assess(value, defaultValue))) {
+      this.#reach(moved);
+    }
+
+    for (const moved of this.#state.touch(held)) {
       this.#reach(moved);
     }
   }

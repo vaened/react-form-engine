@@ -1649,6 +1649,84 @@ describe("FormStore", () => {
     });
   });
 
+  /**
+   * Being touched is having been written, and nothing else: the form is handed
+   * the values it starts with, and one handed them later is being written to.
+   */
+  describe("what being touched means", () => {
+    it("is not touched by being registered", () => {
+      store.register("invoice.client.name");
+
+      expect(store.state("invoice.client.name")?.isTouched).toBe(false);
+    });
+
+    it("is touched the moment a write reaches it", () => {
+      store.set("invoice.client.name", "Grace Hopper");
+
+      expect(store.state("invoice.client.name")?.isTouched).toBe(true);
+    });
+
+    /** Typed, deleted, typed again: back where it started and still touched. */
+    it("stays touched once the value is back where it started", () => {
+      const editing = new FormStore<Invoice>({ values: sample(), defaults: sample() });
+
+      editing.set("invoice.client.name", "Grace Hopper");
+      editing.set("invoice.client.name", "Ada Lovelace");
+
+      expect(editing.state("invoice.client.name")?.isDirty).toBe(false);
+      expect(editing.state("invoice.client.name")?.isTouched).toBe(true);
+    });
+
+    /**
+     * Naming a location after the fact only gives its path a route: what it
+     * already held is what answers, which is how a write that reached a name
+     * nobody had said can be asked about at all.
+     */
+    it("touches every location a whole write reached", () => {
+      store.set("invoice.client", { ...sample().invoice.client, name: "Grace Hopper" });
+
+      store.register("invoice.client.name");
+      store.register("invoice.client.email");
+
+      expect(store.state("invoice.client.name")?.isTouched).toBe(true);
+      expect(store.state("invoice.client.email")?.isTouched).toBe(true);
+    });
+
+    it("touches every position a list brought", () => {
+      store.set("invoice.client.addresses", [{ city: "Cusco", reference: "x" }]);
+
+      store.register("invoice.client.addresses.0.city");
+
+      expect(store.state("invoice.client.addresses.0.city")?.isTouched).toBe(true);
+    });
+
+    it("carries it up to a node watching over it", () => {
+      store.register("invoice.client");
+
+      expect(store.state("invoice.client")?.isTouched).toBe(false);
+
+      store.set("invoice.client.name", "Grace Hopper");
+
+      expect(store.state("invoice.client")?.isTouched).toBe(true);
+    });
+
+    it("touches nothing where the write landed on the value already there", () => {
+      const editing = new FormStore<Invoice>({ values: sample(), defaults: sample() });
+
+      editing.set("invoice.client.name", "Ada Lovelace");
+
+      expect(editing.state("invoice.client.name")).toBeUndefined();
+    });
+
+    it("touches each location an assignment names", () => {
+      store.assign({ "invoice.series": "F002", "invoice.number": "000002" });
+
+      expect(store.state("invoice.series")?.isTouched).toBe(true);
+      expect(store.state("invoice.number")?.isTouched).toBe(true);
+      expect(store.state("invoice.createdAt")).toBeUndefined();
+    });
+  });
+
   describe("guards", () => {
     it("finds nothing for a path that was never registered", () => {
       expect(store.state("invoice.client.name")).toBeUndefined();
