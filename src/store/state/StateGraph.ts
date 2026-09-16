@@ -241,9 +241,16 @@ export class StateGraph {
     return entry.snapshot;
   }
 
-  /** For callers that do not hold the field, such as an imperative set. */
-  field(id: EntryId): StateFieldEntry {
-    return StateGraph.#asField(this.entry(id));
+  /**
+   * For callers that do not hold the field, such as an imperative set.
+   *
+   * A location nobody registered is an answer and not a fault. One registered as
+   * something else is the fault, and says so.
+   */
+  field(id: EntryId): StateFieldEntry | undefined {
+    const entry = this.#chain.find(id);
+
+    return entry && StateGraph.#asField(entry);
   }
 
   /**
