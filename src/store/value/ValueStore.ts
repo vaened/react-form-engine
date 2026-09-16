@@ -216,7 +216,14 @@ export class ValueStore<TValues extends FormValues = FormValues> {
       return this.#value.read(entry);
     }
 
-    const watcher = this.#chain.node(entry.id);
+    const watcher = this.#chain.find(entry.id);
+
+    // A copy exists to be compared against the one read before, and there is
+    // nowhere to keep it for a location nothing will ever tell about. What is
+    // left to answer with is what the form holds there.
+    if (!watcher) {
+      return this.#value.read(entry);
+    }
 
     if (watcher.snapshot === STALE) {
       watcher.snapshot = ValueStore.#shallow(entry.kind, this.#value.read(entry));

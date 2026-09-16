@@ -2185,6 +2185,84 @@ describe("FormStore", () => {
     });
   });
 
+  /**
+   * The shape grows without anybody naming what it grew: a value brings keys, a
+   * reorder leaves an item under a name it was never created with. A location
+   * the form holds is a location its name reaches, however it came to exist.
+   */
+  describe("names the form never heard before", () => {
+    it("finds a field a whole write discovered inside the value", () => {
+      store.set("invoice.client", { ...sample().invoice.client, name: "Grace Hopper" });
+
+      expect(store.kindOf("invoice.client.email")).toBe(PathKind.Field);
+      expect(store.state("invoice.client.email")?.isTouched).toBe(true);
+    });
+
+    it("finds an item a reorder left under another name", () => {
+      const listed = new FormStore<Invoice>({
+        values: {
+          invoice: {
+            ...sample().invoice,
+            client: {
+              ...sample().invoice.client,
+              addresses: [
+                { city: "Lima", reference: "la primera" },
+                { city: "Cusco" } as Invoice["invoice"]["client"]["addresses"][number],
+              ],
+            },
+          },
+        },
+        defaults: sample(),
+      });
+
+      listed.set("invoice.client.addresses.0.reference", "editada");
+
+      expect(listed.state("invoice.client.addresses.0.reference")?.isTouched).toBe(true);
+
+      listed.swap("invoice.client.addresses", 0, 1);
+
+      expect(listed.snapshot("invoice.client.addresses.1.reference")).toBe("editada");
+      expect(listed.state("invoice.client.addresses.1.reference")?.isTouched).toBe(true);
+      expect(listed.state("invoice.client.addresses.0.reference")).toBeUndefined();
+    });
+
+    it("answers absent for a name the form does not hold", () => {
+      store.register("invoice.client.name");
+
+      expect(store.kindOf("invoice.client.nope" as never)).toBeUndefined();
+      expect(store.state("invoice.client.nope" as never)).toBeUndefined();
+    });
+
+    /** A name costs its walk once: what it found is what answers from then on. */
+    it("answers the same location every time it is asked", () => {
+      store.set("invoice.client", { ...sample().invoice.client, name: "Grace Hopper" });
+
+      const first = store.state("invoice.client.email");
+
+      expect(store.state("invoice.client.email")).toBe(first);
+      expect(store.kindOf("invoice.client.email")).toBe(PathKind.Field);
+    });
+
+    /**
+     * What the walk leaves behind is the question and not the answer, so asking
+     * again has to reach the position and not the item that was standing in it.
+     */
+    it("keeps answering by position once it walked through one", () => {
+      store.set("invoice.client.addresses", [
+        { city: "Lima", reference: "la primera" },
+        { city: "Cusco", reference: "la segunda" },
+      ]);
+
+      expect(store.kindOf("invoice.client.addresses.1.city")).toBe(PathKind.Field);
+
+      store.swap("invoice.client.addresses", 0, 1);
+
+      expect(store.kindOf("invoice.client.addresses.1.city")).toBe(PathKind.Field);
+      expect(store.snapshot("invoice.client.addresses.1.city")).toBe("Lima");
+      expect(store.snapshot("invoice.client.addresses.0.city")).toBe("Cusco");
+    });
+  });
+
   describe("guards", () => {
     it("finds nothing for a path that was never registered", () => {
       expect(store.state("invoice.client.name")).toBeUndefined();

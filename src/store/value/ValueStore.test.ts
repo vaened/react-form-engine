@@ -353,8 +353,9 @@ describe("ValueStore", () => {
       expect(empty.snapshot(at(form.client))).toEqual({});
     });
 
-    it("throws for a node that was never materialized", () => {
-      expect(() => store.snapshot(at(form.client))).toThrow(UnknownObservation);
+    /** A copy exists to be compared against the last one, and nobody is comparing. */
+    it("answers a node nobody watches with what the form holds there", () => {
+      expect(store.snapshot(at(form.client))).toEqual(store.value.invoice.client);
     });
 
     it("reads a field that was never registered, same as any other read", () => {

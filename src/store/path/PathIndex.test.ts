@@ -360,9 +360,7 @@ describe("PathIndex", () => {
     it("infers an array node when the next segment is an index", () => {
       index.register(CITY_0, PathKind.Field);
 
-      const addresses = index.resolve(ADDRESSES as Path<Invoice>);
-
-      expect(addresses).toBeUndefined();
+      expect(index.resolve(ADDRESSES as Path<Invoice>)?.kind).toBe(PathKind.Array);
       expect(index.register(ADDRESSES, PathKind.Array).kind).toBe(PathKind.Array);
     });
 

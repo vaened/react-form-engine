@@ -239,16 +239,76 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
     return this.#follow(route);
   }
 
+  /**
+   * The entry a path names, or nothing when the shape does not hold that
+   * location.
+   *
+   * A route is how a name that was asked for before is answered without walking
+   * again, and not what decides whether a name can be asked at all: the shape
+   * already indexes its children by the segment that names them, so every
+   * location it holds is reachable by walking down to it. A name arrives here
+   * without a route whenever the shape grew without anybody naming it — a value
+   * that brought keys nobody asked for, or an item that a reorder left under a
+   * name it was never created with.
+   *
+   * What the walk finds is kept, so a name costs its walk once and never again.
+   * Nothing has to remember to keep that up to date: a route holds the question
+   * and not the answer, so no operation on the shape can make one stale.
+   */
   resolve(path: FormPath<TValues>): PathIndexEntry | undefined {
     const pathId = this.#paths.resolve(path);
+    const route = pathId === undefined ? undefined : this.#routes.get(pathId);
+    const known = route && this.#reachable(route);
 
-    if (pathId === undefined) {
+    return known ?? this.#trace(path);
+  }
+
+  /** Down the shape one segment at a time, leaving the way back behind. */
+  #trace(path: FormPath<TValues>): PathIndexEntry | undefined {
+    const steps: RouteStep[] = [];
+
+    let current: PathIndexEntry = this.#root;
+    let anchor: PathIndexEntry = this.#root;
+
+    for (const segment of this.segmentsOf(path)) {
+      if (current.kind === PathKind.Field) {
+        return undefined;
+      }
+
+      if (current.kind === PathKind.Array) {
+        const at = PathIndex.#toIndex(segment);
+
+        if (at === undefined || at >= current.children.length) {
+          return undefined;
+        }
+
+        current = current.children[at];
+        steps.push({ at });
+        continue;
+      }
+
+      const child = current.children.get(segment);
+
+      if (!child) {
+        return undefined;
+      }
+
+      current = child;
+
+      if (steps.length === 0) {
+        anchor = child;
+      } else {
+        steps.push({ key: segment });
+      }
+    }
+
+    if (current === this.#root) {
       return undefined;
     }
 
-    const route = this.#routes.get(pathId);
+    this.#routes.set(this.#paths.register(path), { anchor, steps });
 
-    return route && this.#reachable(route);
+    return current;
   }
 
   find(id: EntryId): PathIndexEntry | undefined {
