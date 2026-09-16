@@ -26,15 +26,15 @@ type Reached = (at: PathIndexEntry, value: unknown, defaultValue: unknown) => vo
  * An entry carries the key and its parent carries the container, so a descent
  * driven by one never splits a path or walks from the root.
  */
-export class FormValue<TValues extends FormValues = FormValues> {
+export class FormValue<THeld extends FormValues = FormValues> {
   readonly #tree: EntryTree;
   readonly #classifier: PathValueClassifier;
-  #defaults: TValues;
+  #defaults: THeld;
   readonly #container = new SingleEntryCache<PathIndexEntry, ValueContainer>();
 
-  #root: TValues;
+  #root: THeld;
 
-  constructor(tree: EntryTree, classifier: PathValueClassifier, values: TValues, defaults: TValues) {
+  constructor(tree: EntryTree, classifier: PathValueClassifier, values: THeld, defaults: THeld) {
     this.#classifier = classifier;
     this.#tree = tree;
 
@@ -121,11 +121,11 @@ export class FormValue<TValues extends FormValues = FormValues> {
     return held;
   }
 
-  get value(): TValues {
+  get value(): THeld {
     return this.#root;
   }
 
-  get defaults(): TValues {
+  get defaults(): THeld {
     return this.#defaults;
   }
 
@@ -238,7 +238,7 @@ export class FormValue<TValues extends FormValues = FormValues> {
    * They arrive as two values and not one because the form writes into what it
    * holds, and a base that moved with it would be no base at all.
    */
-  rebase(values: TValues, defaults: TValues): void {
+  rebase(values: THeld, defaults: THeld): void {
     this.#assertRoot(values);
     this.#assertRoot(defaults);
 
@@ -247,7 +247,7 @@ export class FormValue<TValues extends FormValues = FormValues> {
     this.clear();
   }
 
-  replace(values: TValues): void {
+  replace(values: THeld): void {
     this.#assertRoot(values);
 
     this.#root = values;
@@ -255,7 +255,7 @@ export class FormValue<TValues extends FormValues = FormValues> {
   }
 
   /** Walks down to an entry's container, stopping at the first missing step. */
-  #reach(entry: PathIndexStructuralEntry, from: TValues): ValueContainer | undefined {
+  #reach(entry: PathIndexStructuralEntry, from: THeld): ValueContainer | undefined {
     if (!entry.parent) {
       return from;
     }

@@ -309,12 +309,12 @@ describe("Transaction", () => {
     /** Only a field is asked: a node handed the very object it already holds is
      * still copied in, or the form would keep two names for one slot. */
     it("still copies a node handed the object it already holds", () => {
-      const held = value.value.invoice.client;
+      const held = value.value.invoice?.client;
 
       writing.set("invoice.client" as never, held as never);
 
-      expect(value.value.invoice.client).not.toBe(held);
-      expect(value.value.invoice.client).toEqual(held);
+      expect(value.value.invoice?.client).not.toBe(held);
+      expect(value.value.invoice?.client).toEqual(held);
     });
 
     it("still tells everyone when the value actually moved", () => {

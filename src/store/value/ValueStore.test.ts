@@ -253,13 +253,13 @@ describe("ValueStore", () => {
     it("changes the live value at the written location", () => {
       store.write(form.index.entry(form.city0), "Chorrillos");
 
-      expect(store.value.invoice.client.addresses[0]?.city).toBe("Chorrillos");
+      expect(store.value.invoice?.client?.addresses?.[0]?.city).toBe("Chorrillos");
     });
 
     it("leaves the defaults untouched", () => {
       store.write(form.index.entry(form.city0), "Chorrillos");
 
-      expect(store.defaults.invoice.client.addresses[0]?.city).toBe("Lima");
+      expect(store.defaults.invoice?.client?.addresses?.[0]?.city).toBe("Lima");
     });
 
     it("creates whatever containers a write below the root needs", () => {
@@ -269,7 +269,7 @@ describe("ValueStore", () => {
 
       store.write(description, "Support renewal");
 
-      expect(store.value.invoice.details[0]).toMatchObject({ description: "Support renewal" });
+      expect(store.value.invoice?.details?.[0]).toMatchObject({ description: "Support renewal" });
     });
   });
 

@@ -109,8 +109,8 @@ export class FormStore<TValues extends FormValues> {
     this.#value = new ValueStore<TValues>(
       this.#index,
       this.#classifier,
-      this.#held(options.values ?? options.defaults),
-      this.#held(options.defaults),
+      isolate(options.values ?? options.defaults, this.#classifier),
+      isolate(options.defaults, this.#classifier),
     );
     this.#assessor = new StateAssessor(this.#classifier);
     this.#writing = new FormWriting(
@@ -276,7 +276,7 @@ export class FormStore<TValues extends FormValues> {
    * store.reset(await save(store.values)); // what came back is the new base
    */
   reset(values?: DeepPartial<TValues>): void {
-    this.#writing.reset(values === undefined ? this.#value.defaults : this.#held(values));
+    this.#writing.reset(values);
   }
 
   /**
@@ -382,19 +382,6 @@ export class FormStore<TValues extends FormValues> {
     }
 
     return { state, value };
-  }
-
-  /**
-   * A copy of what the form was handed, as the shape it says it holds.
-   *
-   * The two describe the same shape and differ only in what is there, which is
-   * what a form is: everything it can hold, less whatever nobody has filled in
-   * yet. Reading a location that was left out answers absent, the same as one
-   * that was never registered — so the missing pieces cost the reader nothing
-   * and the compiler has no way to tell the two apart on its own.
-   */
-  #held(value: DeepPartial<TValues>): TValues {
-    return isolate(value, this.#classifier) as TValues;
   }
 
   static #count(value: unknown): number {

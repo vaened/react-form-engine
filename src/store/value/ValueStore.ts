@@ -5,6 +5,7 @@
 
 import type { Unsubscribe } from "../../EventEmitter";
 import type { FormValues, Path, PathValue } from "../../path";
+import type { DeepPartial } from "../../types";
 import { type Notifiable, ObservationChain } from "../observation/ObservationChain";
 import {
   type EntryId,
@@ -15,6 +16,7 @@ import {
   type StepsOf,
 } from "../path/types";
 import { FormValue } from "./FormValue";
+import { isolate } from "./isolate";
 import type { PathValueClassifier } from "./PathValueClassifier";
 
 const STALE = Symbol("stale");
@@ -33,18 +35,20 @@ export interface ValueEntry extends Notifiable {
  * which is the one thing about a value that is not simply read from the tree.
  */
 export class ValueStore<TValues extends FormValues = FormValues> {
-  readonly #value: FormValue<TValues>;
+  readonly #value: FormValue<DeepPartial<TValues>>;
   readonly #tree: EntryTree;
   readonly #chain: ObservationChain<ValueEntry>;
+  readonly #classifier: PathValueClassifier;
 
   constructor(
     tree: EntryTree & ObservableStructure,
     classifier: PathValueClassifier,
-    values: TValues,
-    defaults: TValues,
+    values: DeepPartial<TValues>,
+    defaults: DeepPartial<TValues>,
   ) {
     this.#value = new FormValue(tree, classifier, values, defaults);
     this.#tree = tree;
+    this.#classifier = classifier;
     this.#chain = new ObservationChain<ValueEntry>(tree, { id: tree.root().id, parent: null, snapshot: STALE });
 
     tree.on("discarded", (entries) => this.#discarded(entries));
@@ -61,11 +65,11 @@ export class ValueStore<TValues extends FormValues = FormValues> {
   }
 
   get value(): TValues {
-    return this.#value.value;
+    return this.#value.value as TValues;
   }
 
   get defaults(): TValues {
-    return this.#value.defaults;
+    return this.#value.defaults as TValues;
   }
 
   read(entry: PathIndexEntry): unknown {
@@ -85,13 +89,21 @@ export class ValueStore<TValues extends FormValues = FormValues> {
     this.#value.reconcile(entry, each);
   }
 
-  replace(values: TValues): void {
+  replace(values: DeepPartial<TValues>): void {
     this.#value.replace(values);
   }
 
-  /** What the form holds and what it is measured against, both at once. */
-  rebase(values: TValues, defaults: TValues): void {
-    this.#value.rebase(values, defaults);
+  /**
+   * A form born again. Left to say what it returns to, it returns to the base it
+   * is measured against now.
+   *
+   * It keeps two trees out of the one it is handed, because the form writes into
+   * what it holds and a base that moved along with it would be no base at all.
+   */
+  rebase(base?: DeepPartial<TValues>): void {
+    const next = base === undefined ? this.#value.defaults : isolate(base, this.#classifier);
+
+    this.#value.rebase(isolate(next, this.#classifier), next);
   }
 
   clear(): void {

@@ -4,6 +4,7 @@
  */
 
 import type { FormValues, Path, PathValue } from "../path";
+import type { DeepPartial } from "../types";
 import type { PathIndex } from "./path/PathIndex";
 import type { StateAssessor } from "./state/StateAssessor";
 import type { StateGraph } from "./state/StateGraph";
@@ -74,7 +75,7 @@ export class FormWriting<TValues extends FormValues = FormValues> {
   }
 
   /** A form born again, told once like any other change. */
-  reset(base: TValues): void {
+  reset(base?: DeepPartial<TValues>): void {
     this.#begin().reset(base).commit();
   }
 

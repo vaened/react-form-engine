@@ -4,6 +4,7 @@
  */
 
 import type { FormValues, Path, PathValue } from "../path";
+import type { DeepPartial } from "../types";
 import type { PathIndex } from "./path/PathIndex";
 import {
   type PathIndexArrayEntry,
@@ -18,7 +19,6 @@ import {
 import type { StateAssessor } from "./state/StateAssessor";
 import type { StateGraph } from "./state/StateGraph";
 import type { StateEntry } from "./state/types";
-import { isolate } from "./value/isolate";
 import type { PathValueClassifier } from "./value/PathValueClassifier";
 import type { ValueEntry, ValueStore } from "./value/ValueStore";
 import type { ValueWrite } from "./value/ValueWrite";
@@ -84,8 +84,8 @@ export class Transaction<TValues extends FormValues> {
     return this;
   }
 
-  reset(base: TValues): this {
-    this.#value.rebase(isolate(base, this.#classifier), base);
+  reset(base?: DeepPartial<TValues>): this {
+    this.#value.rebase(base);
 
     const root = this.#index.root();
 
