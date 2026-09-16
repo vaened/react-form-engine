@@ -8,6 +8,7 @@ import type { ArrayItem, DeepPartial } from "../types";
 import { MissingArrayPosition, NotAnArrayEntry } from "./path/errors";
 import type { PathIndex } from "./path/PathIndex";
 import {
+  type EntryId,
   type PathIndexArrayEntry,
   type PathIndexChildEntry,
   type PathIndexEntry,
@@ -118,7 +119,7 @@ export class Transaction<TValues extends FormValues> {
 
     this.#value.insert(array, index, kind === PathKind.Field ? value : isolate(value, this.#classifier));
 
-    return this.#settle(array);
+    return this.#settle(array, index, Number.POSITIVE_INFINITY);
   }
 
   remove<TPath extends ArrayPath<TValues> & Path<TValues>>(path: TPath, index: number): this {
@@ -132,7 +133,7 @@ export class Transaction<TValues extends FormValues> {
 
     this.#value.remove(array, index);
 
-    return this.#settle(array);
+    return this.#settle(array, index, Number.POSITIVE_INFINITY);
   }
 
   move<TPath extends ArrayPath<TValues> & Path<TValues>>(path: TPath, from: number, to: number): this {
@@ -148,7 +149,7 @@ export class Transaction<TValues extends FormValues> {
 
     this.#value.move(array, from, to);
 
-    return this.#settle(array);
+    return this.#settle(array, Math.min(from, to), Math.max(from, to));
   }
 
   swap<TPath extends ArrayPath<TValues> & Path<TValues>>(path: TPath, left: number, right: number): this {
@@ -164,7 +165,7 @@ export class Transaction<TValues extends FormValues> {
 
     this.#value.swap(array, left, right);
 
-    return this.#settle(array);
+    return this.#settle(array, Math.min(left, right), Math.max(left, right));
   }
 
   /**
@@ -177,26 +178,44 @@ export class Transaction<TValues extends FormValues> {
    * every list says how long it turned out to be, and nobody is said to have
    * been anywhere.
    */
-  #settle(array: PathIndexArrayEntry): this {
-    this.#climb(array);
+  #settle(array: PathIndexArrayEntry, first: number, last: number): this {
+    const children = array.children;
+    const reached = new Set(children.slice(Math.max(first, 0), Math.min(last, children.length - 1) + 1));
+
+    for (const item of reached) {
+      this.#climb(item);
+    }
+
+    this.#ascend(array.id);
 
     this.#value.reconcile(array, (at, value, defaultValue) => {
-      if (at.kind === PathKind.Field) {
-        const held = this.#state.field(at.id);
-
-        if (held) {
-          this.#assess(held, value, defaultValue);
-        }
-
-        return;
+      if (at.parent === array && !reached.has(at)) {
+        return false;
       }
 
-      if (at.kind === PathKind.Array) {
-        this.#measure(at, Transaction.#itemsOf(value).length, Transaction.#itemsOf(defaultValue).length);
-      }
+      return this.#restated(at, value, defaultValue);
     });
 
     return this;
+  }
+
+  /** What a location is worth saying about once it holds what its neighbour held. */
+  #restated(at: PathIndexEntry, value: unknown, defaultValue: unknown): boolean {
+    if (at.kind === PathKind.Field) {
+      const held = this.#state.field(at.id);
+
+      if (held) {
+        this.#assess(held, value, defaultValue);
+      }
+
+      return true;
+    }
+
+    if (at.kind === PathKind.Array) {
+      this.#measure(at, Transaction.#itemsOf(value).length, Transaction.#itemsOf(defaultValue).length);
+    }
+
+    return true;
   }
 
   /**
@@ -261,14 +280,14 @@ export class Transaction<TValues extends FormValues> {
 
     this.#value.reconcile(root, (at, value, defaultValue) => {
       if (at.kind === PathKind.Field) {
-        return this.#clear(at);
+        this.#clear(at);
+      } else if (at.kind === PathKind.Array) {
+        this.#array(at, value, defaultValue);
+      } else {
+        this.#object(at, value);
       }
 
-      if (at.kind === PathKind.Array) {
-        return this.#array(at, value, defaultValue);
-      }
-
-      this.#object(at, value);
+      return true;
     });
 
     this.#stir();
@@ -335,7 +354,12 @@ export class Transaction<TValues extends FormValues> {
       }
     }
 
-    for (let watcher: ValueEntry | null = this.#value.originOf(entry.id); watcher; watcher = watcher.parent) {
+    this.#ascend(entry.id);
+  }
+
+  /** Everyone above a location, stopping where this transaction already was. */
+  #ascend(id: EntryId): void {
+    for (let watcher: ValueEntry | null = this.#value.originOf(id); watcher; watcher = watcher.parent) {
       if (watcher.mark === this.#number) {
         return;
       }
@@ -356,14 +380,14 @@ export class Transaction<TValues extends FormValues> {
   #reconcile(entry: PathIndexEntry): void {
     this.#value.reconcile(entry, (at, value, defaultValue) => {
       if (at.kind === PathKind.Field) {
-        return this.#field(at, value, defaultValue);
+        this.#field(at, value, defaultValue);
+      } else if (at.kind === PathKind.Array) {
+        this.#array(at, value, defaultValue);
+      } else {
+        this.#object(at, value);
       }
 
-      if (at.kind === PathKind.Array) {
-        return this.#array(at, value, defaultValue);
-      }
-
-      this.#object(at, value);
+      return true;
     });
   }
 

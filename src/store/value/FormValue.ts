@@ -18,8 +18,11 @@ import { InvalidRootValue, PathInsideValue } from "./errors";
 import { PathValueClassifier } from "./PathValueClassifier";
 import type { ValueContainer } from "./types";
 
-/** What a walk hands over at every location it stops on. */
-type Reached = (at: PathIndexEntry, value: unknown, defaultValue: unknown) => void;
+/**
+ * What a walk hands over at every location it stops on, and whether what lives
+ * under it is worth reaching. A visitor that has seen enough says so.
+ */
+export type Reached = (at: PathIndexEntry, value: unknown, defaultValue: unknown) => boolean;
 
 /**
  * The live value of a form, plus the defaults it is compared against.
@@ -169,9 +172,7 @@ export class FormValue<THeld extends FormValues = FormValues> {
   }
 
   #descend(at: PathIndexEntry, value: unknown, defaultValue: unknown, each: Reached): void {
-    each(at, value, defaultValue);
-
-    if (at.kind === PathKind.Field) {
+    if (!each(at, value, defaultValue) || at.kind === PathKind.Field) {
       return;
     }
 

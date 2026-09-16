@@ -16,7 +16,7 @@ import {
   PathKind,
   type StepsOf,
 } from "../path/types";
-import { FormValue } from "./FormValue";
+import { FormValue, type Reached } from "./FormValue";
 import { isolate } from "./isolate";
 import type { PathValueClassifier } from "./PathValueClassifier";
 
@@ -86,7 +86,7 @@ export class ValueStore<TValues extends FormValues = FormValues> {
   }
 
   /** Every location under one, with what it holds and what it is measured against. */
-  reconcile(entry: PathIndexEntry, each: (at: PathIndexEntry, value: unknown, defaultValue: unknown) => void): void {
+  reconcile(entry: PathIndexEntry, each: Reached): void {
     this.#value.reconcile(entry, each);
   }
 

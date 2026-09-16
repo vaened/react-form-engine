@@ -607,6 +607,8 @@ describe("FormValue", () => {
 
       value.reconcile(index.entry(index.resolve(from)?.id as never), (at, held, base) => {
         seen.push(`${index.describe(at.id)} = ${JSON.stringify(held)} / ${JSON.stringify(base)}`);
+
+        return true;
       });
 
       return seen;
@@ -629,7 +631,7 @@ describe("FormValue", () => {
 
       const seen: string[] = [];
 
-      value.reconcile(city, (_, held, base) => seen.push(`${held} / ${base}`));
+      value.reconcile(city, (_, held, base) => seen.push(`${held} / ${base}`) > 0);
 
       expect(seen).toEqual(["Cusco / Lima"]);
     });
@@ -645,9 +647,30 @@ describe("FormValue", () => {
       value.reconcile(index.entry(index.resolve(ADDRESSES)?.id as never), (at, held, base) => {
         walked.push(`${JSON.stringify(held)}/${JSON.stringify(base)}`);
         asked.push(`${JSON.stringify(value.read(at))}/${JSON.stringify(value.default(at))}`);
+
+        return true;
       });
 
       expect(walked).toEqual(asked);
+    });
+
+    /** A walk that is told to stop goes no further down that branch, and no other. */
+    it("goes no further under a location the visitor closed", () => {
+      index.register(ADDRESSES, PathKind.Array);
+      field(CITY_0);
+      field(CITY_1);
+
+      const list = index.entry(index.resolve(ADDRESSES)?.id as never) as PathIndexArrayEntry;
+      const item0 = list.children[0];
+      const seen: string[] = [];
+
+      value.reconcile(list, (at) => {
+        seen.push(index.describe(at.id));
+
+        return at !== item0;
+      });
+
+      expect(seen).toEqual([ADDRESSES, "invoice.client.addresses.0", "invoice.client.addresses.1", CITY_1]);
     });
 
     it("hands nothing down from a shape the form holds whole", () => {
@@ -666,6 +689,8 @@ describe("FormValue", () => {
 
       whole.reconcile(address, (at, held) => {
         if (at.id === city.id) seen.push(JSON.stringify(held));
+
+        return true;
       });
 
       expect(seen).toEqual([JSON.stringify(undefined)]);
@@ -680,6 +705,8 @@ describe("FormValue", () => {
 
       empty.reconcile(index.entry(city.parent.id), (at, held) => {
         if (at.id === city.id) seen.push(held);
+
+        return true;
       });
 
       expect(seen).toEqual([undefined]);
