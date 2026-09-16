@@ -18,6 +18,7 @@ import {
 import type { StateAssessor } from "./state/StateAssessor";
 import type { StateGraph } from "./state/StateGraph";
 import type { StateEntry } from "./state/types";
+import { isolate } from "./value/isolate";
 import type { PathValueClassifier } from "./value/PathValueClassifier";
 import type { ValueEntry, ValueStore } from "./value/ValueStore";
 import type { ValueWrite } from "./value/ValueWrite";
@@ -81,6 +82,55 @@ export class Transaction<TValues extends FormValues> {
     }
 
     return this;
+  }
+
+  reset(base: TValues): this {
+    this.#value.rebase(isolate(base, this.#classifier), base);
+
+    const root = this.#index.root();
+
+    this.#value.reconcile(root, (at, value, defaultValue) => {
+      if (at.kind === PathKind.Field) {
+        return this.#clear(at);
+      }
+
+      if (at.kind === PathKind.Array) {
+        return this.#array(at, value, defaultValue);
+      }
+
+      this.#object(at, value);
+    });
+
+    this.#stir();
+
+    return this;
+  }
+
+  /** A field a reset reached is the field it was born as. */
+  #clear(field: PathIndexFieldEntry): void {
+    if (!this.#state.has(field.id)) {
+      return;
+    }
+
+    for (const moved of this.#state.clear(this.#state.field(field.id))) {
+      this.#reach(moved);
+    }
+  }
+
+  /**
+   * Everyone watching a value, because the tree they were watching is not the
+   * one the form holds now. There is no climb to cut short: nothing was spared.
+   */
+  #stir(): void {
+    const root = this.#value.root();
+
+    this.#value.stale(root);
+    this.#reach(root);
+
+    for (const inside of this.#value.descendantsOf(root.id)) {
+      this.#value.stale(inside);
+      this.#reach(inside);
+    }
   }
 
   /**

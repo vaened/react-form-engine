@@ -157,6 +157,20 @@ export class StateGraph {
     return this.#moved(field, held, shown);
   }
 
+  /**
+   * The one operation allowed to put back what no other may touch, because it
+   * is the only one that speaks for the whole of a field rather than for what
+   * one producer knows.
+   */
+  clear(field: StateFieldEntry): readonly StateEntry[] {
+    const held = field.state.flags;
+    const shown = field.state.errors;
+
+    field.state.clear();
+
+    return this.#moved(field, held, shown);
+  }
+
   touch(field: StateFieldEntry): readonly StateEntry[] {
     const held = field.state.flags;
 

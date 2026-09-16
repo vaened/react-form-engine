@@ -1727,6 +1727,146 @@ describe("FormStore", () => {
     });
   });
 
+  describe("starting over", () => {
+    it("puts the value back where its base is", () => {
+      store.set("invoice.client.name", "Grace Hopper");
+
+      store.reset();
+
+      expect(store.values.invoice.client.name).toBe("Ada Lovelace");
+    });
+
+    it("leaves nothing dirty and nothing touched", () => {
+      store.set("invoice.client.name", "Grace Hopper");
+      store.register("invoice.client");
+
+      store.reset();
+
+      expect(store.state("invoice.client.name")?.isDirty).toBe(false);
+      expect(store.state("invoice.client.name")?.isTouched).toBe(false);
+      expect(store.state("invoice.client")?.isDirty).toBe(false);
+      expect(store.state("invoice.client")?.isTouched).toBe(false);
+    });
+
+    it("clears what a form born differing from its base was carrying", () => {
+      const editing = new FormStore<Invoice>({
+        values: { ...sample(), invoice: { ...sample().invoice, series: "F009" } },
+        defaults: sample(),
+      });
+
+      editing.register("invoice.series");
+      expect(editing.state("invoice.series")?.isDirty).toBe(true);
+
+      editing.reset();
+
+      expect(editing.values.invoice.series).toBe("F001");
+      expect(editing.state("invoice.series")?.isDirty).toBe(false);
+    });
+
+    it("takes a value as both where the form starts and what it is measured against", () => {
+      store.register("invoice.client.name");
+
+      store.reset({ invoice: { client: { name: "Grace Hopper" } } });
+
+      expect(store.values.invoice.client.name).toBe("Grace Hopper");
+      expect(store.defaults.invoice.client.name).toBe("Grace Hopper");
+      expect(store.state("invoice.client.name")?.isDirty).toBe(false);
+    });
+
+    /** A record that was just saved is the record the form is now editing. */
+    it("returns to the base the last reset left, not the one it was built with", () => {
+      store.reset({ invoice: { client: { name: "Grace Hopper" } } });
+      store.set("invoice.client.name", "Katherine Johnson");
+
+      store.reset();
+
+      expect(store.values.invoice.client.name).toBe("Grace Hopper");
+    });
+
+    it("keeps the value and the base apart, so a later write leaves the base alone", () => {
+      store.reset({ invoice: { client: { name: "Grace Hopper" } } });
+
+      store.set("invoice.client.name", "Katherine Johnson");
+
+      expect(store.defaults.invoice.client.name).toBe("Grace Hopper");
+    });
+
+    it("does not hold on to what the caller handed it", () => {
+      const handed = sample();
+
+      store.reset(handed);
+      handed.invoice.client.name = "Katherine Johnson";
+
+      expect(store.values.invoice.client.name).toBe("Ada Lovelace");
+      expect(store.defaults.invoice.client.name).toBe("Ada Lovelace");
+    });
+
+    it("brings the shape back in step with the value that arrived", () => {
+      store.register("invoice.client.addresses.0.city");
+
+      store.reset({ invoice: { client: { addresses: [] } } });
+
+      expect(store.snapshot("invoice.client.addresses")).toEqual([]);
+      expect(store.state("invoice.client.addresses.0.city")).toBeUndefined();
+    });
+
+    it("leaves every registration standing", () => {
+      const release = store.register("invoice.client.name");
+
+      store.reset();
+
+      expect(store.state("invoice.client.name")).toBeDefined();
+
+      release();
+
+      expect(store.state("invoice.client.name")).toBeUndefined();
+    });
+
+    it("tells whoever is waiting once", () => {
+      let woken = 0;
+
+      store.watch("invoice.client", () => {
+        woken++;
+      });
+      store.set("invoice.client.name", "Grace Hopper");
+
+      woken = 0;
+      store.reset();
+
+      expect(woken).toBe(1);
+    });
+
+    it("tells a field that went back to what it was", () => {
+      let woken = 0;
+
+      store.watch("invoice.client.name", () => {
+        woken++;
+      });
+      store.set("invoice.client.name", "Grace Hopper");
+
+      woken = 0;
+      store.reset();
+
+      expect(woken).toBe(1);
+      expect(store.snapshot("invoice.client.name")).toBe("Ada Lovelace");
+    });
+
+    it("hands a node a reference nobody compared before", () => {
+      store.register("invoice.client");
+
+      const before = store.snapshot("invoice.client");
+
+      store.reset();
+
+      expect(store.snapshot("invoice.client")).not.toBe(before);
+      expect(store.snapshot("invoice.client")).toEqual(sample().invoice.client);
+    });
+
+    it("refuses a value that is not a record", () => {
+      expect(() => store.reset([] as unknown as Invoice)).toThrow();
+    });
+  });
+
   describe("guards", () => {
     it("finds nothing for a path that was never registered", () => {
       expect(store.state("invoice.client.name")).toBeUndefined();

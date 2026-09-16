@@ -57,6 +57,17 @@ export class FieldState implements PathState {
     this.errors = errors;
   }
 
+  /**
+   * Back to what it was born as.
+   *
+   * It is the one place anything here is put back rather than moved, because a
+   * reset does not undo what happened — it says none of it did.
+   */
+  clear(): void {
+    this.flags = 0;
+    this.errors = NO_ERRORS;
+  }
+
   /** The user has been here. Only a reset takes it back. */
   touch(): void {
     this.flags = setFlag(this.flags, StateFlag.Touched, true);

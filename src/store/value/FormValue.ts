@@ -29,7 +29,7 @@ type Reached = (at: PathIndexEntry, value: unknown, defaultValue: unknown) => vo
 export class FormValue<TValues extends FormValues = FormValues> {
   readonly #tree: EntryTree;
   readonly #classifier: PathValueClassifier;
-  readonly #defaults: TValues;
+  #defaults: TValues;
   readonly #container = new SingleEntryCache<PathIndexEntry, ValueContainer>();
 
   #root: TValues;
@@ -229,6 +229,22 @@ export class FormValue<TValues extends FormValues = FormValues> {
    */
   clear(): void {
     this.#container.clear();
+  }
+
+  /**
+   * A form born again: what it holds and what it is measured against, both at
+   * once.
+   *
+   * They arrive as two values and not one because the form writes into what it
+   * holds, and a base that moved with it would be no base at all.
+   */
+  rebase(values: TValues, defaults: TValues): void {
+    this.#assertRoot(values);
+    this.#assertRoot(defaults);
+
+    this.#root = values;
+    this.#defaults = defaults;
+    this.clear();
   }
 
   replace(values: TValues): void {

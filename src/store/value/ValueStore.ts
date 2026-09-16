@@ -89,6 +89,11 @@ export class ValueStore<TValues extends FormValues = FormValues> {
     this.#value.replace(values);
   }
 
+  /** What the form holds and what it is measured against, both at once. */
+  rebase(values: TValues, defaults: TValues): void {
+    this.#value.rebase(values, defaults);
+  }
+
   clear(): void {
     this.#value.clear();
   }

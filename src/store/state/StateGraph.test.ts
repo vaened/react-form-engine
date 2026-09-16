@@ -188,6 +188,53 @@ describe("StateGraph", () => {
     });
   });
 
+  describe("clearing a field", () => {
+    beforeEach(() => {
+      graph.register(form.city0);
+    });
+
+    it("takes back every flag at once, the user's included", () => {
+      const field = graph.field(form.city0);
+
+      graph.touch(field);
+      graph.assessed(field, true);
+      graph.validated(field, true, ["requerido"]);
+
+      graph.clear(field);
+
+      expect(field.state.flags).toBe(0);
+      expect(field.state.errors).toEqual([]);
+    });
+
+    it("carries the loss up to the node above", () => {
+      const field = graph.field(form.city0);
+
+      graph.touch(field);
+      graph.assessed(field, true);
+
+      expect(graph.root().state.touched).toBe(1);
+      expect(graph.root().state.dirty).toBe(1);
+
+      graph.clear(field);
+
+      expect(graph.root().state.flags).toBe(0);
+      expect(graph.root().state.touched).toBe(0);
+      expect(graph.root().state.dirty).toBe(0);
+    });
+
+    it("reaches everyone the loss was news to", () => {
+      const field = graph.field(form.city0);
+
+      graph.touch(field);
+
+      expect(graph.clear(field)).toContain(graph.root());
+    });
+
+    it("reaches nobody when there was nothing to take back", () => {
+      expect(graph.clear(graph.field(form.city0))).toEqual([]);
+    });
+  });
+
   describe("the cut", () => {
     let address: StateNodeEntry;
 

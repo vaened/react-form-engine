@@ -257,6 +257,29 @@ export class FormStore<TValues extends FormValues> {
   }
 
   /**
+   * The form starts over: nothing is dirty, nothing has been touched, and
+   * nothing is holding errors.
+   *
+   * Given a value, that value is both where the form starts and what it is
+   * measured against from now on — a record that was just saved is the record
+   * the form is now editing, so a reset with no argument later returns here and
+   * not to whatever the form was constructed with.
+   *
+   * Given nothing, the form returns to the base it is measured against right
+   * now.
+   *
+   * What was registered stays registered. This works on the value and on what
+   * the form believes about it, and everyone waiting hears it once.
+   *
+   * @example
+   * store.reset();                       // back to the current base
+   * store.reset(await save(store.values)); // what came back is the new base
+   */
+  reset(values?: DeepPartial<TValues>): void {
+    this.#writing.reset(values === undefined ? this.#value.defaults : this.#held(values));
+  }
+
+  /**
    * What a location holds, as something that can be compared with `Object.is`
    * against what was read last.
    *

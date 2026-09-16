@@ -73,6 +73,11 @@ export class FormWriting<TValues extends FormValues = FormValues> {
     transaction.commit();
   }
 
+  /** A form born again, told once like any other change. */
+  reset(base: TValues): void {
+    this.#begin().reset(base).commit();
+  }
+
   #begin(): Transaction<TValues> {
     return new Transaction(
       ++this.#transactions,
