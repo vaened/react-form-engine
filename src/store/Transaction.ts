@@ -19,7 +19,7 @@ import {
 } from "./path/types";
 import type { StateAssessor } from "./state/StateAssessor";
 import type { StateGraph } from "./state/StateGraph";
-import type { StateEntry } from "./state/types";
+import type { StateEntry, StateFieldEntry } from "./state/types";
 import { isolate } from "./value/isolate";
 import type { PathValueClassifier } from "./value/PathValueClassifier";
 import type { ValueEntry, ValueStore } from "./value/ValueStore";
@@ -182,7 +182,13 @@ export class Transaction<TValues extends FormValues> {
 
     this.#value.reconcile(array, (at, value, defaultValue) => {
       if (at.kind === PathKind.Field) {
-        return this.#assess(at, value, defaultValue);
+        const held = this.#state.field(at.id);
+
+        if (held) {
+          this.#assess(held, value, defaultValue);
+        }
+
+        return;
       }
 
       if (at.kind === PathKind.Array) {
@@ -272,11 +278,13 @@ export class Transaction<TValues extends FormValues> {
 
   /** A field a reset reached is the field it was born as. */
   #clear(field: PathIndexFieldEntry): void {
-    if (!this.#state.has(field.id)) {
+    const held = this.#state.field(field.id);
+
+    if (!held) {
       return;
     }
 
-    for (const moved of this.#state.clear(this.#state.field(field.id))) {
+    for (const moved of this.#state.clear(held)) {
       this.#reach(moved);
     }
   }
@@ -396,26 +404,18 @@ export class Transaction<TValues extends FormValues> {
    * written to, whoever asked for it.
    */
   #field(field: PathIndexFieldEntry, value: unknown, defaultValue: unknown): void {
-    if (!this.#state.has(field.id)) {
-      this.#state.register(field.id);
-    }
+    const held = this.#state.field(field.id) ?? this.#state.register(field.id);
 
-    this.#assess(field, value, defaultValue);
+    this.#assess(held, value, defaultValue);
 
-    for (const moved of this.#state.touch(this.#state.field(field.id))) {
+    for (const moved of this.#state.touch(held)) {
       this.#reach(moved);
     }
   }
 
-  /** What comparing a location against its base implies, for a location that has state. */
-  #assess(field: PathIndexFieldEntry, value: unknown, defaultValue: unknown): void {
-    if (!this.#state.has(field.id)) {
-      return;
-    }
-
-    const verdict = this.#assessor.assess(value, defaultValue);
-
-    for (const moved of this.#state.assessed(this.#state.field(field.id), verdict)) {
+  /** What comparing a location against its base implies, and nothing else. */
+  #assess(held: StateFieldEntry, value: unknown, defaultValue: unknown): void {
+    for (const moved of this.#state.assessed(held, this.#assessor.assess(value, defaultValue))) {
       this.#reach(moved);
     }
   }
