@@ -16,6 +16,7 @@ import {
   PathKind,
   type StepsOf,
 } from "../path/types";
+import type { PathId } from "../state/PathRegistry";
 import { FormValue, type Reached } from "./FormValue";
 import { isolate } from "./isolate";
 import type { PathValueClassifier } from "./PathValueClassifier";
@@ -132,8 +133,8 @@ export class ValueStore<TValues extends FormValues = FormValues> {
     return this.#chain.join({ id, parent: null, snapshot: STALE });
   }
 
-  subscribe(entry: ValueEntry, listener: () => void): Unsubscribe {
-    return this.#chain.subscribe(entry, listener);
+  subscribe(entry: ValueEntry, listener: () => void, path: PathId<string>): Unsubscribe {
+    return this.#chain.subscribe(entry, listener, path);
   }
 
   unregister(id: EntryId): void {

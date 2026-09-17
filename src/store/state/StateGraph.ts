@@ -9,6 +9,7 @@ import { type EntryId, type EntryTree, type ObservableStructure, type PathIndexE
 import { ArrayStateAggregate } from "./ArrayStateAggregate";
 import { StateAggregateUnderflow, StateKindConflict } from "./errors";
 import { FieldState } from "./FieldState";
+import type { PathId } from "./PathRegistry";
 import { StateAggregate } from "./StateAggregate";
 import {
   type FieldPathState,
@@ -98,8 +99,8 @@ export class StateGraph {
     return field;
   }
 
-  subscribe(entry: StateEntry, listener: () => void): Unsubscribe {
-    return this.#chain.subscribe(entry, listener);
+  subscribe(entry: StateEntry, listener: () => void, path: PathId<string>): Unsubscribe {
+    return this.#chain.subscribe(entry, listener, path);
   }
 
   /**

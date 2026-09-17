@@ -9,6 +9,7 @@ import { FormWriting } from "./FormWriting";
 import { type Invoice, InvoiceStructure, sampleInvoice } from "./observation/__fixtures__/invoice";
 import type { EntryId } from "./path/types";
 import { PathKind } from "./path/types";
+import type { PathId } from "./state/PathRegistry";
 import { StateAssessor } from "./state/StateAssessor";
 import { StateGraph } from "./state/StateGraph";
 import { FullWrite } from "./value/FullWrite";
@@ -16,6 +17,9 @@ import { PathValueClassifier } from "./value/PathValueClassifier";
 import { ValueStore } from "./value/ValueStore";
 
 const classifier = new PathValueClassifier();
+
+/** Every subscription here is on one location, so one name is enough to tell them apart. */
+const NAMED = 1 as PathId<string>;
 
 describe("Transaction", () => {
   let form: InvoiceStructure;
@@ -67,7 +71,7 @@ describe("Transaction", () => {
       .map((candidate) => {
         const node = value.find(candidate);
 
-        return node && value.subscribe(node, () => heard.push(candidate));
+        return node && value.subscribe(node, () => heard.push(candidate), NAMED);
       })
       .filter((leave) => leave !== undefined);
 
@@ -183,7 +187,7 @@ describe("Transaction", () => {
       value.materialize(form.address0);
 
       const heard: EntryId[] = [];
-      const leave = value.subscribe(value.entry(form.address0), () => heard.push(form.address0));
+      const leave = value.subscribe(value.entry(form.address0), () => heard.push(form.address0), NAMED);
 
       writing.assign({
         "invoice.client.addresses.0.city": "Arequipa",
@@ -199,7 +203,7 @@ describe("Transaction", () => {
       value.materialize(form.address0);
 
       const heard: EntryId[] = [];
-      const leave = value.subscribe(value.entry(form.address0), () => heard.push(form.address0));
+      const leave = value.subscribe(value.entry(form.address0), () => heard.push(form.address0), NAMED);
 
       writing.set("invoice.client.addresses.0.city" as never, "Arequipa" as never);
       writing.set("invoice.client.addresses.0.reference" as never, "Al costado" as never);
@@ -216,7 +220,7 @@ describe("Transaction", () => {
       const heard: string[] = [];
 
       value.register(form.city0);
-      state.subscribe(field, () => heard.push("city"));
+      state.subscribe(field, () => heard.push("city"), NAMED);
 
       writing.set("invoice.client.addresses.0.city" as never, "Arequipa" as never);
 
@@ -229,7 +233,7 @@ describe("Transaction", () => {
 
       value.register(form.city0);
       writing.set("invoice.client.addresses.0.city" as never, "Arequipa" as never);
-      state.subscribe(field, () => heard.push("city"));
+      state.subscribe(field, () => heard.push("city"), NAMED);
 
       writing.set("invoice.client.addresses.0.city" as never, "Arequipa" as never);
 
@@ -243,7 +247,7 @@ describe("Transaction", () => {
       value.materialize(form.address0);
 
       const heard: string[] = [];
-      const leave = value.subscribe(value.entry(form.address0), () => heard.push("address"));
+      const leave = value.subscribe(value.entry(form.address0), () => heard.push("address"), NAMED);
 
       writing.assign({
         "invoice.client": sampleInvoice().invoice.client,
@@ -263,12 +267,16 @@ describe("Transaction", () => {
 
       const heard: string[] = [];
       const node = value.entry(form.address0);
-      const leave = value.subscribe(node, () => heard.push("leaving"));
+      const leave = value.subscribe(node, () => heard.push("leaving"), NAMED);
 
-      value.subscribe(node, () => {
-        leave();
-        heard.push("second");
-      });
+      value.subscribe(
+        node,
+        () => {
+          leave();
+          heard.push("second");
+        },
+        NAMED,
+      );
 
       writing.set("invoice.client.addresses.0.city" as never, "Arequipa" as never);
 
@@ -330,7 +338,7 @@ describe("Transaction", () => {
       value.materialize(form.address0);
 
       const heard: EntryId[] = [];
-      const leave = value.subscribe(value.entry(form.address0), () => heard.push(form.address0));
+      const leave = value.subscribe(value.entry(form.address0), () => heard.push(form.address0), NAMED);
 
       writing.assign({
         "invoice.client.addresses.0.city": "Lima",

@@ -5,6 +5,7 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 import type { EntryId } from "../path/types";
+import type { PathId } from "../state/PathRegistry";
 import { InvoiceStructure } from "./__fixtures__/invoice";
 import { RootHasNoParent, RootObservationRequired, UnknownObservation } from "./errors";
 import { ObservationChain } from "./ObservationChain";
@@ -15,7 +16,11 @@ type Node = {
   parent: Node | null;
   label: string;
   listeners?: Set<() => void>;
+  path?: PathId<string>;
 };
+
+/** Every subscription here is on one location, so one name is enough to tell them apart. */
+const NAMED = 1 as PathId<string>;
 
 describe("ObservationChain", () => {
   let form: InvoiceStructure;
@@ -53,13 +58,43 @@ describe("ObservationChain", () => {
     return walked;
   };
 
+  /**
+   * A subscription keeps the name it arrived by, because a location can stop
+   * being what that name reaches and the listener has to be able to find out.
+   */
+  describe("the name a listener arrived by", () => {
+    it("is remembered on the node it listens to", () => {
+      const held = join(form.city0, "city");
+
+      chain.subscribe(held, () => {}, 7 as PathId<string>);
+
+      expect(held.path).toBe(7);
+    });
+
+    it("is absent until somebody listens", () => {
+      expect(join(form.city0, "city").path).toBeUndefined();
+    });
+
+    it("is given up when the last listener leaves", () => {
+      const node = join(form.city0, "city");
+      const leave = chain.subscribe(node, () => {}, 7 as PathId<string>);
+      const stay = chain.subscribe(node, () => {}, 7 as PathId<string>);
+
+      leave();
+      expect(node.path).toBe(7);
+
+      stay();
+      expect(node.path).toBeUndefined();
+    });
+  });
+
   describe("who is waiting to hear about a node", () => {
     it("keeps every listener that joined, in the order they arrived", () => {
       const heard: string[] = [];
       const name = join(form.name, "name");
 
-      chain.subscribe(name, () => heard.push("first"));
-      chain.subscribe(name, () => heard.push("second"));
+      chain.subscribe(name, () => heard.push("first"), NAMED);
+      chain.subscribe(name, () => heard.push("second"), NAMED);
 
       for (const listener of name.listeners ?? []) listener();
 
@@ -70,8 +105,8 @@ describe("ObservationChain", () => {
       const heard: string[] = [];
       const name = join(form.name, "name");
 
-      const leave = chain.subscribe(name, () => heard.push("gone"));
-      chain.subscribe(name, () => heard.push("stayed"));
+      const leave = chain.subscribe(name, () => heard.push("gone"), NAMED);
+      chain.subscribe(name, () => heard.push("stayed"), NAMED);
 
       leave();
 
@@ -83,8 +118,8 @@ describe("ObservationChain", () => {
     it("leaving twice is the same as leaving once", () => {
       const name = join(form.name, "name");
 
-      const leave = chain.subscribe(name, () => {});
-      chain.subscribe(name, () => {});
+      const leave = chain.subscribe(name, () => {}, NAMED);
+      chain.subscribe(name, () => {}, NAMED);
 
       leave();
       leave();
@@ -96,7 +131,7 @@ describe("ObservationChain", () => {
       const name = join(form.name, "name");
       const email = join(form.email, "email");
 
-      chain.subscribe(name, () => {});
+      chain.subscribe(name, () => {}, NAMED);
 
       expect(email.listeners).toBeUndefined();
     });
@@ -105,7 +140,7 @@ describe("ObservationChain", () => {
     it("waiting on a node does not keep it on the chain", () => {
       const name = join(form.name, "name");
 
-      chain.subscribe(name, () => {});
+      chain.subscribe(name, () => {}, NAMED);
 
       expect(chain.remove(name.id)).toBeDefined();
     });

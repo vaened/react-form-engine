@@ -5,6 +5,7 @@
 
 import type { Unsubscribe } from "../../EventEmitter";
 import type { EntryId, EntryTree } from "../path/types";
+import type { PathId } from "../state/PathRegistry";
 import { RootHasNoParent, RootObservationRequired, UnknownObservation } from "./errors";
 
 /** Shared so that watching an already watched node does not allocate to say so. */
@@ -20,6 +21,15 @@ const NOTHING_CLAIMED: readonly never[] = Object.freeze([]);
  */
 export interface Notifiable {
   listeners?: Set<() => void>;
+  /**
+   * The name every listener here arrived by, absent while nobody listens.
+   *
+   * A name answers for one location and a location answers to one name, so the
+   * ones gathered here all came by the same: two names reaching the same node
+   * would mean one of them stopped being answered when the shape moved, and
+   * that is what a recomposition is for.
+   */
+  path?: PathId<string>;
   /**
    * The last transaction this was told about.
    *
@@ -166,14 +176,19 @@ export class ObservationChain<TNode extends ChainNode<TParent>, TParent extends 
    * When they are woken is not decided here: the work that moves a node reports
    * once it has finished, never while it is under way.
    */
-  subscribe(node: TNode, listener: () => void): Unsubscribe {
+  subscribe(node: TNode, listener: () => void, path: PathId<string>): Unsubscribe {
     const listeners = node.listeners ?? new Set<() => void>();
 
     node.listeners = listeners;
+    node.path = path;
     listeners.add(listener);
 
     return () => {
       listeners.delete(listener);
+
+      if (listeners.size === 0) {
+        delete node.path;
+      }
     };
   }
 

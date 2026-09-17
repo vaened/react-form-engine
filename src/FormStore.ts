@@ -10,7 +10,7 @@ import { PathIndex } from "./store/path/PathIndex";
 import type { PathIndexEntry, WalkOf } from "./store/path/types";
 import { PathKind } from "./store/path/types";
 import { FieldState } from "./store/state/FieldState";
-import { type PathIdentifier, PathRegistry } from "./store/state/PathRegistry";
+import { type PathId, type PathIdentifier, PathRegistry } from "./store/state/PathRegistry";
 import { StateAssessor } from "./store/state/StateAssessor";
 import { StateGraph } from "./store/state/StateGraph";
 import type { FieldPathState, NodePathState, StateEntry } from "./store/state/types";
@@ -27,10 +27,18 @@ export type { FormWrites } from "./store/FormWriting";
 
 export type FormMode = "full" | "patch";
 
-/** The one location, as each domain knows it. */
-interface Admitted {
+/**
+ * The one location, as each domain knows it, and the name it was reached by.
+ *
+ * The name and the entries come from a single resolution, so nothing downstream
+ * has to trust that a caller used the same path twice. It is the only place the
+ * two are known together: below here a location is an id, and an id says
+ * nothing about what asked for it.
+ */
+interface Admitted<TValues extends FormValues> {
   readonly value: ValueEntry;
   readonly state: StateEntry;
+  readonly name: PathId<Path<TValues>>;
 }
 
 export interface FormStoreOptions<TValues extends FormValues> {
@@ -177,7 +185,8 @@ export class FormStore<TValues extends FormValues> {
    * what the returned call gives back.
    */
   watch<TPath extends Path<TValues>>(path: TPath, listener: () => void): Unsubscribe {
-    const leave = this.#value.subscribe(this.#admit(path).value, listener);
+    const at = this.#admit(path);
+    const leave = this.#value.subscribe(at.value, listener, at.name);
     const release = this.#release(path);
 
     return () => {
@@ -188,7 +197,8 @@ export class FormStore<TValues extends FormValues> {
 
   /** The same as `watch`, for how a location stands rather than what it holds. */
   feel<TPath extends Path<TValues>>(path: TPath, listener: () => void): Unsubscribe {
-    const leave = this.#state.subscribe(this.#admit(path).state, listener);
+    const at = this.#admit(path);
+    const leave = this.#state.subscribe(at.state, listener, at.name);
     const release = this.#release(path);
 
     return () => {
@@ -395,25 +405,30 @@ export class FormStore<TValues extends FormValues> {
    * absent branch registers as a field and opens into a node the moment
    * something registers underneath it.
    */
-  #admit<TPath extends Path<TValues>>(path: TPath): Admitted {
+  #admit<TPath extends Path<TValues>>(path: TPath): Admitted<TValues> {
+    const name = this.#paths.register(path);
     const existing = this.#index.resolve(path);
 
     if (existing) {
-      return this.#join(existing);
+      return this.#join(existing, name);
     }
 
     const walk = this.#walk(path);
 
-    return this.#join(this.#index.ensure(path, walk[walk.length - 1].observed ?? PathKind.Field, walk));
+    return this.#join(this.#index.ensure(path, walk[walk.length - 1].observed ?? PathKind.Field, walk), name);
   }
 
-  #join(entry: PathIndexEntry): Admitted {
+  #join(entry: PathIndexEntry, name: PathId<Path<TValues>>): Admitted<TValues> {
     if (entry.kind === PathKind.Field) {
       const initial = new FieldState();
 
       initial.assessed(this.#assessor.assess(this.#value.read(entry), this.#value.default(entry)));
 
-      return { state: this.#state.register(entry.id, initial), value: this.#value.register(entry.id) };
+      return {
+        state: this.#state.register(entry.id, initial),
+        value: this.#value.register(entry.id),
+        name,
+      };
     }
 
     const state = this.#state.materialize(entry.id);
@@ -427,7 +442,7 @@ export class FormStore<TValues extends FormValues> {
       );
     }
 
-    return { state, value };
+    return { state, value, name };
   }
 
   static #count(value: unknown): number {
