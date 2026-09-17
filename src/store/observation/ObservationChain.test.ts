@@ -17,6 +17,7 @@ type Node = {
   label: string;
   listeners?: Set<() => void>;
   path?: PathId<string>;
+  reporting?: Set<Node>;
 };
 
 /** Every subscription here is on one location, so one name is enough to tell them apart. */
@@ -57,6 +58,105 @@ describe("ObservationChain", () => {
 
     return walked;
   };
+
+  /**
+   * The chain answers who reports to whom from both ends. Kept at one end and
+   * rebuilt at the other, the two could disagree.
+   */
+  describe("who reports to a node", () => {
+    it("is nobody until somebody joins under it", () => {
+      expect(insert(form.client, "client").node.reporting).toBeUndefined();
+    });
+
+    it("holds the ones that joined under it", () => {
+      const client = insert(form.client, "client").node;
+      const city = join(form.city0, "city");
+
+      expect([...(client.reporting ?? [])]).toEqual([city]);
+    });
+
+    it("lets go of one that left", () => {
+      const client = insert(form.client, "client").node;
+
+      join(form.city0, "city");
+      drop(form.city0);
+
+      expect([...(client.reporting ?? [])]).toEqual([]);
+    });
+
+    /** A node taking a location over takes over what reported past it. */
+    it("hands them to the node that takes the location over", () => {
+      const client = insert(form.client, "client").node;
+      const city = join(form.city0, "city");
+
+      const next = chain.replace(form.client, node(form.client, "otro"));
+
+      expect([...(next.reporting ?? [])]).toEqual([city]);
+      expect(client.reporting).toBeUndefined();
+      expect(city.parent).toBe(next);
+    });
+
+    /** Losing a node hands what reported to it up to whoever it reported to. */
+    it("hands them upward when the node in between goes", () => {
+      const client = insert(form.client, "client").node;
+      const city = join(form.city0, "city");
+
+      drop(form.client);
+
+      expect(city.parent).toBe(chain.root());
+      expect([...(chain.root().reporting ?? [])]).toContain(city);
+      expect(client.reporting).toBeUndefined();
+    });
+
+    /** Three levels on the chain, so reaching the last one takes more than one step down. */
+    it("walks down to everyone inside a location, however deep", () => {
+      insert(form.client, "client");
+      const addresses = insert(form.addresses, "addresses").node;
+      const city = join(form.city0, "city");
+
+      expect(city.parent).toBe(addresses);
+      expect(chain.descendantsOf(form.client)).toEqual([addresses, city]);
+    });
+  });
+
+  /**
+   * Two ways in, and they must agree: one asks the chain, which only a location
+   * on it can answer, and the other asks the shape.
+   */
+  describe("everyone on the chain inside a location", () => {
+    it("comes off the chain when the location is on it, each one under the one it reports to", () => {
+      insert(form.client, "client");
+
+      const name = join(form.name, "name");
+      const addresses = insert(form.addresses, "addresses").node;
+      const city = join(form.city0, "city");
+
+      // A field that reports straight to `client` arrived before the node that
+      // sits between `client` and `city`, which the shape has no way to know.
+      expect(chain.descendantsOf(form.client)).toEqual([name, addresses, city]);
+    });
+
+    it("comes off the shape when the location is not on the chain, missing neither nodes nor fields", () => {
+      const addresses = insert(form.addresses, "addresses").node;
+      const city = join(form.city0, "city");
+      const name = join(form.name, "name");
+
+      expect(chain.has(form.client)).toBe(false);
+
+      const found = chain.descendantsOf(form.client);
+
+      expect(found).toHaveLength(3);
+      expect(found).toContain(addresses);
+      expect(found).toContain(city);
+      expect(found).toContain(name);
+    });
+
+    it("finds nobody inside a location nothing watches", () => {
+      join(form.email, "email");
+
+      expect(chain.descendantsOf(form.details)).toEqual([]);
+    });
+  });
 
   /**
    * A subscription keeps the name it arrived by, because a location can stop
@@ -258,6 +358,66 @@ describe("ObservationChain", () => {
     it("hands back nothing for a location that was never on the chain", () => {
       expect(chain.leave(form.city0)).toBeUndefined();
     });
+
+    it("stops being heard from by the one it reported to", () => {
+      const client = insert(form.client, "client").node;
+
+      join(form.city0, "city");
+      chain.leave(form.city0);
+
+      expect([...(client.reporting ?? [])]).toEqual([]);
+    });
+  });
+
+  /**
+   * A location the shape stopped having is not one everybody has to stop asking
+   * about: the question itself is gone, so every claim goes at once.
+   */
+  describe("forgetting a location", () => {
+    it("lets go of every claim at once, however many were held", () => {
+      const city = join(form.city0, "city");
+
+      join(form.city0, "again");
+      insert(form.city0, "and again");
+
+      expect(chain.forget(form.city0)?.node).toBe(city);
+      expect(chain.has(form.city0)).toBe(false);
+    });
+
+    it("leaves nothing counted behind, so the location starts over", () => {
+      join(form.city0, "city");
+      join(form.city0, "again");
+
+      chain.forget(form.city0);
+
+      const reborn = join(form.city0, "reborn");
+
+      expect(chain.leave(form.city0)).toBe(reborn);
+      expect(chain.has(form.city0)).toBe(false);
+    });
+
+    it("hands its children up, the same as any other removal", () => {
+      const city = join(form.city0, "city");
+      const address = insert(form.address0, "address0").node;
+
+      const removal = chain.forget(form.address0);
+
+      expect(removal?.node).toBe(address);
+      expect(removal?.parent).toBe(chain.root());
+      expect(removal?.adopted).toEqual([city]);
+      expect(city.parent).toBe(chain.root());
+      expect(address.parent).toBeNull();
+    });
+
+    it("hands back nothing for a location that was never on the chain", () => {
+      expect(chain.forget(form.email)).toBeUndefined();
+      expect(chain.has(form.email)).toBe(false);
+    });
+
+    it("hands back nothing for the root, which no shape stops having", () => {
+      expect(chain.forget(form.root)).toBeUndefined();
+      expect(chain.has(form.root)).toBe(true);
+    });
   });
 
   describe("inserting", () => {
@@ -391,13 +551,25 @@ describe("ObservationChain", () => {
       expect(reference.parent).toBe(next);
     });
 
+    /** Reported to a watcher and not to the root, so inheriting is not climbing. */
     it("keeps whoever the replaced occupant reported to", () => {
-      const address = insert(form.address0, "address0").node;
-      const reportedTo = address.parent;
+      const client = insert(form.client, "client").node;
+
+      insert(form.address0, "address0");
 
       const next = chain.replace(form.address0, node(form.address0, "reshaped"));
 
-      expect(next.parent).toBe(reportedTo);
+      expect(next.parent).toBe(client);
+    });
+
+    it("is the only one of the two the node above hears from", () => {
+      const client = insert(form.client, "client").node;
+      const address = insert(form.address0, "address0").node;
+
+      const next = chain.replace(form.address0, node(form.address0, "reshaped"));
+
+      expect([...(client.reporting ?? [])]).toEqual([next]);
+      expect(address.parent).toBeNull();
     });
 
     it("detaches the old occupant and puts the new one on the chain in its place", () => {

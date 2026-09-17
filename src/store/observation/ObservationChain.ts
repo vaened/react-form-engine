@@ -9,6 +9,7 @@ import type { PathId } from "../state/PathRegistry";
 import { RootHasNoParent, RootObservationRequired, UnknownObservation } from "./errors";
 
 /** Shared so that watching an already watched node does not allocate to say so. */
+const NOBODY_REPORTING: ReadonlySet<never> = Object.freeze(new Set<never>());
 const NOTHING_CLAIMED: readonly never[] = Object.freeze([]);
 
 /**
@@ -50,6 +51,13 @@ export interface Notifiable {
 export interface ChainNode<TParent> extends Notifiable {
   readonly id: EntryId;
   parent: TParent | null;
+  /**
+   * Who reports to this one, absent until somebody does.
+   *
+   * It sits beside the link it answers, because a relation kept at one end and
+   * rebuilt at the other is a relation that can be left half undone.
+   */
+  reporting?: Set<ChainNode<TParent>>;
 }
 
 export interface ChainInsertion<TNode> {
@@ -143,14 +151,41 @@ export class ObservationChain<TNode extends ChainNode<TParent>, TParent extends 
    *
    * A descendant already reporting to something closer belongs to that one.
    */
-  reportingTo(id: EntryId, parent: TParent): TNode[] {
-    return this.descendantsOf(id).filter((descendant) => descendant.parent === parent);
+  #reportingTo(id: EntryId, parent: TParent): TNode[] {
+    const claimed: TNode[] = [];
+
+    for (const child of (parent.reporting ?? NOBODY_REPORTING) as ReadonlySet<TNode>) {
+      for (const ancestor of this.#tree.ancestorsOf(child.id)) {
+        if (ancestor.id === id) {
+          claimed.push(child);
+          break;
+        }
+      }
+    }
+
+    return claimed;
   }
 
-  /** The ones on the chain inside a location, whoever each one reports to. */
+  /**
+   * The ones on the chain inside a location, whoever each one reports to.
+   *
+   * A location on the chain is asked of the chain, where everything under it
+   * reports to it or to something that does. One that is not on the chain has
+   * nothing reporting to it, so the question goes to the shape: whoever watches
+   * inside it is answering to an ancestor that has no idea it exists.
+   */
   descendantsOf(id: EntryId): TNode[] {
-    const { nodes, fields } = this.#tree.descendantsOf(id);
     const descendants: TNode[] = [];
+
+    const known = this.#nodes.get(id);
+
+    if (known) {
+      this.#below(known as TParent, descendants);
+
+      return descendants;
+    }
+
+    const { nodes, fields } = this.#tree.descendantsOf(id);
 
     for (const candidates of [nodes, fields]) {
       for (const candidate of candidates) {
@@ -163,6 +198,13 @@ export class ObservationChain<TNode extends ChainNode<TParent>, TParent extends 
     }
 
     return descendants;
+  }
+
+  #below(node: TParent, into: TNode[]): void {
+    for (const child of (node.reporting ?? NOBODY_REPORTING) as ReadonlySet<TNode>) {
+      into.push(child);
+      this.#below(child as TParent, into);
+    }
   }
 
   /**
@@ -209,6 +251,7 @@ export class ObservationChain<TNode extends ChainNode<TParent>, TParent extends 
 
     this.#nodes.set(node.id, node);
     this.#claims.set(node.id, 1);
+    this.#reports(node);
 
     return node;
   }
@@ -227,16 +270,19 @@ export class ObservationChain<TNode extends ChainNode<TParent>, TParent extends 
     }
 
     const parent = this.#above(node.id);
-    const claimed = this.reportingTo(node.id, parent);
+    const claimed = this.#reportingTo(node.id, parent);
 
     node.parent = parent;
 
-    for (const child of claimed) {
-      child.parent = node;
-    }
-
     this.#nodes.set(node.id, node);
     this.#claims.set(node.id, 1);
+    this.#reports(node);
+
+    for (const child of claimed) {
+      this.#stopsReporting(child);
+      child.parent = node;
+      this.#reports(child);
+    }
 
     return { node, claimed };
   }
@@ -282,16 +328,15 @@ export class ObservationChain<TNode extends ChainNode<TParent>, TParent extends 
   /** Takes the node off the chain and hands its children to whoever it reported to. */
   #detach(node: TNode, parent: TParent): ChainRemoval<TNode, TParent> {
     this.#nodes.delete(node.id);
+    this.#stopsReporting(node);
 
-    const adopted: TNode[] = [];
+    const adopted = [...((node.reporting ?? NOBODY_REPORTING) as ReadonlySet<TNode>)];
 
-    for (const child of this.#nodes.values()) {
-      if (child.parent !== node) {
-        continue;
-      }
+    delete node.reporting;
 
+    for (const child of adopted) {
       child.parent = parent;
-      adopted.push(child);
+      this.#reports(child);
     }
 
     node.parent = null;
@@ -315,12 +360,19 @@ export class ObservationChain<TNode extends ChainNode<TParent>, TParent extends 
 
     next.parent = previous.parent;
 
+    this.#stopsReporting(previous);
     this.#nodes.set(id, next);
+    this.#reports(next);
 
-    for (const child of this.#nodes.values()) {
-      if (child.parent === previous) {
-        child.parent = next;
-      }
+    // What reported to the one being replaced reports to the one taking its
+    // place: the location did not move, only what stands in it.
+    if (previous.reporting) {
+      next.reporting = previous.reporting;
+      delete previous.reporting;
+    }
+
+    for (const child of (next.reporting ?? NOBODY_REPORTING) as ReadonlySet<TNode>) {
+      child.parent = next;
     }
 
     previous.parent = null;
@@ -343,6 +395,7 @@ export class ObservationChain<TNode extends ChainNode<TParent>, TParent extends 
     }
 
     this.#nodes.delete(id);
+    this.#stopsReporting(node);
     node.parent = null;
 
     return node;
@@ -354,6 +407,23 @@ export class ObservationChain<TNode extends ChainNode<TParent>, TParent extends 
    * The cast holds because `ancestorsOf` yields the root, objects and arrays and
    * never a field, so whatever is found up there can hold children.
    */
+  #reports(node: TNode): void {
+    const above = node.parent;
+
+    if (!above) {
+      return;
+    }
+
+    const reporting = above.reporting ?? new Set<ChainNode<TParent>>();
+
+    above.reporting = reporting;
+    reporting.add(node);
+  }
+
+  #stopsReporting(node: TNode): void {
+    node.parent?.reporting?.delete(node);
+  }
+
   #above(id: EntryId): TParent {
     for (const ancestor of this.#tree.ancestorsOf(id)) {
       const found = this.#nodes.get(ancestor.id);
