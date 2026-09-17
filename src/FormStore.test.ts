@@ -2185,11 +2185,6 @@ describe("FormStore", () => {
     });
   });
 
-  /**
-   * The shape grows without anybody naming what it grew: a value brings keys, a
-   * reorder leaves an item under a name it was never created with. A location
-   * the form holds is a location its name reaches, however it came to exist.
-   */
   describe("names the form never heard before", () => {
     it("finds a field a whole write discovered inside the value", () => {
       store.set("invoice.client", { ...sample().invoice.client, name: "Grace Hopper" });

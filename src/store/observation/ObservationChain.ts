@@ -15,10 +15,14 @@ const NOTHING_CLAIMED: readonly never[] = Object.freeze([]);
 /**
  * What a chain puts on a node, whichever chain it is.
  *
- * Both sit here rather than in a registry of their own because a climb already
+ * They sit here rather than in registries of their own because a climb already
  * holds the node it is standing on, and looking it up again by id would be
- * undoing work that was just done. Both are absent until they are earned, so a
- * node nobody reached and nobody listens to costs nothing.
+ * undoing work that was just done. A registry keyed by location would be worse
+ * than wasteful: what a name owns has to travel together when the shape moves
+ * it, and three halves kept in three places is three chances to move two.
+ *
+ * Every one of them is absent until it is earned, so a node nobody reached and
+ * nobody listens to costs nothing.
  */
 export interface Notifiable {
   listeners?: Set<() => void>;
@@ -31,6 +35,8 @@ export interface Notifiable {
    * that is what a recomposition is for.
    */
   path?: PathId<string>;
+  /** How many asked for this location to be kept, absent once nobody has. */
+  claims?: number;
   /**
    * The last transaction this was told about.
    *
@@ -95,7 +101,6 @@ export interface ChainRemoval<TNode, TParent> {
  */
 export class ObservationChain<TNode extends ChainNode<TParent>, TParent extends TNode = TNode> {
   readonly #nodes = new Map<EntryId, TNode>();
-  readonly #claims = new Map<EntryId, number>();
   readonly #tree: EntryTree;
   readonly #root: TParent;
 
@@ -103,7 +108,6 @@ export class ObservationChain<TNode extends ChainNode<TParent>, TParent extends 
     this.#tree = tree;
     this.#root = root;
     this.#nodes.set(root.id, root);
-    this.#claims.set(root.id, 1);
   }
 
   /** Always on the chain, so every climb and every walk has an answer. */
@@ -242,15 +246,15 @@ export class ObservationChain<TNode extends ChainNode<TParent>, TParent extends 
     const existing = this.#nodes.get(node.id);
 
     if (existing) {
-      this.#claims.set(node.id, this.#claimsOn(node.id) + 1);
+      existing.claims = (existing.claims ?? 0) + 1;
 
       return existing;
     }
 
     node.parent = this.#above(node.id);
+    node.claims = 1;
 
     this.#nodes.set(node.id, node);
-    this.#claims.set(node.id, 1);
     this.#reports(node);
 
     return node;
@@ -264,7 +268,7 @@ export class ObservationChain<TNode extends ChainNode<TParent>, TParent extends 
     const existing = this.#nodes.get(node.id);
 
     if (existing) {
-      this.#claims.set(node.id, this.#claimsOn(node.id) + 1);
+      existing.claims = (existing.claims ?? 0) + 1;
 
       return { node: existing, claimed: NOTHING_CLAIMED };
     }
@@ -273,9 +277,9 @@ export class ObservationChain<TNode extends ChainNode<TParent>, TParent extends 
     const claimed = this.#reportingTo(node.id, parent);
 
     node.parent = parent;
+    node.claims = 1;
 
     this.#nodes.set(node.id, node);
-    this.#claims.set(node.id, 1);
     this.#reports(node);
 
     for (const child of claimed) {
@@ -302,7 +306,7 @@ export class ObservationChain<TNode extends ChainNode<TParent>, TParent extends 
       throw new RootObservationRequired();
     }
 
-    return this.#release(id) ? this.#detach(node, parent) : undefined;
+    return this.#release(node) ? this.#detach(node, parent) : undefined;
   }
 
   /**
@@ -320,7 +324,7 @@ export class ObservationChain<TNode extends ChainNode<TParent>, TParent extends 
       return undefined;
     }
 
-    this.#claims.delete(id);
+    delete node.claims;
 
     return this.#detach(node, node.parent);
   }
@@ -390,7 +394,7 @@ export class ObservationChain<TNode extends ChainNode<TParent>, TParent extends 
   leave(id: EntryId): TNode | undefined {
     const node = this.#nodes.get(id);
 
-    if (!node || node === this.#root || !this.#release(id)) {
+    if (!node || node === this.#root || !this.#release(node)) {
       return undefined;
     }
 
@@ -436,21 +440,17 @@ export class ObservationChain<TNode extends ChainNode<TParent>, TParent extends 
     throw new RootHasNoParent();
   }
 
-  #claimsOn(id: EntryId): number {
-    return this.#claims.get(id) ?? 0;
-  }
-
   /** Whether that was the last watcher, in which case the node may go. */
-  #release(id: EntryId): boolean {
-    const left = this.#claimsOn(id) - 1;
+  #release(node: TNode): boolean {
+    const left = (node.claims ?? 0) - 1;
 
     if (left > 0) {
-      this.#claims.set(id, left);
+      node.claims = left;
 
       return false;
     }
 
-    this.#claims.delete(id);
+    delete node.claims;
 
     return true;
   }

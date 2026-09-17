@@ -17,6 +17,7 @@ type Node = {
   label: string;
   listeners?: Set<() => void>;
   path?: PathId<string>;
+  claims?: number;
   reporting?: Set<Node>;
 };
 
@@ -347,12 +348,13 @@ describe("ObservationChain", () => {
       expect(chain.has(form.city0)).toBe(false);
     });
 
-    it("detaches it, so a reference somebody kept leads nowhere", () => {
+    it("detaches it and leaves nothing counted on it, so a reference somebody kept is inert", () => {
       const city = join(form.city0, "city");
 
       chain.leave(form.city0);
 
       expect(city.parent).toBeNull();
+      expect(city.claims).toBeUndefined();
     });
 
     it("hands back nothing for a location that was never on the chain", () => {
@@ -382,6 +384,7 @@ describe("ObservationChain", () => {
 
       expect(chain.forget(form.city0)?.node).toBe(city);
       expect(chain.has(form.city0)).toBe(false);
+      expect(city.claims).toBeUndefined();
     });
 
     it("leaves nothing counted behind, so the location starts over", () => {
