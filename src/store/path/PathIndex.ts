@@ -12,7 +12,6 @@ import {
   MissingArrayPosition,
   NotAnArrayEntry,
   PathKindConflict,
-  UnknownChildPath,
   UnknownEntryId,
   UnknownPathId,
 } from "./errors";
@@ -228,15 +227,22 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
     return this.#ensureItem(this.#array(arrayId), index, kind);
   }
 
-  /** Resolves a path id to the entry that currently occupies it. */
-  locate(pathId: PathId<FormPath<TValues>>): PathIndexEntry {
+  /**
+   * Resolves a path id to the entry that currently occupies it, or nothing when
+   * the shape stopped holding that position.
+   *
+   * An id nobody registered is refused rather than answered empty: not knowing
+   * a name is a caller's mistake, while a name whose position is gone is an
+   * answer.
+   */
+  locate(pathId: PathId<FormPath<TValues>>): PathIndexEntry | undefined {
     const route = this.#routes.get(pathId);
 
     if (!route) {
       throw new UnknownPathId(pathId);
     }
 
-    return this.#follow(route);
+    return this.#reachable(route);
   }
 
   /**
@@ -563,46 +569,35 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
   }
 
   /**
-   * Follows a route without throwing when the structure moved underneath it.
+   * The entry a route reaches, or nothing when the structure moved out from
+   * under it.
    *
-   * A route outlives the entries it reaches: remove destroys items, while the
-   * route keeps describing the position it always described. It also checks the
-   * anchor is still alive, because removing an item destroys the arrays nested
-   * inside it and a route anchored there would otherwise follow a dead entry.
+   * A route outlives the entries it describes: remove destroys items while the
+   * route keeps naming the position it always named. Every way of not arriving
+   * says the same thing — that position holds nobody — so none of them is a
+   * fault worth raising.
+   *
+   * The anchor is checked first because removing an item destroys the arrays
+   * nested inside it, and a route anchored there would otherwise set off from
+   * an entry that is already gone.
    */
   #reachable(route: Route): PathIndexEntry | undefined {
     if (!this.#entries.has(route.anchor.id)) {
       return undefined;
     }
 
-    try {
-      return this.#follow(route);
-    } catch (error) {
-      if (
-        error instanceof MissingArrayPosition ||
-        error instanceof UnknownChildPath ||
-        error instanceof NotAnArrayEntry
-      ) {
-        return undefined;
-      }
-
-      throw error;
-    }
-  }
-
-  #follow(route: Route): PathIndexEntry {
     let current: PathIndexEntry = route.anchor;
 
     for (const step of route.steps) {
       if ("at" in step) {
         if (current.kind !== PathKind.Array) {
-          throw new NotAnArrayEntry(current.id);
+          return undefined;
         }
 
         const next = current.children[step.at];
 
         if (!next) {
-          throw new MissingArrayPosition(step.at, current.children.length);
+          return undefined;
         }
 
         current = next;
@@ -610,13 +605,13 @@ export class PathIndex<TValues extends FormValues = FormValues> implements Entry
       }
 
       if (current.kind === PathKind.Field || current.kind === PathKind.Array) {
-        throw new UnknownChildPath(this.describe(current.id), step.key);
+        return undefined;
       }
 
       const next = current.children.get(step.key);
 
       if (!next) {
-        throw new UnknownChildPath(this.describe(current.id), step.key);
+        return undefined;
       }
 
       current = next;

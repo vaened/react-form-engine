@@ -9,7 +9,6 @@ export {
   MissingArrayPosition,
   NotAnArrayEntry,
   PathKindConflict,
-  UnknownChildPath,
   UnknownEntryId,
   UnknownPathId,
 } from "./errors";

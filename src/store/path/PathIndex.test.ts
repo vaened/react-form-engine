@@ -555,6 +555,64 @@ describe("PathIndex", () => {
 
       expect(scoped.locate(pathId)).toBe(arequipa);
     });
+
+    /**
+     * A route keeps naming the position it always named, so every way of the
+     * shape no longer holding that position reads the same: nobody is there.
+     */
+    it("reaches nobody once the position is past the end of the list", () => {
+      const addresses = index.register(ADDRESSES, PathKind.Array);
+
+      index.register(CITY_0, PathKind.Field);
+      index.register(CITY_1, PathKind.Field);
+      index.remove(addresses.id, 1);
+
+      expect(index.resolve(CITY_1)).toBeUndefined();
+      expect(index.resolve(CITY_0)).toBeDefined();
+    });
+
+    it("reaches nobody when the position holds something that has no children", () => {
+      const addresses = index.register(ADDRESSES, PathKind.Array);
+
+      index.register(CITY_0, PathKind.Field);
+      index.insert(addresses.id, 0, PathKind.Field);
+
+      expect(index.resolve(CITY_0)).toBeUndefined();
+    });
+
+    it("reaches nobody when the position holds something without that key", () => {
+      const addresses = index.register(ADDRESSES, PathKind.Array);
+
+      index.register(CITY_0, PathKind.Field);
+      index.insert(addresses.id, 0, PathKind.Object);
+
+      expect(index.resolve(CITY_0)).toBeUndefined();
+    });
+
+    /** Deep enough that giving up has to stop the walk and not just answer it. */
+    it("gives up where it lost the way and does not go on from nowhere", () => {
+      type Deep = { invoice: { grid: number[][]; rows: { tags: { label: string }[] }[] } };
+
+      const deep = new PathIndex<Deep>(new PathRegistry<Path<Deep>>());
+      const rows = deep.register("invoice.rows", PathKind.Array);
+
+      deep.register("invoice.rows.0.tags.0.label", PathKind.Field);
+      deep.insert(rows.id, 0, PathKind.Object);
+
+      expect(deep.resolve("invoice.rows.0.tags.0.label")).toBeUndefined();
+    });
+
+    it("reaches nobody when a position is asked of something that holds no order", () => {
+      type Deep = { invoice: { grid: number[][] } };
+
+      const deep = new PathIndex<Deep>(new PathRegistry<Path<Deep>>());
+      const grid = deep.register("invoice.grid", PathKind.Array);
+
+      deep.register("invoice.grid.0.1", PathKind.Field);
+      deep.insert(grid.id, 0, PathKind.Field);
+
+      expect(deep.resolve("invoice.grid.0.1")).toBeUndefined();
+    });
   });
 
   describe("navigation", () => {

@@ -26,13 +26,6 @@ export class UnknownEntryId extends Error {
   }
 }
 
-export class UnknownChildPath extends Error {
-  constructor(parent: string, segment: string) {
-    super(`Unknown child "${segment}" under path "${parent}".`);
-    this.name = "UnknownChildPath";
-  }
-}
-
 export class PathKindConflict extends Error {
   constructor(path: string, current: PathKind, expected: PathKind) {
     super(`Path "${path}" is already registered as "${current}", not "${expected}".`);

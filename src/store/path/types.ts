@@ -4,6 +4,7 @@
  */
 
 import type { Unsubscribe } from "../../EventEmitter";
+import type { PathId } from "../state/PathRegistry";
 
 declare const entryIdBrand: unique symbol;
 
@@ -153,6 +154,8 @@ export interface EntryTree {
   descendantsOf(id: EntryId): PathDescendants;
   /** The entry a name reaches, for a name somebody asked about before. */
   resolve(path: string): PathIndexEntry | undefined;
+  /** The same, asked by identity: the occupant of a position, not the one it held. */
+  locate(pathId: PathId): PathIndexEntry | undefined;
   /** A name taken apart, each step checked as it comes off. */
   segmentsOf(path: string): readonly string[];
 }
