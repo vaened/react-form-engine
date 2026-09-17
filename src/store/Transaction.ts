@@ -4,7 +4,7 @@
  */
 
 import type { ArrayPath, FormValues, Path, PathValue } from "../path";
-import type { ArrayItem, DeepPartial } from "../types";
+import type { ArrayItem, DeepPartial, WriteOptions } from "../types";
 import { MissingArrayPosition, NotAnArrayEntry } from "./path/errors";
 import type { PathIndex } from "./path/PathIndex";
 import {
@@ -25,6 +25,9 @@ import { isolate } from "./value/isolate";
 import type { PathValueClassifier } from "./value/PathValueClassifier";
 import type { ValueEntry, ValueStore } from "./value/ValueStore";
 import type { ValueWrite } from "./value/ValueWrite";
+
+/** Shared so that an item arriving whole does not allocate to say nobody typed it. */
+const ARRIVED: WriteOptions = Object.freeze({ touch: false });
 
 /**
  * One transaction, which is all this exists for: it is born knowing which one
@@ -72,7 +75,7 @@ export class Transaction<TValues extends FormValues> {
    * Nobody is told here: while this runs the form is half made, and will be
    * again if more writes follow.
    */
-  write<TPath extends Path<TValues>>(path: TPath, value: PathValue<TValues, TPath>): this {
+  write<TPath extends Path<TValues>>(path: TPath, value: PathValue<TValues, TPath>, options?: WriteOptions): this {
     const entry = this.#index.resolve(path) ?? this.#claim(path, this.#classifier.classify(value));
     const written = this.#policy.write(entry, value);
 
@@ -81,7 +84,7 @@ export class Transaction<TValues extends FormValues> {
     }
 
     for (const at of written) {
-      this.#reconcile(at);
+      this.#reconcile(at, options);
     }
 
     return this;
@@ -113,11 +116,13 @@ export class Transaction<TValues extends FormValues> {
 
     this.#assertPosition(index, held);
 
-    if (index <= array.children.length) {
-      this.#index.insert(array.id, index, kind);
-    }
+    const item = index <= array.children.length ? this.#index.insert(array.id, index, kind) : undefined;
 
     this.#value.insert(array, index, kind === PathKind.Field ? value : isolate(value, this.#classifier));
+
+    if (item) {
+      this.#reconcile(item, ARRIVED);
+    }
 
     return this.#settle(array, index, Number.POSITIVE_INFINITY);
   }
@@ -199,7 +204,12 @@ export class Transaction<TValues extends FormValues> {
     return this;
   }
 
-  /** What a location is worth saying about once it holds what its neighbour held. */
+  /**
+   * What a location is worth saying about once it holds what its neighbour held.
+   *
+   * Nothing arrived, so nothing is registered: a position that ends up holding
+   * what nobody ever named holds it just as unnamed as it was.
+   */
   #restated(at: PathIndexEntry, value: unknown, defaultValue: unknown): boolean {
     if (at.kind === PathKind.Field) {
       const held = this.#state.field(at.id);
@@ -377,18 +387,32 @@ export class Transaction<TValues extends FormValues> {
    * because how many positions it has is the value's to decide and the ones
    * that outlived the value have to be gone before anything looks for them.
    */
-  #reconcile(entry: PathIndexEntry): void {
-    this.#value.reconcile(entry, (at, value, defaultValue) => {
-      if (at.kind === PathKind.Field) {
-        this.#field(at, value, defaultValue);
-      } else if (at.kind === PathKind.Array) {
-        this.#array(at, value, defaultValue);
-      } else {
-        this.#object(at, value);
-      }
+  #reconcile(entry: PathIndexEntry, options?: WriteOptions): void {
+    this.#value.reconcile(entry, (at, value, defaultValue) => this.#reached(at, value, defaultValue, options));
+  }
+
+  /**
+   * Every location a value reached: the form comes to hold it, and then hears
+   * what the operation has to say about it.
+   *
+   * Holding it is not up for discussion. A name the value carries is a location
+   * the form can address, whether or not anybody asked for it first, and one it
+   * cannot address is one no listener can ever be attached to.
+   */
+  #reached(at: PathIndexEntry, value: unknown, defaultValue: unknown, options?: WriteOptions): boolean {
+    if (at.kind === PathKind.Field) {
+      this.#field(at, value, defaultValue, options);
 
       return true;
-    });
+    }
+
+    if (at.kind === PathKind.Array) {
+      this.#array(at, value, defaultValue);
+    } else {
+      this.#object(at, value);
+    }
+
+    return true;
   }
 
   /**
@@ -422,16 +446,23 @@ export class Transaction<TValues extends FormValues> {
    * It is born clean and assessed right after, so what its arrival moves is
    * reported the same way any other move is.
    *
-   * A location a write reached has been written, and that is all being touched
-   * ever meant. Nothing here asks who was holding the keyboard: a form is
-   * handed the values it starts with, and one handed them later is being
-   * written to, whoever asked for it.
+   * Being touched is the one thing here that is somebody's opinion rather than
+   * the value's, so it is the one thing a caller may take back. It is taken as
+   * given otherwise: a form handed values later is being written to, whoever
+   * asked for it.
    */
-  #field(field: PathIndexFieldEntry, value: unknown, defaultValue: unknown): void {
+  #field(field: PathIndexFieldEntry, value: unknown, defaultValue: unknown, options?: WriteOptions): void {
     const held = this.#state.field(field.id) ?? this.#state.register(field.id);
 
     this.#assess(held, value, defaultValue);
 
+    if (options?.touch !== false) {
+      this.#touch(held);
+    }
+  }
+
+  /** What having been at a location implies, and nothing else. */
+  #touch(held: StateFieldEntry): void {
     for (const moved of this.#state.touch(held)) {
       this.#reach(moved);
     }

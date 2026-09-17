@@ -20,7 +20,7 @@ import { PatchWrite } from "./store/value/PatchWrite";
 import { PathValueClassifier } from "./store/value/PathValueClassifier";
 import type { Scalar } from "./store/value/Scalar";
 import { type ValueEntry, ValueStore } from "./store/value/ValueStore";
-import type { ArrayItem, DeepPartial } from "./types";
+import type { ArrayItem, DeepPartial, WriteOptions } from "./types";
 
 export type { FormValues } from "./path";
 export type { FormWrites } from "./store/FormWriting";
@@ -241,8 +241,8 @@ export class FormStore<TValues extends FormValues> {
     }
   }
 
-  set<TPath extends Path<TValues>>(path: TPath, value: PathValue<TValues, TPath>): void {
-    this.#writing.set(path, value);
+  set<TPath extends Path<TValues>>(path: TPath, value: PathValue<TValues, TPath>, options?: WriteOptions): void {
+    this.#writing.set(path, value, options);
   }
 
   /**
@@ -262,8 +262,8 @@ export class FormStore<TValues extends FormValues> {
    *   "invoice.series": "F002",
    * });
    */
-  assign(writes: FormWrites<TValues>): void {
-    this.#writing.assign(writes);
+  assign(writes: FormWrites<TValues>, options?: WriteOptions): void {
+    this.#writing.assign(writes, options);
   }
 
   /**

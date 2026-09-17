@@ -6,6 +6,7 @@
 import type { Unsubscribe } from "../EventEmitter";
 import type { FormStore, FormValues as StoreFormValues } from "../FormStore";
 import type { FormValues, IsTerminal, NodePath, Path, PathValue } from "../path";
+import type { WriteOptions } from "../types";
 import { MappedNodeControl } from "./MappedNodeControl";
 import type { ControlProjection, FocusedValue, ProjectionValue, WithoutOverrides } from "./types";
 
@@ -55,7 +56,7 @@ export interface NodeControl<TValues extends FormValues> {
    * @example
    * control.set("person.name", "Ada");
    */
-  set: <TPath extends Path<TValues>>(path: TPath, value: PathValue<TValues, TPath>) => void;
+  set: <TPath extends Path<TValues>>(path: TPath, value: PathValue<TValues, TPath>, options?: WriteOptions) => void;
 
   /**
    * Derives a new control lens from the current control scope.
@@ -122,7 +123,7 @@ export interface FieldControl<TValue> {
    * @example
    * control.set("Ada");
    */
-  set: (value: TValue) => void;
+  set: (value: TValue, options?: WriteOptions) => void;
 }
 
 type NodeControlValue<TValue> = TValue extends unknown

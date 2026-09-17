@@ -18,3 +18,4 @@ export type {
   Primitive,
 } from "./path";
 export type { Scalar } from "./store/value/Scalar";
+export type { WriteOptions } from "./types";

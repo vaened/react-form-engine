@@ -71,7 +71,7 @@ describe("MappedNodeControl", () => {
 
     expect(store.register).toHaveBeenCalledWith("invoice.client.person.name");
     expect(store.register).toHaveBeenCalledWith("invoice.serial.series");
-    expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Grace");
+    expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Grace", undefined);
   });
 
   it("resolves aliased paths before calling the store", () => {
@@ -89,7 +89,7 @@ describe("MappedNodeControl", () => {
 
     expect(store.register).toHaveBeenCalledWith("invoice.client.person.name");
     expect(store.register).toHaveBeenCalledWith("invoice.serial.number");
-    expect(store.set).toHaveBeenCalledWith("invoice.client.person.documentNumber", "123");
+    expect(store.set).toHaveBeenCalledWith("invoice.client.person.documentNumber", "123", undefined);
   });
 
   it("composes alias projections across nested lenses", () => {
@@ -111,7 +111,7 @@ describe("MappedNodeControl", () => {
 
     expect(store.register).toHaveBeenCalledWith("invoice.client.person.name");
     expect(store.register).toHaveBeenCalledWith("invoice.client.person.documentNumber");
-    expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Ada");
+    expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Ada", undefined);
   });
 
   it("keeps resolved projection aliases stable after the parent alias map changes", () => {
@@ -135,7 +135,7 @@ describe("MappedNodeControl", () => {
 
     expect(store.register).toHaveBeenCalledWith("invoice.client.person.name");
     expect(store.register).toHaveBeenCalledWith("invoice.client.person.documentNumber");
-    expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Ada");
+    expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Ada", undefined);
   });
 
   it("focuses a subtree with lens from a direct control", () => {
@@ -149,7 +149,7 @@ describe("MappedNodeControl", () => {
 
     expect(store.register).toHaveBeenCalledWith("invoice.client.person.name");
     expect(store.register).toHaveBeenCalledWith("invoice.client.person.documentNumber");
-    expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Grace");
+    expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Grace", undefined);
   });
 
   it("focuses a subtree with lens from an aliased control using the resolved real prefix once", () => {
@@ -170,7 +170,7 @@ describe("MappedNodeControl", () => {
 
     expect(store.register).toHaveBeenCalledWith("invoice.client.person.name");
     expect(store.register).toHaveBeenCalledWith("invoice.client.person.documentNumber");
-    expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Ada");
+    expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Ada", undefined);
   });
 
   it("focuses a deep subtree from an aliased control using the resolved real prefix once", () => {
@@ -191,7 +191,7 @@ describe("MappedNodeControl", () => {
 
     expect(store.register).toHaveBeenCalledWith("invoice.client.person.name");
     expect(store.register).toHaveBeenCalledWith("invoice.client.person.documentNumber");
-    expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Ada");
+    expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Ada", undefined);
   });
 
   it("allows lens chaining across nested nodes", () => {
@@ -206,7 +206,7 @@ describe("MappedNodeControl", () => {
 
     expect(store.register).toHaveBeenCalledWith("invoice.client.person.name");
     expect(store.register).toHaveBeenCalledWith("invoice.client.person.documentNumber");
-    expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Grace");
+    expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Grace", undefined);
   });
 
   it("composes nested lens over lens over lens to the final real store paths", () => {
@@ -230,7 +230,7 @@ describe("MappedNodeControl", () => {
 
     expect(store.register).toHaveBeenCalledWith("invoice.client.person.name");
     expect(store.register).toHaveBeenCalledWith("invoice.client.person.documentNumber");
-    expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Grace");
+    expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Grace", undefined);
   });
 
   it("composes lens over lens from an aliased control to the final real store paths", () => {
@@ -252,7 +252,7 @@ describe("MappedNodeControl", () => {
 
     expect(store.register).toHaveBeenCalledWith("invoice.client.person.name");
     expect(store.register).toHaveBeenCalledWith("invoice.client.person.documentNumber");
-    expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Grace");
+    expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Grace", undefined);
   });
 
   describe("a projection that renames, rather than a window onto one prefix", () => {
@@ -269,8 +269,8 @@ describe("MappedNodeControl", () => {
       projected.set("person.name", "Ada");
       projected.set("person.code", "F001");
 
-      expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Ada");
-      expect(store.set).toHaveBeenCalledWith("invoice.serial.series", "F001");
+      expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Ada", undefined);
+      expect(store.set).toHaveBeenCalledWith("invoice.serial.series", "F001", undefined);
     });
 
     it("focuses a group the projection invented, whose members have no shared real prefix", () => {
@@ -286,8 +286,8 @@ describe("MappedNodeControl", () => {
       person.set("name", "Ada");
       person.set("code", "F001");
 
-      expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Ada");
-      expect(store.set).toHaveBeenCalledWith("invoice.serial.series", "F001");
+      expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Ada", undefined);
+      expect(store.set).toHaveBeenCalledWith("invoice.serial.series", "F001", undefined);
     });
 
     it("refuses a map where a name both stands for a place and holds others", () => {
@@ -311,8 +311,8 @@ describe("MappedNodeControl", () => {
       projected.lens("client").lens("person").set("name", "Ada");
       projected.lens("client").set("mail", "ada@example.com");
 
-      expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Ada");
-      expect(store.set).toHaveBeenCalledWith("invoice.client.contact.email", "ada@example.com");
+      expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Ada", undefined);
+      expect(store.set).toHaveBeenCalledWith("invoice.client.contact.email", "ada@example.com", undefined);
     });
   });
 
@@ -327,10 +327,13 @@ describe("MappedNodeControl", () => {
 
       projected.set("card", { who: "Ada", serie: "F001" });
 
-      expect(store.assign).toHaveBeenCalledWith({
-        "invoice.client.person.name": "Ada",
-        "invoice.serial.series": "F001",
-      });
+      expect(store.assign).toHaveBeenCalledWith(
+        {
+          "invoice.client.person.name": "Ada",
+          "invoice.serial.series": "F001",
+        },
+        undefined,
+      );
     });
 
     it("leaves alone what the value never names", () => {
@@ -343,7 +346,7 @@ describe("MappedNodeControl", () => {
 
       projected.set("card", { who: "Ada" } as never);
 
-      expect(store.assign).toHaveBeenCalledWith({ "invoice.client.person.name": "Ada" });
+      expect(store.assign).toHaveBeenCalledWith({ "invoice.client.person.name": "Ada" }, undefined);
     });
 
     it("stops at an alias instead of opening the value under it", () => {
@@ -355,7 +358,7 @@ describe("MappedNodeControl", () => {
 
       projected.set("card", { whole: person });
 
-      expect(store.assign).toHaveBeenCalledWith({ "invoice.client.person": person });
+      expect(store.assign).toHaveBeenCalledWith({ "invoice.client.person": person }, undefined);
     });
 
     it("refuses the same map when it reaches the control through a projection", () => {
@@ -402,7 +405,7 @@ describe("MappedNodeControl", () => {
       control.set("person", person);
       control.register("person");
 
-      expect(store.set).toHaveBeenCalledWith("invoice.client.person", person);
+      expect(store.set).toHaveBeenCalledWith("invoice.client.person", person, undefined);
       expect(store.set).toHaveBeenCalledTimes(1);
       expect(store.register).toHaveBeenCalledWith("invoice.client.person");
       expect(store.register).toHaveBeenCalledTimes(1);
@@ -422,10 +425,13 @@ describe("MappedNodeControl", () => {
       projected.set("card", { who: "Ada", serie: "F001" });
 
       expect(store.assign).toHaveBeenCalledTimes(1);
-      expect(store.assign).toHaveBeenCalledWith({
-        "invoice.client.person.name": "Ada",
-        "invoice.serial.series": "F001",
-      });
+      expect(store.assign).toHaveBeenCalledWith(
+        {
+          "invoice.client.person.name": "Ada",
+          "invoice.serial.series": "F001",
+        },
+        undefined,
+      );
       expect(store.set).not.toHaveBeenCalled();
     });
 
@@ -438,7 +444,7 @@ describe("MappedNodeControl", () => {
 
       control.set("person.name", "Ada");
 
-      expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Ada");
+      expect(store.set).toHaveBeenCalledWith("invoice.client.person.name", "Ada", undefined);
       expect(store.assign).not.toHaveBeenCalled();
     });
 

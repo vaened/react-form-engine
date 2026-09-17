@@ -6,6 +6,7 @@
 import type { Unsubscribe } from "../EventEmitter";
 import type { FormStore, FormWrites, FormValues as StoreFormValues } from "../FormStore";
 import type { FormValues, NodePath, Path, PathValue } from "../path";
+import type { WriteOptions } from "../types";
 import type { NodeControl } from "./Control";
 import { EmptyProjection, PathOutsideControl } from "./errors";
 import { AliasPathResolver, type ControlAliasMap } from "./paths/AliasPathResolver";
@@ -55,8 +56,12 @@ export class MappedNodeControl<TLocalValues extends FormValues, TFormValues exte
     };
   }
 
-  set<TPath extends Path<TLocalValues>>(path: TPath, value: PathValue<TLocalValues, TPath>): void {
-    this.#write(path, value);
+  set<TPath extends Path<TLocalValues>>(
+    path: TPath,
+    value: PathValue<TLocalValues, TPath>,
+    options?: WriteOptions,
+  ): void {
+    this.#write(path, value, options);
   }
 
   /**
@@ -71,15 +76,15 @@ export class MappedNodeControl<TLocalValues extends FormValues, TFormValues exte
    * writes it happens to take. A name that stands for one place skips that:
    * building a map to take it apart again buys nothing.
    */
-  #write(path: Path<TLocalValues>, value: unknown): void {
+  #write(path: Path<TLocalValues>, value: unknown, options?: WriteOptions): void {
     const reach = this.#pathResolver.reach(path);
 
     if (reach.kind === "alias") {
-      this.#store.set(reach.path, value as PathValue<TFormValues, Path<TFormValues>>);
+      this.#store.set(reach.path, value as PathValue<TFormValues, Path<TFormValues>>, options);
       return;
     }
 
-    this.#store.assign(this.#planned(path, value));
+    this.#store.assign(this.#planned(path, value), options);
   }
 
   /** Where every part of a value lands, without writing any of it yet. */

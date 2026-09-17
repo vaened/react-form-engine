@@ -4,7 +4,7 @@
  */
 
 import type { ArrayPath, FormValues, Path, PathValue } from "../path";
-import type { ArrayItem, DeepPartial } from "../types";
+import type { ArrayItem, DeepPartial, WriteOptions } from "../types";
 import type { PathIndex } from "./path/PathIndex";
 import type { StateAssessor } from "./state/StateAssessor";
 import type { StateGraph } from "./state/StateGraph";
@@ -53,8 +53,8 @@ export class FormWriting<TValues extends FormValues = FormValues> {
     this.#policy = policy;
   }
 
-  set<TPath extends Path<TValues>>(path: TPath, value: PathValue<TValues, TPath>): void {
-    this.#begin().write(path, value).commit();
+  set<TPath extends Path<TValues>>(path: TPath, value: PathValue<TValues, TPath>, options?: WriteOptions): void {
+    this.#begin().write(path, value, options).commit();
   }
 
   /**
@@ -64,11 +64,11 @@ export class FormWriting<TValues extends FormValues = FormValues> {
    * They land in the order they were written down, and one left out is one
    * nothing reaches: what it held stays as it was.
    */
-  assign(writes: FormWrites<TValues>): void {
+  assign(writes: FormWrites<TValues>, options?: WriteOptions): void {
     const transaction = this.#begin();
 
     for (const path of Object.keys(writes) as Path<TValues>[]) {
-      transaction.write(path, writes[path] as PathValue<TValues, Path<TValues>>);
+      transaction.write(path, writes[path] as PathValue<TValues, Path<TValues>>, options);
     }
 
     transaction.commit();

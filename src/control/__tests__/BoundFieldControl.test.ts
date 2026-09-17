@@ -45,7 +45,7 @@ describe("BoundFieldControl", () => {
 
     control.set("Grace");
 
-    expect(set).toHaveBeenCalledWith("invoice.client.name", "Grace");
+    expect(set).toHaveBeenCalledWith("invoice.client.name", "Grace", undefined);
     expect(store.values.invoice.client.name).toBe("Grace");
   });
 });

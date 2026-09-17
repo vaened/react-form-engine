@@ -6,6 +6,32 @@
 import type { FormValues, IsTerminal, Path, PathValue } from "./path";
 
 /**
+ * What a write says about the locations it reaches, beyond the value it puts
+ * there.
+ *
+ * Everything here is optional and left out by default, which is what an edit
+ * means: somebody put this value here.
+ *
+ * Whether a location differs from what it is measured against is not offered,
+ * because it is not an opinion. It is read from the value every time, so a form
+ * that says nothing is dirty is a form whose values match their base.
+ *
+ * @example
+ * // Fills the form from a fetched record without saying the user typed it.
+ * store.set("invoice.client.name", record.name, { touch: false });
+ */
+export interface WriteOptions {
+  /**
+   * Whether a location this reaches counts as one somebody has been at.
+   *
+   * Defaults to `true`: a write is somebody putting a value somewhere. Pass
+   * `false` for a value the form gave itself, so a field the user never visited
+   * does not start showing the errors of an empty one.
+   */
+  readonly touch?: boolean;
+}
+
+/**
  * A value that says the same shape, with nothing required.
  *
  * What a form is measured against is rarely everything it can hold: a form for

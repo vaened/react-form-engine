@@ -6,6 +6,7 @@
 import type { Unsubscribe } from "../EventEmitter";
 import type { FormStore, FormValues } from "../FormStore";
 import type { FieldPath, Path, PathValue } from "../path";
+import type { WriteOptions } from "../types";
 import type { FieldControl } from "./Control";
 
 export class BoundFieldControl<TFormValues extends FormValues, TPath extends FieldPath<TFormValues> & Path<TFormValues>>
@@ -30,7 +31,7 @@ export class BoundFieldControl<TFormValues extends FormValues, TPath extends Fie
     return this.#store.register(this.#path);
   }
 
-  set(value: PathValue<TFormValues, TPath>): void {
-    this.#store.set(this.#path, value);
+  set(value: PathValue<TFormValues, TPath>, options?: WriteOptions): void {
+    this.#store.set(this.#path, value, options);
   }
 }

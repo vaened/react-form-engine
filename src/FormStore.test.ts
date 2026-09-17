@@ -1653,6 +1653,56 @@ describe("FormStore", () => {
    * Being touched is having been written, and nothing else: the form is handed
    * the values it starts with, and one handed them later is being written to.
    */
+  /**
+   * Being touched is the one thing a write says that the value cannot: whether
+   * somebody was at that location, as against what it holds now.
+   */
+  describe("a write that says nobody was there", () => {
+    const NAME = "invoice.client.name";
+
+    it("leaves untouched what it wrote", () => {
+      store.set(NAME, "Grace", { touch: false });
+
+      expect(store.state(NAME)?.isTouched).toBe(false);
+    });
+
+    it("still says what the value says, because that was never an opinion", () => {
+      store.set(NAME, "Grace", { touch: false });
+
+      expect(store.state(NAME)?.isDirty).toBe(true);
+    });
+
+    it("touches when told nothing, and when told to", () => {
+      store.set(NAME, "Grace");
+      expect(store.state(NAME)?.isTouched).toBe(true);
+
+      store.reset();
+      store.set(NAME, "Ada", { touch: true });
+      expect(store.state(NAME)?.isTouched).toBe(true);
+    });
+
+    it("leaves alone what it already found touched", () => {
+      store.set(NAME, "Grace");
+      store.set(NAME, "Ada", { touch: false });
+
+      expect(store.state(NAME)?.isTouched).toBe(true);
+    });
+
+    it("reaches every location a whole value carries, not just the one named", () => {
+      store.set("invoice.client", { ...sample().invoice.client, name: "Grace" }, { touch: false });
+
+      expect(store.state(NAME)?.isTouched).toBe(false);
+      expect(store.state("invoice.client.addresses.0.city")?.isTouched).toBe(false);
+    });
+
+    it("is said once for locations written together", () => {
+      store.assign({ [NAME]: "Grace", "invoice.series": "F002" } as never, { touch: false });
+
+      expect(store.state(NAME)?.isTouched).toBe(false);
+      expect(store.state("invoice.series")?.isTouched).toBe(false);
+    });
+  });
+
   describe("what being touched means", () => {
     it("is not touched by being registered", () => {
       store.register("invoice.client.name");
@@ -1902,6 +1952,30 @@ describe("FormStore", () => {
       store.swap(ADDRESSES, 0, 1);
 
       expect(cities()).toEqual(["Cusco", "Lima"]);
+    });
+
+    /**
+     * A name the value carries is a location the form can address, whether or
+     * not anybody asked for it first — the same for an item as for a write.
+     */
+    it("leaves registered every location the item it inserted carries", () => {
+      store.insert(ADDRESSES, 0, { city: "Cusco", reference: "x" });
+
+      expect(store.kindOf(`${ADDRESSES}.0.city` as never)).toBe(PathKind.Field);
+      expect(store.state(`${ADDRESSES}.0.city` as never)).toBeDefined();
+    });
+
+    it("says the item it inserted differs from a base that has no such position", () => {
+      store.insert(ADDRESSES, 0, { city: "Cusco", reference: "x" });
+
+      expect(store.state(`${ADDRESSES}.0.city` as never)?.isDirty).toBe(true);
+    });
+
+    /** It arrived whole. Nobody typed into it. */
+    it("leaves untouched everything the item it inserted carries", () => {
+      store.insert(ADDRESSES, 0, { city: "Cusco", reference: "x" });
+
+      expect(store.state(`${ADDRESSES}.0.city` as never)?.isTouched).toBe(false);
     });
 
     it("does not keep the object the caller handed it", () => {
