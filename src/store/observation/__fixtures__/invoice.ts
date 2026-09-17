@@ -50,7 +50,8 @@ export const sampleInvoice = (): Invoice => ({
 
 /** The canonical form of `docs/FormValue.example.json`, registered for real. */
 export class InvoiceStructure {
-  readonly index = new PathIndex<Invoice>(new PathRegistry<Path<Invoice>>());
+  readonly paths = new PathRegistry<Path<Invoice>>();
+  readonly index = new PathIndex<Invoice>(this.paths);
 
   readonly root = this.index.root().id;
   readonly client = this.#node("invoice.client", PathKind.Object);

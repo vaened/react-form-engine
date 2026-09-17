@@ -682,6 +682,151 @@ describe("ObservationChain", () => {
     });
   });
 
+  /**
+   * A name is a position. A location whose positions moved is one whose names
+   * answer for something else, and everything a name owns has to end up there.
+   */
+  describe("moving every name inside a location", () => {
+    const CITY_0 = "invoice.client.addresses.0.city" as const;
+    const CITY_1 = "invoice.client.addresses.1.city" as const;
+
+    let first: Node;
+    let second: Node;
+    let one: PathId<string>;
+    let other: PathId<string>;
+
+    beforeEach(() => {
+      insert(form.addresses, "addresses");
+      first = join(form.city0, "city0");
+      second = join(form.city1, "city1");
+      one = form.paths.identify(CITY_0);
+      other = form.paths.identify(CITY_1);
+    });
+
+    /** What the shape does to the positions; the chain hears about it after. */
+    const swapPositions = () => form.index.swap(form.addresses, 0, 1);
+
+    it("hands each name to the node that answers for it now", () => {
+      chain.subscribe(first, () => {}, one);
+      chain.subscribe(second, () => {}, other);
+
+      swapPositions();
+      chain.resynchronize(form.addresses);
+
+      expect(second.path).toBe(one);
+      expect(first.path).toBe(other);
+    });
+
+    it("hands over everyone waiting, so a name wakes the ones that asked for it", () => {
+      const heard: string[] = [];
+
+      chain.subscribe(first, () => heard.push("one"), one);
+      chain.subscribe(second, () => heard.push("other"), other);
+
+      swapPositions();
+      chain.resynchronize(form.addresses);
+
+      for (const listener of second.listeners ?? []) listener();
+
+      expect(heard).toEqual(["one"]);
+    });
+
+    /** The call that lets go was handed out holding the set it was added to. */
+    it("hands the set over whole, so a call that lets go still finds its own", () => {
+      const leave = chain.subscribe(first, () => {}, one);
+
+      swapPositions();
+      chain.resynchronize(form.addresses);
+      leave();
+
+      expect(second.listeners?.size).toBe(0);
+    });
+
+    it("hands over every claim and not just one of them", () => {
+      join(form.city0, "otra vez");
+
+      chain.subscribe(first, () => {}, one);
+      chain.subscribe(second, () => {}, other);
+
+      swapPositions();
+      chain.resynchronize(form.addresses);
+
+      expect(second.claims).toBe(2);
+      expect(first.claims).toBe(1);
+    });
+
+    /** Sharing the set it left behind would have it woken from two places. */
+    it("takes off the chain the one no name was left on, carrying nothing away", () => {
+      chain.subscribe(first, () => {}, one);
+
+      swapPositions();
+      chain.resynchronize(form.addresses);
+
+      expect(chain.has(form.city0)).toBe(false);
+      expect(first.parent).toBeNull();
+      expect(first.path).toBeUndefined();
+      expect(first.listeners).toBeUndefined();
+      expect(first.claims).toBeUndefined();
+    });
+
+    it("keeps the one another name landed on", () => {
+      chain.subscribe(first, () => {}, one);
+      chain.subscribe(second, () => {}, other);
+
+      swapPositions();
+      chain.resynchronize(form.addresses);
+
+      expect(chain.has(form.city0)).toBe(true);
+      expect(chain.has(form.city1)).toBe(true);
+    });
+
+    /** A shape that stopped holding a location is not one that moved it. */
+    it("leaves where it was a name that reaches nothing", () => {
+      chain.subscribe(second, () => {}, other);
+
+      form.index.remove(form.addresses, 1);
+      chain.resynchronize(form.addresses);
+
+      expect(second.path).toBe(other);
+      expect(second.listeners?.size).toBe(1);
+      expect(second.claims).toBe(1);
+    });
+
+    it("leaves alone a node nobody named", () => {
+      swapPositions();
+      chain.resynchronize(form.addresses);
+
+      expect(first.path).toBeUndefined();
+      expect(first.claims).toBe(1);
+      expect(chain.has(form.city0)).toBe(true);
+    });
+
+    it("leaves alone a name outside the location", () => {
+      const email = join(form.email, "email");
+
+      chain.subscribe(email, () => {}, form.paths.identify("invoice.client.email"));
+      chain.subscribe(first, () => {}, one);
+
+      swapPositions();
+      chain.resynchronize(form.addresses);
+
+      expect(email.path).toBe(form.paths.identify("invoice.client.email"));
+      expect(email.claims).toBe(1);
+    });
+
+    /** Whatever the shape counted to put a node there is not a claim on this name. */
+    it("adds to what the node it lands on was already holding", () => {
+      join(form.city1, "y otra vez");
+
+      chain.subscribe(first, () => {}, one);
+
+      swapPositions();
+      chain.resynchronize(form.addresses);
+
+      expect(second.claims).toBe(3);
+    });
+  });
+
   describe("guards", () => {
     it("finds an unknown location as undefined but requiring it throws", () => {
       expect(chain.find(form.email)).toBeUndefined();

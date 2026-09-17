@@ -73,6 +73,14 @@ export interface ChainInsertion<TNode> {
   readonly claimed: readonly TNode[];
 }
 
+/** What a name owns here, off the node that was holding it. */
+interface Displaced<TNode> {
+  readonly from: TNode;
+  readonly path: PathId<string>;
+  readonly listeners: Set<() => void>;
+  readonly claims: number;
+}
+
 export interface ChainRemoval<TNode, TParent> {
   /** Already detached: its `parent` is null. */
   readonly node: TNode;
@@ -236,6 +244,55 @@ export class ObservationChain<TNode extends ChainNode<TParent>, TParent extends 
         delete node.path;
       }
     };
+  }
+
+  /**
+   * Hands every name inside a location to whatever it reaches now.
+   *
+   * A name is a position, so a location whose positions moved is one whose
+   * names answer for something else. Everything a name owns goes with it and
+   * none of it stays behind: everyone waiting on it, and every claim holding
+   * its location here.
+   *
+   * Where each one belongs is asked of the shape, which is the only one that
+   * knows what a name reaches. Whoever moved the positions is expected to have
+   * left both ends of the move reachable: one that is not is a name left where
+   * it was, since a shape that stopped holding a location is not the same as
+   * one that moved it.
+   */
+  resynchronize(id: EntryId): void {
+    const displaced: Displaced<TNode>[] = [];
+
+    // Everything comes off before anything goes back, because the node a name
+    // lands on is one another name is leaving.
+    for (const node of this.descendantsOf(id)) {
+      const { path, listeners } = node;
+
+      if (path === undefined || listeners === undefined) {
+        continue;
+      }
+
+      displaced.push({ from: node, path, listeners, claims: node.claims ?? 0 });
+
+      delete node.path;
+      delete node.listeners;
+      delete node.claims;
+    }
+
+    for (const one of displaced) {
+      const reached = this.#tree.locate(one.path);
+      const node = (reached && this.#nodes.get(reached.id)) ?? one.from;
+
+      node.path = one.path;
+      node.listeners = one.listeners;
+      node.claims = (node.claims ?? 0) + one.claims;
+    }
+
+    for (const { from } of displaced) {
+      if (from.claims === undefined && from.parent) {
+        this.#detach(from, from.parent);
+      }
+    }
   }
 
   /**
